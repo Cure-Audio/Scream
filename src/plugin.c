@@ -143,6 +143,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             int num_frames = event.processAudio.endFrame - frame;
             memset(output[0] + frame, 0, sizeof(float) * num_frames);
             memset(output[1] + frame, 0, sizeof(float) * num_frames);
+
+            frame = event.processAudio.endFrame;
             break;
         }
         default:
