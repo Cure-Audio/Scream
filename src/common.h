@@ -1,0 +1,45 @@
+#ifndef PLUGIN_CONFIG_H
+#define PLUGIN_CONFIG_H
+
+#define CPLUG_IS_INSTRUMENT 0
+
+#define CPLUG_NUM_INPUT_BUSSES  1
+#define CPLUG_NUM_OUTPUT_BUSSES 1
+#define CPLUG_WANT_MIDI_INPUT   0
+#define CPLUG_WANT_MIDI_OUTPUT  0
+
+#define CPLUG_WANT_GUI      1
+#define CPLUG_GUI_RESIZABLE 1
+
+// See list of categories here: https://steinbergmedia.github.io/vst3_doc/vstinterfaces/group__plugType.html
+#define CPLUG_VST3_CATEGORIES "Fx|Filter"
+
+#define CPLUG_VST3_TUID_COMPONENT  'CPLG', 'comp', 'SCRM', 0
+#define CPLUG_VST3_TUID_CONTROLLER 'CPLG', 'edit', 'SCRM', 0
+
+#define CPLUG_AUV2_VIEW_CLASS     ScreamTemplateView
+#define CPLUG_AUV2_VIEW_CLASS_STR "ScreamTemplateView"
+
+#define CPLUG_CLAP_ID          "com.cplug.screamtemplate"
+#define CPLUG_CLAP_DESCRIPTION "Scream Template"
+#define CPLUG_CLAP_FEATURES    CLAP_PLUGIN_FEATURE_FILTER
+
+#include <xhl/alloc.h>
+#include <xhl/debug.h>
+
+#define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
+
+#ifndef NDEBUG
+void println(const char* const fmt, ...);
+#define cplug_log println
+#else
+#define println(...)                                                                                                   \
+    {}
+#endif
+
+#define XFILES_ASSERT xassert
+
+#define PW_MALLOC xmalloc
+#define PW_FREE   xfree
+
+#endif // PLUGIN_CONFIG_H
