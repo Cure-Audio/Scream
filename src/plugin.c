@@ -1,5 +1,6 @@
-#include "plugin.h"
 #include "common.h"
+#include "plugin.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <xhl/time.h>

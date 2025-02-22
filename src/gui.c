@@ -156,7 +156,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
 #endif
     int font_id = nvgCreateFont(gui->nvg, "Arial", font_path);
     xassert(font_id != -1);
-    if (font_id != -1)
+    if (font_id == -1)
     {
         println("[CRITICAL] Failed to open font at path %s", font_path);
     }

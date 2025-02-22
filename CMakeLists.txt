@@ -2,12 +2,27 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version" FORCE)
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
-project(scream_template
+project(skibidiscream
     VERSION 0.0.1
     DESCRIPTION ""
-    HOMEPAGE_URL "https://exacoustics.com"
+    HOMEPAGE_URL "https://github.com/Tremus/skibidiscream"
     LANGUAGES C)
-set(COMPANY_NAME exacoustics)
+set(COMPANY_NAME CUREAUDIO)
+
+set(PRODUCT_NAME "skibidiscream")
+set(PRODUCT_COPYRIGHT CUREAUDIO)
+set(PLUGIN_BUNDLE_ID "com.cureaudio.skibidiscream.plugin")
+set(APP_BUNDLE_ID "com.cureaudio.skibidiscream.app")
+# Full list of AU types & tags here:
+# https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/AudioUnit.html
+# The properties:
+set(MACOSX_BUNDLE_TAGS "<string>Filter</string>") # Predefined tags are: Bass, Delay, Distortion, Drums, Dynamics, Dynamics Processor, Effects, Equalizer, Filter, Format Converter, Guitar, Imaging, MIDI, Mixer, Offline Effect, Output, Panner, Pitch, Reverb, Sampler, Synthesizer, Time Effect, Vocal. But you can use others.
+set(MACOSX_BUNDLE_TYPE "aufx") # "aufx" for Effect, "augn" for Generator, "aumu" for Instrument, "aufm" for Music Effect.
+set(MACOSX_BUNDLE_SUBTYPE "Skb1") # For AU and GarageBand 10.3 compatibility, the first letter must be upper-case, the others lower-case.
+set(MACOSX_BUNDLE_MANUFACTURER "Cure") # For AU and GarageBand 10.3 compatibility, the first letter must be upper-case, the others lower-case.
+# Convert version string (1.0.0) > integer (65536)
+math(EXPR MACOSX_BUNDLE_VERSION_INT "${PROJECT_VERSION_MAJOR} << 16 | ${PROJECT_VERSION_MINOR} << 8 | ${PROJECT_VERSION_PATCH}" OUTPUT_FORMAT DECIMAL) # cool trick bro
+
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
@@ -82,7 +97,7 @@ endif()
 
 set(PLUGIN_DEFINITIONS
     CPLUG_COMPANY_NAME="${COMPANY_NAME}"
-    CPLUG_COMPANY_EMAIL="contact@exacoustics.com"
+    CPLUG_COMPANY_EMAIL="contact@cure.audio"
     CPLUG_PLUGIN_NAME="${PROJECT_NAME}"
     CPLUG_PLUGIN_URI="${PROJECT_HOMEPAGE_URL}"
     CPLUG_PLUGIN_VERSION="${PROJECT_VERSION}"
@@ -144,10 +159,8 @@ elseif(APPLE)
         "-framework Cocoa"
         "-framework Metal"
         "-framework MetalKit")
-    list(APPEND PLUGIN_DEFINITIONS
-        PW_METAL)
+    list(APPEND PLUGIN_DEFINITIONS PW_METAL)
 endif()
-
 
 set(COMPILE_SHADER_CMD sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/libs/nanovg_sokol.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h --slang ${SHADER_LANG})
 
@@ -165,6 +178,87 @@ add_custom_target(shader_header
         ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h
 )
 
+# ██████╗ ██╗     ██╗   ██╗ ██████╗ ██╗███╗   ██╗
+# ██╔══██╗██║     ██║   ██║██╔════╝ ██║████╗  ██║
+# ██████╔╝██║     ██║   ██║██║  ███╗██║██╔██╗ ██║
+# ██╔═══╝ ██║     ██║   ██║██║   ██║██║██║╚██╗██║
+# ██║     ███████╗╚██████╔╝╚██████╔╝██║██║ ╚████║
+# ╚═╝     ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝╚═╝  ╚═══╝
+
+# .plists are generated using a template
+# The params @bundle_identifier@ and @bundle_type@ are used by the .plist
+function(configure_info_plist target_name bundle_identifier bundle_type bundle_extension)
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/modules/CPLUG/example/Info.plist.in
+        ${CMAKE_BINARY_DIR}/${bundle_type}.plist
+        @ONLY
+    )
+
+    set_target_properties(${target_name} PROPERTIES
+        BUNDLE True
+        MACOSX_BUNDLE TRUE
+        OUTPUT_NAME ${PROJECT_NAME}
+        BUNDLE_EXTENSION ${bundle_extension}
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_BINARY_DIR}/${bundle_type}.plist
+        CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.${bundle_extension}
+    )
+endfunction()
+
+# All Plugin formats in one
+if (APPLE)
+    add_library(${PROJECT_NAME}_plugin MODULE ${PLUGIN_SOURCES} src/platform_osx.m)
+    target_link_libraries(${PROJECT_NAME}_plugin PRIVATE "-framework AudioToolbox -framework Cocoa") # -framework AudioToolbox not actually required...
+
+    configure_info_plist(${PROJECT_NAME}_plugin ${PLUGIN_BUNDLE_ID} "BNDL" "clap")
+
+    file(TOUCH_NOCREATE "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.clap/Contents/PkgInfo")
+    file(WRITE "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.clap/Contents/PkgInfo" "BNDL????")
+
+    target_compile_definitions(${PROJECT_NAME}_plugin PRIVATE
+        CPLUG_AUV2_VERSION_INT=${MACOSX_BUNDLE_VERSION_INT}
+        CPLUG_AUV2_BUNDLE_ID="${PLUGIN_BUNDLE_ID}"
+        CPLUG_BUILD_AUV2=1
+    )
+
+    add_custom_command(TARGET ${PROJECT_NAME}_plugin POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.vst3"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.component"
+
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.clap" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.vst3"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.clap" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.component"
+
+        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.clap to ~/Library/Audio/Plug-Ins/CLAP/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.clap" "~/Library/Audio/Plug-Ins/CLAP/${PROJECT_NAME}.clap"
+
+        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.vst3 to ~/Library/Audio/Plug-Ins/VST3/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.vst3" "~/Library/Audio/Plug-Ins/VST3/${PROJECT_NAME}.vst3"
+
+        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.component to ~/Library/Audio/Plug-Ins/Components/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.component" "~/Library/Audio/Plug-Ins/Components/${PROJECT_NAME}.component"
+    )
+elseif(WIN32)
+    add_library(${PROJECT_NAME}_plugin MODULE example/example.c src/cplug_clap.c src/cplug_vst3.c)
+    set_target_properties(${PROJECT_NAME}_plugin PROPERTIES
+        OUTPUT_NAME "${PROJECT_NAME}"
+        SUFFIX .clap
+        PDB_NAME "${PROJECT_NAME}"
+        )
+    # According to the docs you're meant to bundle your Windows VST3 using a bundle like folder structure:
+    # https://steinbergmedia.github.io/vst3_dev_portal/pages/Technical+Documentation/Locations+Format/Plugin+Format.html#for-the-windows-platform
+    # However, placing the unbundled binary directly into your ...\Common Files\VST3 folder will work fine in every host.
+    # I'm not sure anyone in the real world actually bundles Windows VST3s like this, but maybe I'm just ignorant.
+    add_custom_command(TARGET ${PROJECT_NAME}_plugin POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.vst3"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.vst3/Contents/x86_64-win"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.clap" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.vst3/Contents/x86_64-win/${PROJECT_NAME}.vst3"
+        )
+endif()
+
+target_link_libraries(${PROJECT_NAME}_plugin PRIVATE ${PLUGIN_LIBRARIES})
+target_include_directories(${PROJECT_NAME}_plugin PRIVATE ${PLUGIN_INCLUDE})
+target_compile_definitions(${PROJECT_NAME}_plugin PRIVATE ${PLUGIN_DEFINITIONS} CPLUG_BUILD_VST3 CPLUG_BUILD_CLAP CPLUG_BUILD_AUV2)
+target_compile_options(${PROJECT_NAME}_plugin PRIVATE ${PLUGIN_OPTIONS})
+add_dependencies(${PROJECT_NAME}_plugin shader_header)
 
 # ███████╗████████╗ █████╗ ███╗   ██╗██████╗  █████╗ ██╗      ██████╗ ███╗   ██╗███████╗
 # ██╔════╝╚══██╔══╝██╔══██╗████╗  ██║██╔══██╗██╔══██╗██║     ██╔═══██╗████╗  ██║██╔════╝
@@ -175,164 +269,17 @@ add_custom_target(shader_header
 
 if (WIN32)
     add_executable(${PROJECT_NAME}_standalone WIN32 ${PLUGIN_SOURCES} modules/CPLUG/src/cplug_standalone_win.c)
-    target_include_directories(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_INCLUDE})
     target_link_libraries(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_LIBRARIES})
-    target_compile_definitions(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_DEFINITIONS} CPLUG_BUILD_STANDALONE)
-    target_compile_options(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_OPTIONS})
-    add_dependencies(${PROJECT_NAME}_standalone shader_header)
 elseif(APPLE)
-    add_executable(${PROJECT_NAME}_app MACOSX_BUNDLE ${PLUGIN_SOURCES} modules/CPLUG/src/cplug_standalone_osx.m)
-    target_include_directories(${PROJECT_NAME}_app PRIVATE ${PLUGIN_INCLUDE})
-    set_target_properties(${PROJECT_NAME}_app PROPERTIES
-        BUNDLE True
-        OUTPUT_NAME ${PROJECT_NAME}                                                                # out binary name, differs from target name
-        CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.app # out directory name, differs from target name
-        MACOSX_BUNDLE_GUI_IDENTIFIER com.${COMPANY_NAME}.${PROJECT_NAME}.app
-        MACOSX_BUNDLE_BUNDLE_NAME ${PROJECT_NAME}
-        MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-        MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
-        MACOSX_BUNDLE_COPYRIGHT ${COMPANY_NAME}
-        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/assets/app.plist
-    )
-    file(TOUCH_NOCREATE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.app/Contents/PkgInfo)
-    file(WRITE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.app/Contents/PkgInfo "APPL????")
-    target_link_libraries(${PROJECT_NAME}_app PRIVATE ${PLUGIN_LIBRARIES} "-framework Cocoa -framework CoreMIDI -framework CoreAudio -framework CoreServices")
-    target_compile_definitions(${PROJECT_NAME}_app PRIVATE ${PLUGIN_DEFINITIONS} CPLUG_BUILD_STANDALONE)
-    target_compile_options(${PROJECT_NAME}_app PRIVATE ${PLUGIN_OPTIONS})
-    add_dependencies(${PROJECT_NAME}_app shader_header)
+    add_executable(${PROJECT_NAME}_standalone MACOSX_BUNDLE ${PLUGIN_SOURCES} modules/CPLUG/src/cplug_standalone_osx.m)
+    target_link_libraries(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_LIBRARIES} "-framework CoreMIDI -framework CoreAudio -framework CoreServices")
+
+    configure_info_plist(${PROJECT_NAME}_standalone ${APP_BUNDLE_ID} "APPL" "app")
+
+    file(TOUCH_NOCREATE "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/PkgInfo")
+    file(WRITE "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/PkgInfo" "APPL????")
 endif()
-
-
-# ██╗   ██╗███████╗████████╗██████╗ 
-# ██║   ██║██╔════╝╚══██╔══╝╚════██╗
-# ██║   ██║███████╗   ██║    █████╔╝
-# ╚██╗ ██╔╝╚════██║   ██║    ╚═══██╗
-#  ╚████╔╝ ███████║   ██║   ██████╔╝
-#   ╚═══╝  ╚══════╝   ╚═╝   ╚═════╝ 
-
-add_library(${PROJECT_NAME}_vst3 MODULE ${PLUGIN_SOURCES} modules/CPLUG/src/cplug_vst3.c)
-target_include_directories(${PROJECT_NAME}_vst3 PRIVATE ${PLUGIN_INCLUDE})
-target_link_libraries(${PROJECT_NAME}_vst3 PRIVATE ${PLUGIN_LIBRARIES})
-target_compile_definitions(${PROJECT_NAME}_vst3 PRIVATE ${PLUGIN_DEFINITIONS} CPLUG_BUILD_VST3)
-target_compile_options(${PROJECT_NAME}_vst3 PRIVATE ${PLUGIN_OPTIONS})
-if (WIN32)
-    set_target_properties(${PROJECT_NAME}_vst3 PROPERTIES
-        OUTPUT_NAME ${PROJECT_NAME}
-        SUFFIX .vst3
-        PDB_NAME ${PROJECT_NAME}_vst3
-    )
-elseif (APPLE)
-    set_target_properties(${PROJECT_NAME}_vst3 PROPERTIES
-        BUNDLE True
-        BUNDLE_EXTENSION vst3
-        OUTPUT_NAME ${PROJECT_NAME}                                                                 # out binary name, differs from target name
-        CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.vst3 # out directory name, differs from target name
-        MACOSX_BUNDLE_BUNDLE_NAME ${PROJECT_NAME}
-        MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-        MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
-        MACOSX_BUNDLE_GUI_IDENTIFIER com.${COMPANY_NAME}.${PROJECT_NAME}.vst3
-        MACOSX_BUNDLE_COPYRIGHT ${COMPANY_NAME}
-        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/assets/vst3.plist
-    )
-    file(TOUCH_NOCREATE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.vst3/Contents/PkgInfo)
-    file(WRITE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.vst3/Contents/PkgInfo "BNDL????")
-endif()
-
-#  ██████╗██╗      █████╗ ██████╗
-# ██╔════╝██║     ██╔══██╗██╔══██╗
-# ██║     ██║     ███████║██████╔╝
-# ██║     ██║     ██╔══██║██╔═══╝
-# ╚██████╗███████╗██║  ██║██║
-#  ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝
-
-add_library(${PROJECT_NAME}_clap MODULE ${PLUGIN_SOURCES} modules/CPLUG/src/cplug_clap.c)
-target_include_directories(${PROJECT_NAME}_clap PRIVATE ${PLUGIN_INCLUDE})
-target_link_libraries(${PROJECT_NAME}_clap PRIVATE ${PLUGIN_LIBRARIES})
-target_compile_definitions(${PROJECT_NAME}_clap PRIVATE ${PLUGIN_DEFINITIONS} CPLUG_BUILD_CLAP)
-target_compile_options(${PROJECT_NAME}_clap PRIVATE ${PLUGIN_OPTIONS})
-
-if (WIN32)
-    set_target_properties(${PROJECT_NAME}_clap PROPERTIES
-        OUTPUT_NAME ${PROJECT_NAME}
-        SUFFIX .clap
-        PDB_NAME ${PROJECT_NAME}_clap
-        )
-elseif(APPLE)
-    set_target_properties(${PROJECT_NAME}_clap PROPERTIES
-        BUNDLE True
-        BUNDLE_EXTENSION clap
-        OUTPUT_NAME ${PROJECT_NAME}                                                                 # out binary name, differs from target name
-        CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.clap # out directory name, differs from target name
-        MACOSX_BUNDLE_GUI_IDENTIFIER com.${COMPANY_NAME}.${PROJECT_NAME}.clap
-        MACOSX_BUNDLE_BUNDLE_NAME ${PROJECT_NAME}
-        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT ${COMPANY_NAME}
-        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/assets/clap.plist
-        )
-    file(TOUCH_NOCREATE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.clap/Contents/PkgInfo)
-    file(WRITE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.clap/Contents/PkgInfo "BNDL????")
-endif()
-
-#  █████╗ ██╗   ██╗██╗   ██╗██████╗ 
-# ██╔══██╗██║   ██║██║   ██║╚════██╗
-# ███████║██║   ██║██║   ██║ █████╔╝
-# ██╔══██║██║   ██║╚██╗ ██╔╝██╔═══╝ 
-# ██║  ██║╚██████╔╝ ╚████╔╝ ███████╗
-# ╚═╝  ╚═╝ ╚═════╝   ╚═══╝  ╚══════╝
-
-# Read the comments here carefully. Building Audio Units v2 through CMake is not as easy as VST3 or CLAP
-
-if (APPLE)
-
-add_library(${PROJECT_NAME}_auv2 MODULE ${PLUGIN_SOURCES} modules/CPLUG/src/cplug_auv2.c)
-target_include_directories(${PROJECT_NAME}_auv2 PRIVATE ${PLUGIN_INCLUDE})
-target_link_libraries(${PROJECT_NAME}_auv2 PRIVATE ${PLUGIN_LIBRARIES} "-framework AudioToolbox") # -framework AudioToolbox may not be required...
-target_compile_options(${PROJECT_NAME}_auv2 PRIVATE ${PLUGIN_OPTIONS})
-
-# The following properties will end up in our bundles .plist, but must be set here.
-# CMake doesn't support passing them as arguments in 'set_target_properties' below
-# Some of these properties are used by both the .plist, and inside the AU when the host requests a 'ClassInfo' dict
-# I would love to only define these in example/config.h, but then I would be duplicating these properties.
-# Instead, I configure all AU settings from a single place
-# Full list of AU types & tags here:
-# https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/AudioUnit.html
-# The properties:
-set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.${COMPANY_NAME}.${PROJECT_NAME}.auv2")
-set(MACOSX_BUNDLE_DESCRIPTION ${PROJECT_NAME})
-set(MACOSX_BUNDLE_TAGS "<string>Synthesizer</string>")
-set(MACOSX_BUNDLE_TYPE "aumu")
-set(MACOSX_BUNDLE_SUBTYPE "RIFF")
-set(MACOSX_BUNDLE_MANUFACTURER "ExAc")
-# Convert version string (1.0.0) > integer (65536)
-math(EXPR MACOSX_BUNDLE_VERSION_INT "${PROJECT_VERSION_MAJOR} << 16 | ${PROJECT_VERSION_MINOR} << 8 | ${PROJECT_VERSION_PATCH}" OUTPUT_FORMAT DECIMAL) # cool trick bro
-
-set_target_properties(${PROJECT_NAME}_auv2 PROPERTIES
-    BUNDLE True
-    BUNDLE_EXTENSION component
-    OUTPUT_NAME ${PROJECT_NAME}                                                                      # out binary name, differs from target name
-    CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.component # out directory name, differs from target name
-    MACOSX_BUNDLE_BUNDLE_NAME ${PROJECT_NAME}
-    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-    MACOSX_BUNDLE_COPYRIGHT ${COMPANY_NAME}
-    MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/assets/auv2.plist
-    )
-file(TOUCH_NOCREATE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.component/Contents/PkgInfo)
-file(WRITE ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.component/Contents/PkgInfo "BNDL????")
-
-target_compile_definitions(${PROJECT_NAME}_auv2 PRIVATE
-    ${PLUGIN_DEFINITIONS}
-    CPLUG_AUV2_VERSION_INT=${MACOSX_BUNDLE_VERSION_INT}
-    CPLUG_AUV2_BUNDLE_ID="${MACOSX_BUNDLE_GUI_IDENTIFIER}"
-    CPLUG_BUILD_AUV2
-)
-add_dependencies(${PROJECT_NAME}_auv2 shader_header)
-
-if (CMAKE_BUILD_TYPE MATCHES Debug)
-    add_custom_command(TARGET ${PROJECT_NAME}_auv2 POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.component to ~/Library/Audio/Plug-Ins/Components/"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.component" "~/Library/Audio/Plug-Ins/Components/${PROJECT_NAME}.component"
-        )
-endif() # Debug
-endif() # APPLE
+target_include_directories(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_INCLUDE})
+target_compile_definitions(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_DEFINITIONS} CPLUG_BUILD_STANDALONE)
+target_compile_options(${PROJECT_NAME}_standalone PRIVATE ${PLUGIN_OPTIONS})
+add_dependencies(${PROJECT_NAME}_standalone shader_header)

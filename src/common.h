@@ -18,14 +18,14 @@
 // See list of categories here: https://steinbergmedia.github.io/vst3_doc/vstinterfaces/group__plugType.html
 #define CPLUG_VST3_CATEGORIES "Fx|Filter"
 
-#define CPLUG_VST3_TUID_COMPONENT  'CPLG', 'comp', 'SCRM', 0
-#define CPLUG_VST3_TUID_CONTROLLER 'CPLG', 'edit', 'SCRM', 0
+#define CPLUG_VST3_TUID_COMPONENT  'Cure', 'comp', 'SCRM', 0
+#define CPLUG_VST3_TUID_CONTROLLER 'Cure', 'edit', 'SCRM', 0
 
 #define CPLUG_AUV2_VIEW_CLASS     ScreamTemplateView
 #define CPLUG_AUV2_VIEW_CLASS_STR "ScreamTemplateView"
 
-#define CPLUG_CLAP_ID          "com.cplug.screamtemplate"
-#define CPLUG_CLAP_DESCRIPTION "Scream Template"
+#define CPLUG_CLAP_ID          "com.cureaudio.skibidiscream"
+#define CPLUG_CLAP_DESCRIPTION "skibidiscream"
 #define CPLUG_CLAP_FEATURES    CLAP_PLUGIN_FEATURE_FILTER
 
 #include <xhl/alloc.h>

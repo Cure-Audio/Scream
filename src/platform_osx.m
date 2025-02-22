@@ -1,4 +1,5 @@
 #define SOKOL_METAL
+#define SOKOL_GFX_IMPL
 #define XHL_FILES_IMPL
 #define XHL_TIME_IMPL
 #define XHL_ALLOC_IMPL
@@ -13,6 +14,8 @@
 #include <xhl/alloc.h>
 #include <xhl/files.h>
 #include <xhl/time.h>
+#include <stdarg.h>  
+#include <stdio.h>  
 
 #ifndef NDEBUG
 void println(const char* const fmt, ...)
