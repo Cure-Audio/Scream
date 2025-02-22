@@ -1,6 +1,10 @@
 #ifndef PLUGIN_CONFIG_H
 #define PLUGIN_CONFIG_H
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+#error Unsupported OS
+#endif
+
 #define CPLUG_IS_INSTRUMENT 0
 
 #define CPLUG_NUM_INPUT_BUSSES  1
@@ -41,5 +45,14 @@ void println(const char* const fmt, ...);
 
 #define PW_MALLOC xmalloc
 #define PW_FREE   xfree
+
+enum
+{
+    GUI_INIT_WIDTH  = 800,
+    GUI_INIT_HEIGHT = GUI_INIT_WIDTH / 2,
+
+    GUI_RATIO_X = 2,
+    GUI_RATIO_Y = 1,
+};
 
 #endif // PLUGIN_CONFIG_H

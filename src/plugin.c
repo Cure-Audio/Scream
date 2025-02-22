@@ -39,8 +39,8 @@ void* cplug_createPlugin(CplugHostContext* ctx)
     struct Plugin* p = xcalloc(1, sizeof(*p));
     p->cplug_ctx     = ctx;
 
-    p->width  = 640;
-    p->height = 480;
+    p->width  = GUI_INIT_WIDTH;
+    p->height = GUI_INIT_HEIGHT;
 
     return p;
 }

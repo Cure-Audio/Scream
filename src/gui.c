@@ -18,7 +18,7 @@ typedef struct GUI
     void*       pw;
     void*       sg;
     NVGcontext* nvg;
-    int         font;
+    int         font_id;
 } GUI;
 
 static void my_sg_logger(
@@ -53,30 +53,69 @@ void pw_get_info(struct PWGetInfo* info)
     }
     else if (info->type == PW_INFO_CONSTRAIN_SIZE)
     {
-        if (info->constrain_size.direction)
+#ifndef NDEBUG
+        static char* names[] = {
+            "PW_RESIZE_UNKNOWN",
+            "PW_RESIZE_LEFT",
+            "PW_RESIZE_RIGHT",
+            "PW_RESIZE_TOP",
+            "PW_RESIZE_TOPLEFT",
+            "PW_RESIZE_TOPRIGHT",
+            "PW_RESIZE_BOTTOM",
+            "PW_RESIZE_BOTTOMLEFT",
+            "PW_RESIZE_BOTTOMRIGHT",
+        };
+        println("resize direction: %s", names[info->constrain_size.direction]);
+#endif
+        uint32_t width  = info->constrain_size.width;
+        uint32_t height = info->constrain_size.height;
+        switch (info->constrain_size.direction)
         {
-            static char* names[] = {
-                "PW_RESIZE_UNKNOWN",
-                "PW_RESIZE_LEFT",
-                "PW_RESIZE_RIGHT",
-                "PW_RESIZE_TOP",
-                "PW_RESIZE_TOPLEFT",
-                "PW_RESIZE_TOPRIGHT",
-                "PW_RESIZE_BOTTOM",
-                "PW_RESIZE_BOTTOMLEFT",
-                "PW_RESIZE_BOTTOMRIGHT",
-            };
-            println("resize direction: %s", names[info->constrain_size.direction]);
-        }
-        if (info->constrain_size.width < 100)
-            info->constrain_size.width = 100;
-        if (info->constrain_size.width > 1000)
-            info->constrain_size.width = 1000;
+        case PW_RESIZE_UNKNOWN:
+        case PW_RESIZE_TOPLEFT:
+        case PW_RESIZE_TOPRIGHT:
+        case PW_RESIZE_BOTTOMLEFT:
+        case PW_RESIZE_BOTTOMRIGHT:
+        {
+            uint32_t numX = width / GUI_RATIO_X;
+            uint32_t numY = height / GUI_RATIO_Y;
+            uint32_t num  = numX > numY ? numX : numY;
 
-        if (info->constrain_size.height < 100)
-            info->constrain_size.height = 100;
-        if (info->constrain_size.height > 800)
-            info->constrain_size.height = 800;
+            uint32_t nextW = num * GUI_RATIO_X;
+            uint32_t nextH = num * GUI_RATIO_Y;
+
+            if (nextW > width || nextH > height)
+            {
+                num = num == numX ? numY : numX;
+
+                nextW = num * GUI_RATIO_X;
+                nextH = num * GUI_RATIO_Y;
+            }
+
+            width  = nextW;
+            height = nextH;
+            break;
+        }
+        case PW_RESIZE_LEFT:
+        case PW_RESIZE_RIGHT:
+        {
+            uint32_t num = width / GUI_RATIO_X;
+            width        = num * GUI_RATIO_X;
+            height       = num * GUI_RATIO_Y;
+            break;
+        }
+        case PW_RESIZE_TOP:
+        case PW_RESIZE_BOTTOM:
+        {
+            uint32_t num = height / GUI_RATIO_Y;
+            width        = num * GUI_RATIO_X;
+            height       = num * GUI_RATIO_Y;
+            break;
+        }
+        }
+
+        info->constrain_size.width  = width;
+        info->constrain_size.height = height;
     }
 }
 
@@ -111,13 +150,18 @@ void* pw_create_gui(void* _plugin, void* _pw)
     xassert(gui->nvg);
 
 #ifdef _WIN32
-    int font = nvgCreateFont(gui->nvg, "Arial", "C:\\Windows\\Fonts\\arial.ttf");
+    static const char* font_path = "C:\\Windows\\Fonts\\arial.ttf";
 #elif defined(__APPLE__)
-    int font = nvgCreateFont(gui->nvg, "Arial", "/Library/Fonts/Arial Unicode.ttf");
+    static const char* font_path = "/Library/Fonts/Arial Unicode.ttf";
 #endif
-    xassert(font != -1);
+    int font_id = nvgCreateFont(gui->nvg, "Arial", font_path);
+    xassert(font_id != -1);
+    if (font_id != -1)
+    {
+        println("[CRITICAL] Failed to open font at path %s", font_path);
+    }
 
-    gui->font = font;
+    gui->font_id = font_id;
 
     return gui;
 }
