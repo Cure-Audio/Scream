@@ -23,6 +23,15 @@ typedef struct Plugin
     uint32_t max_block_size;
 
     double params[NUM_PARAMS];
+
+    struct FilterState
+    {
+        float lp[2];
+        float hp[2];
+
+        float prev_sample;
+    } state[2];
+
 } Plugin;
 
 void param_change_begin(Plugin* p, uint32_t param_idx);

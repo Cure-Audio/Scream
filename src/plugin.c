@@ -2,8 +2,10 @@
 
 #include "plugin.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <xhl/maths.h>
 #include <xhl/time.h>
 
 // Apparently denormals aren't a problem on ARM & M1?
@@ -29,6 +31,12 @@
 #define RESTORE_DENORMALS fesetenv(&_fenv);
 #endif
 
+// Used for midi note maths
+#define MIDI_NOTE_NUM_20Hz  15.486820576352429f // getMidiNoteFromHertz(20)
+#define MIDI_NOTE_NUM_20kHz 135.0762319922975f  // getMidiNoteFromHertz(20000)
+// getMidiNoteFromHertz(20000) - getMidiNoteFromHertz(20)
+#define MIDI_NOTE_NUM_RANGE 119.58941141594507f
+
 void cplug_libraryLoad()
 {
     xtime_init();
@@ -44,7 +52,8 @@ void* cplug_createPlugin(CplugHostContext* ctx)
     p->width  = GUI_INIT_WIDTH;
     p->height = GUI_INIT_HEIGHT;
 
-    p->params[0] = 0.5;
+    for (int i = 0; i < ARRLEN(p->params); i++)
+        p->params[i] = cplug_getDefaultParameterValue(p, i);
 
     return p;
 }
@@ -95,9 +104,9 @@ double cplug_getParameterValue(void* _p, uint32_t paramId)
 }
 double cplug_getDefaultParameterValue(void*, uint32_t paramId)
 {
-    double v = 0;
-    if (paramId == kCutoff)
-        v = 0.5;
+    double v = 0.5;
+    if (paramId == kResonance)
+        v = xm_normd(-2.0, -18.0, 6);
     return v;
 }
 // [hopefully audio thread] VST3 & AU only
@@ -112,9 +121,28 @@ double cplug_parameterStringToValue(void*, uint32_t paramId, const char* str)
     scanf(str, "%f", &val);
     return val;
 }
+
 void cplug_parameterValueToString(void*, uint32_t paramId, char* buf, size_t bufsize, double value)
 {
-    snprintf(buf, bufsize, "%f", value);
+    switch (paramId)
+    {
+    case kCutoff:
+    case kScream:
+    {
+        float Hz = xm_fast_denomalise_Hz(value);
+        snprintf(buf, bufsize, "%.2fHz", Hz);
+        break;
+    }
+    case kResonance:
+    {
+        float dB = xm_lerpf(value, -18, 6);
+        snprintf(buf, bufsize, "%.2fdB", dB);
+        break;
+    }
+    default:
+        snprintf(buf, bufsize, "%f", value);
+        break;
+    }
 }
 
 void param_change_begin(Plugin* p, uint32_t param_idx)
@@ -148,12 +176,71 @@ void cplug_setSampleRateAndBlockSize(void* _p, double sampleRate, uint32_t maxBl
     Plugin* p         = _p;
     p->sample_rate    = sampleRate;
     p->max_block_size = maxBlockSize;
+
+    memset(&p->state, 0, sizeof(p->state));
+}
+
+// SvfLinearTrapOptimised2
+// https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
+typedef union Coeffs
+{
+    struct
+    {
+        float a1, a2, a3, m0, m1, m2;
+    };
+    void* _align;
+} Coeffs;
+
+static inline float calcG(float fc, float fs_inv /*sampleRateInv*/)
+{
+    return xm_fasttan_normalised(XM_HALF_PIf * 1.27f * fc * fs_inv);
+}
+Coeffs filter_LP(float fc, float fs_inv)
+{
+    float g = calcG(fc, fs_inv);
+    float k = 1.0f / 0.707f;
+    // float k = XM_SQRT2f; // Butterworth
+
+    float a1 = 1.0f / (1.0f + g * (g + k));
+    float a2 = g * a1;
+    float a3 = g * a2;
+
+    float m0 = 0.0f;
+    float m1 = 0.0f;
+    float m2 = 1.0f;
+    return (Coeffs){a1, a2, a3, m0, m1, m2};
+}
+
+Coeffs filter_HP(float fc, float fs_inv)
+{
+    float g = calcG(fc, fs_inv);
+    float k = 1.0f / 0.707f;
+    // float k  = XM_SQRT2f; // Butterworth
+    float a1 = 1 / (1 + g * (g + k));
+    float a2 = g * a1;
+    float a3 = g * a2;
+    float m0 = 1;
+    float m1 = -k;
+    float m2 = -1;
+    return (Coeffs){a1, a2, a3, m0, m1, m2};
+}
+
+static inline float filter_process(float v0 /*xn*/, Coeffs* c, float* s)
+{
+    float v3 = v0 - s[1];
+    float v1 = c->a1 * s[0] + c->a2 * v3;
+    float v2 = s[1] + c->a2 * s[0] + c->a3 * v3;
+    s[0]     = 2 * v1 - s[0];
+    s[1]     = 2 * v2 - s[1];
+    return c->m0 * v0 + c->m1 * v1 + c->m2 * v2;
 }
 
 void cplug_process(void* _p, CplugProcessContext* ctx)
 {
     DISABLE_DENORMALS
     Plugin* p = _p;
+
+    const float fs_inv = 1.0f / p->sample_rate;
 
     CplugEvent event;
     uint32_t   frame = 0;
@@ -172,8 +259,60 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             CPLUG_LOG_ASSERT(output[1] != NULL);
 
             int num_frames = event.processAudio.endFrame - frame;
-            memset(output[0] + frame, 0, sizeof(float) * num_frames);
-            memset(output[1] + frame, 0, sizeof(float) * num_frames);
+#ifdef CPLUG_BUILD_STANDALONE
+            // Saw wave oscillator for testing
+            static float phase = 0;
+            const float  inc   = 55.0f * fs_inv; // ~A1
+            for (int i = frame; i < event.processAudio.endFrame; i++)
+            {
+                float saw_wave  = -1 + phase * 2;
+                saw_wave       *= 0.25; // volume
+
+                output[0][i] = saw_wave;
+
+                phase += inc;
+                if (phase >= 1)
+                    phase -= 1;
+            }
+            memcpy(output[1] + frame, output[0] + frame, sizeof(float) * num_frames);
+#endif
+            // Setup params
+            float lowpass       = p->params[kCutoff];
+            float highpass      = p->params[kScream];
+            float feedback_gain = p->params[kResonance];
+
+            lowpass       = xm_fast_denomalise_Hz(lowpass);
+            highpass      = xm_fast_denomalise_Hz(highpass);
+            feedback_gain = xm_lerpf(feedback_gain, -18, 6);
+            feedback_gain = xm_fast_dB_to_gain(feedback_gain);
+
+            // Process
+            Coeffs lp_c = filter_LP(lowpass, fs_inv);
+            Coeffs hp_c = filter_HP(highpass, fs_inv);
+            for (int ch = 0; ch < 2; ch++)
+            {
+                float*             it  = output[ch] + frame;
+                const float* const end = output[ch] + event.processAudio.endFrame;
+                struct FilterState s   = p->state[ch];
+                for (; it != end; it++)
+                {
+                    const float x = *it;
+
+                    // Feedforward
+                    float y = tanhf(x + s.prev_sample);
+                    y       = filter_process(y, &lp_c, s.lp);
+
+                    xassert(y == y);
+                    xassert(y >= -1 && y <= 1);
+                    *it = y;
+
+                    // Feedback
+                    float feed    = filter_process(y, &hp_c, s.hp);
+                    feed          = tanhf(feed * feedback_gain);
+                    s.prev_sample = feed;
+                }
+                p->state[ch] = s;
+            }
 
             frame = event.processAudio.endFrame;
             break;

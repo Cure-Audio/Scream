@@ -398,7 +398,7 @@ void pw_tick(void* _gui)
 
         char   label[24];
         double value = cplug_getParameterValue(gui->plugin, i);
-        snprintf(label, sizeof(label), "%.2f", value);
+        cplug_parameterValueToString(gui->plugin, i, label, sizeof(label), value);
         nvgText(nvg, cx, cy - radius * 1.2, label, NULL);
 
         // Slider Tick/Notch
