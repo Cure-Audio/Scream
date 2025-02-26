@@ -260,9 +260,6 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
     case PARAM_LP_CUTOFF:
         v = 0.5;
         break;
-    case PARAM_HP_CUTOFF:
-        v = 0.05;
-        break;
     case PARAM_LP_RESONANCE:
     case PARAM_HP_RESONANCE:
         v = xm_normd(XM_SQRT1_2f, 0.1, 20);
@@ -270,6 +267,7 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
     case PARAM_FEEDBACK_GAIN:
         v = xm_normd(2.0, -18.0, 24);
         break;
+    case PARAM_HP_CUTOFF:
     default:
         break;
     }
@@ -539,7 +537,9 @@ static inline float filter_process(float v0 /*xn*/, Coeffs* c, float* s)
 void cplug_process(void* _p, CplugProcessContext* ctx)
 {
     DISABLE_DENORMALS
-    Plugin* p = _p;
+    Plugin* p                     = _p;
+    bool    should_post_to_global = false;
+    bool    panic_btn_pressed     = false;
 
     // Dequeue events sent from main thread
     {
@@ -597,6 +597,9 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 CPLUG_LOG_ASSERT(ok);
                 break;
             }
+            case EVENT_PANIC_BUTTON_PRESSED:
+                panic_btn_pressed = true;
+                break;
             }
 
             tail++;
@@ -605,11 +608,24 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         cplug_atomic_exchange_i32(&p->queue_audio_tail, tail);
     }
 
+    float** output = ctx->getAudioOutput(ctx, 0);
+    CPLUG_LOG_ASSERT(output != NULL);
+    CPLUG_LOG_ASSERT(output[0] != NULL);
+    CPLUG_LOG_ASSERT(output[1] != NULL);
+
+    // Force "in place processing"
+    {
+        float** input = ctx->getAudioInput(ctx, 0);
+        if (input && input[0] != output[0])
+        {
+            memcpy(output[0], input[0], sizeof(float) * ctx->numFrames);
+            memcpy(output[1], input[1], sizeof(float) * ctx->numFrames);
+        }
+    }
+
     const float fs_inv      = 1.0f / p->sample_rate;
     bool        is_clipping = false;
     float       peak_gain   = 0;
-
-    bool should_post_to_global = false;
 
     CplugEvent event;
     uint32_t   frame = 0;
@@ -626,11 +642,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             break;
         case CPLUG_EVENT_PROCESS_AUDIO:
         {
-            float** input  = ctx->getAudioInput(ctx, 0);
-            float** output = ctx->getAudioOutput(ctx, 0);
-            CPLUG_LOG_ASSERT(output != NULL);
-            CPLUG_LOG_ASSERT(output[0] != NULL);
-            CPLUG_LOG_ASSERT(output[1] != NULL);
 
             int num_frames = event.processAudio.endFrame - frame;
 #ifdef CPLUG_BUILD_STANDALONE
@@ -670,13 +681,12 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
             for (int ch = 0; ch < 2; ch++)
             {
-                float*             it_x  = input[ch] + frame;
-                float*             it_y  = output[ch] + frame;
-                const float* const end_y = output[ch] + event.processAudio.endFrame;
-                struct FilterState s     = p->state[ch];
-                for (; it_y != end_y; it_x++, it_y++)
+                float*             it  = output[ch] + frame;
+                const float* const end = output[ch] + event.processAudio.endFrame;
+                struct FilterState s   = p->state[ch];
+                for (; it != end; it++, it++)
                 {
-                    const float x = *it_x;
+                    const float x = *it;
 
                     // Feedforward
                     float y = tanhf(x + s.prev_sample);
@@ -700,7 +710,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                             peak_gain = y;
                         is_clipping = true;
                     }
-                    *it_y = y;
+                    *it = y;
 
                     // Feedback
                     float feed    = filter_process(y, &hp_c, s.hp);
@@ -728,11 +738,35 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             break;
         }
     }
+
+    if (panic_btn_pressed)
+    {
+        // Self oscillation is caused by existing feedback & filter state
+        memset(&p->state, 0, sizeof(p->state));
+
+        // Smooth audio fade out. Linear dB
+        const float target_dB   = -100;
+        const float dB_inc      = target_dB / ctx->numFrames;
+        const float scalar_gain = xm_fast_dB_to_gain(dB_inc);
+
+        for (int ch = 0; ch < 2; ch++)
+        {
+            float              gain = scalar_gain;
+            float*             it   = output[ch];
+            const float* const end  = output[ch] + ctx->numFrames;
+            for (; it != end; it++)
+            {
+                *it  *= gain;
+                gain *= gain;
+            }
+        }
+    }
+
     p->is_clipping = is_clipping;
     p->peak_gain   = peak_gain;
     RESTORE_DENORMALS
 
-    if (should_post_to_global)
+    if (should_post_to_global && p->cplug_ctx->type != CPLUG_PLUGIN_IS_STANDALONE)
     {
         send_to_global_event_queue(GLOBAL_EVENT_DEQUEUE_MAIN, p);
     }

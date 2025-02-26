@@ -31,6 +31,9 @@ typedef enum EventType
 {
     EVENT_SET_PARAMETER = 16,
     EVENT_SET_PARAMETER_NOTIFYING_HOST,
+
+    // Helps to stop self oscillation
+    EVENT_PANIC_BUTTON_PRESSED,
 } EventType;
 
 typedef struct Plugin

@@ -17,6 +17,18 @@
 #include <stdio.h>
 #include <string.h>
 
+#define NVG_ALIGN_TL (NVG_ALIGN_TOP | NVG_ALIGN_LEFT)
+#define NVG_ALIGN_TC (NVG_ALIGN_TOP | NVG_ALIGN_CENTER)
+#define NVG_ALIGN_TR (NVG_ALIGN_TOP | NVG_ALIGN_RIGHT)
+
+#define NVG_ALIGN_CL (NVG_ALIGN_MIDDLE | NVG_ALIGN_LEFT)
+#define NVG_ALIGN_CC (NVG_ALIGN_MIDDLE | NVG_ALIGN_CENTER)
+#define NVG_ALIGN_CR (NVG_ALIGN_MIDDLE | NVG_ALIGN_RIGHT)
+
+#define NVG_ALIGN_BL (NVG_ALIGN_BOTTOM | NVG_ALIGN_LEFT)
+#define NVG_ALIGN_BC (NVG_ALIGN_BOTTOM | NVG_ALIGN_CENTER)
+#define NVG_ALIGN_BR (NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT)
+
 typedef struct GUI
 {
     Plugin*     plugin;
@@ -28,8 +40,10 @@ typedef struct GUI
 
     xcomp_root       root;      // root comp state
     xcomp_component  component; // root level component
-    xcomp_component* children[NUM_PARAMS];
+    xcomp_component* children[NUM_PARAMS + 1];
     xcomp_component  sliders[NUM_PARAMS];
+
+    xcomp_component panic_btn;
 
     int    slider_drag_idx;
     xvec2f drag_last;
@@ -138,7 +152,7 @@ void pw_get_info(struct PWGetInfo* info)
     }
 }
 
-void cb_xcomp_gui(struct xcomp_component* comp, uint32_t event, xcomp_event_data data)
+void cb_xcomp_gui(xcomp_component* comp, uint32_t event, xcomp_event_data data)
 {
     if (event == XCOMP_EVENT_DIMENSION_CHANGED)
     {
@@ -161,10 +175,12 @@ void cb_xcomp_gui(struct xcomp_component* comp, uint32_t event, xcomp_event_data
             xcomp_dimensions d = {x - radius, y - radius, 2 * radius, 2 * radius};
             xcomp_set_dimensions(&gui->sliders[i], d);
         }
+
+        xcomp_set_dimensions(&gui->panic_btn, (xcomp_dimensions){width - 100, 0, 100, 40});
     }
 }
 
-void cb_xcomp_slider(struct xcomp_component* comp, uint32_t event, xcomp_event_data data)
+void cb_xcomp_slider(xcomp_component* comp, uint32_t event, xcomp_event_data data)
 {
     GUI* gui        = comp->data;
     int  slider_idx = 0;
@@ -278,6 +294,21 @@ void cb_xcomp_slider(struct xcomp_component* comp, uint32_t event, xcomp_event_d
     }
 }
 
+void cb_xcomp_panic_btn(xcomp_component* comp, uint32_t event, xcomp_event_data data)
+{
+    GUI* gui = comp->data;
+    if (event == XCOMP_EVENT_MOUSE_LEFT_DOWN)
+    {
+        CplugEvent e;
+        e.type = EVENT_PANIC_BUTTON_PRESSED;
+        send_to_audio_event_queue(gui->plugin, e);
+    }
+    else if (event == XCOMP_EVENT_MOUSE_ENTER)
+        pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+    else if (event == XCOMP_EVENT_MOUSE_EXIT)
+        pw_set_mouse_cursor(gui->pw, PW_CURSOR_ARROW);
+}
+
 void* pw_create_gui(void* _plugin, void* _pw)
 {
     CPLUG_LOG_ASSERT(_plugin);
@@ -329,17 +360,21 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->component.data          = gui;
 
     _Static_assert(ARRLEN(gui->sliders) == NUM_PARAMS);
-    _Static_assert(ARRLEN(gui->children) == NUM_PARAMS);
-    for (int i = 0; i < ARRLEN(gui->children); i++)
+    for (int i = 0; i < ARRLEN(gui->sliders); i++)
     {
         xcomp_component* comp = &gui->sliders[i];
         xcomp_add_child(&gui->component, comp);
         comp->data          = gui;
         comp->event_handler = cb_xcomp_slider;
     }
+    xcomp_add_child(&gui->component, &gui->panic_btn);
+
+    gui->panic_btn.data          = gui;
+    gui->panic_btn.event_handler = cb_xcomp_panic_btn;
 
     gui->slider_drag_idx = -1;
 
+    xassert(gui->component.num_children == ARRLEN(gui->children));
     xcomp_dimensions d = {0, 0, p->width, p->height};
     xcomp_set_dimensions(&gui->component, d);
 
@@ -419,7 +454,7 @@ void pw_tick(void* _gui)
 
         // Labels
         nvgFillColor(nvg, col_text);
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgTextAlign(nvg, NVG_ALIGN_CC);
         nvgFontSize(nvg, gui->scale * 16);
 
         char label[24];
@@ -453,12 +488,27 @@ void pw_tick(void* _gui)
     {
         float width  = gui->plugin->width;
         float height = gui->plugin->height;
-        nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
+        nvgTextAlign(nvg, NVG_ALIGN_BR);
         nvgFillColor(nvg, nvgRGBAf(1, 0.1, 0.1, 1));
         float dB = xm_fast_gain_to_dB(gui->plugin->peak_gain);
         char  label[48];
         snprintf(label, sizeof(label), "[WARNING] Auto hardclipper: ON. %.2fdB", dB);
         nvgText(nvg, width - 20, height - 20, label, NULL);
+    }
+
+    // Panic button
+    {
+        xcomp_dimensions d = gui->panic_btn.dimensions;
+        nvgBeginPath(nvg);
+        nvgRect(nvg, d.x, d.y, d.width, d.height);
+        nvgFillColor(nvg, (NVGcolor){0.8f, 0.1f, 0.2f, 1.0f});
+        nvgFill(nvg);
+
+        nvgFillColor(nvg, (NVGcolor){0.9f, 0.9f, 0.2f, 1.0f});
+        nvgTextAlign(nvg, NVG_ALIGN_CC);
+        if (gui->panic_btn.flags & XCOMP_FLAG_IS_MOUSE_LEFT_DOWN)
+            d.y += 1.0f;
+        nvgText(nvg, d.x + d.width * 0.5f, d.y + d.height * 0.5f, "PANIC!", NULL);
     }
 
     // Timer
