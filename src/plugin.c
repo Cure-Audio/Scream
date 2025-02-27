@@ -684,7 +684,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 float*             it  = output[ch] + frame;
                 const float* const end = output[ch] + event.processAudio.endFrame;
                 struct FilterState s   = p->state[ch];
-                for (; it != end; it++, it++)
+                for (; it != end; it++)
                 {
                     const float x = *it;
 
