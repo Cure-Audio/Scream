@@ -438,9 +438,6 @@ void pw_tick(void* _gui)
 
     NVGcontext* nvg = gui->nvg;
 
-    // plot_expander(nvg, gui->plugin->width, gui->plugin->height);
-    // plot_peak_detection(nvg, gui->plugin->width, gui->plugin->height);
-
     const NVGcolor col_text = nvgRGBA(143, 150, 160, 255);
 
     for (int i = 0; i < ARRLEN(SLIDER_POSITIONS); i++)
@@ -514,6 +511,14 @@ void pw_tick(void* _gui)
         if (gui->panic_btn.flags & XCOMP_FLAG_IS_MOUSE_LEFT_DOWN)
             d.y += 1.0f;
         nvgText(nvg, d.x + d.width * 0.5f, d.y + d.height * 0.5f, "PANIC!", NULL);
+    }
+
+    {
+        float width  = gui->plugin->width;
+        float height = gui->plugin->height;
+        // plot_expander(nvg, width, height);
+        // plot_peak_detection(nvg, width, height);
+        plot_peak_distortion(nvg, 0, 2, height - 4, height - 4, gui->plugin->main_params[PARAM_FEEDBACK_GAIN]);
     }
 
     // Timer

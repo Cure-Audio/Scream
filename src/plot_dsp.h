@@ -91,3 +91,89 @@ void plot_peak_detection(NVGcontext* nvg, float width, float height)
     nvgStrokeWidth(nvg, 1.0f);
     nvgStroke(nvg);
 }
+
+float distort_compress(float x, float drive)
+{
+    x = x * (1 + drive * 3);
+
+    float threshold = 0 - drive * 12;
+    float knee      = 60 - drive * 50;
+    // float knee  = 24 - drive * 18;
+    float ratio = 1.4 + drive * 2.6;
+    // float ratio = 1.4 + drive * 0.6;
+    // float ratio = 1.01;
+
+    float dB   = xm_fast_gain_to_dB(fabsf(x));
+    dB         = soft_knee_compress(dB, threshold, 1.0f / ratio, knee);
+    float gain = xm_fast_dB_to_gain(dB);
+    float y    = copysignf(gain, x);
+    return y;
+}
+
+float distort(float x, float drive)
+{
+    // float y = tanhf(x * (1 + drive * 3));
+    // float y = x;
+
+    float tanh_y = tanhf(x * (1 + drive * 4));
+    float comp_y = distort_compress(x, drive);
+
+    // float mix = fabsf(comp_y);
+    float mix = fabsf(x);
+    if (mix > 1)
+        mix = 1;
+
+    // float y = comp_y * (1 - mix) + tanh_y * mix; // mix wet/dry
+    // float y = comp_y * (1 - 0.5 * drive) + tanh_y * drive * 0.5; // mix wet/dry
+    float y = comp_y;
+
+    xassert(y == y);
+    if (y != y)
+        y = 0;
+    if (y > 1)
+        y = 1;
+    if (y < -1)
+        y = -1;
+
+    return y;
+}
+
+void plot_peak_distortion(NVGcontext* nvg, float x, float y, float width, float height, float drive)
+{
+    const float half_height = height * 0.5f;
+    const float cy          = y + half_height;
+
+    nvgBeginPath(nvg);
+
+    nvgMoveTo(nvg, x + width * 0.5f, y);
+    nvgLineTo(nvg, x + width * 0.5f, y + height);
+    nvgMoveTo(nvg, x, y + height * 0.5f);
+    nvgLineTo(nvg, x + width, y + height * 0.5f);
+    nvgStrokeWidth(nvg, 1.2);
+    nvgStrokeColor(nvg, nvgRGBAf(0.2, 0.2, 0.3, 1.0f));
+    nvgStroke(nvg);
+
+    float       sample_inc = 2 / width;
+    float       in_sample  = -1;
+    float       pt_x       = x;
+    const float right      = x + width;
+
+    nvgBeginPath(nvg);
+    while (pt_x < right)
+    {
+        float out_sample = distort(in_sample, drive);
+
+        float pt_y = cy - out_sample * half_height;
+        if (pt_x == x)
+            nvgMoveTo(nvg, pt_x, pt_y);
+        else
+            nvgLineTo(nvg, pt_x, pt_y);
+
+        in_sample += sample_inc;
+        pt_x      += 1;
+    }
+
+    nvgStrokeColor(nvg, nvgRGBA(255, 0, 127, 255));
+    nvgStrokeWidth(nvg, 4);
+    nvgStroke(nvg);
+}
