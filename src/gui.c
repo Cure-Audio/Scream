@@ -546,7 +546,6 @@ void pw_tick(void* _gui)
         struct imgui_widget btn = {w - 80, h - 80, w - 20, h - 20};
         if (imgui_button(&gui->imgui, &btn))
         {
-            println("Pressed!");
             btn.y += 1;
             btn.b += 1;
         }
@@ -554,6 +553,29 @@ void pw_tick(void* _gui)
         nvgRect(nvg, btn.x, btn.y, btn.r - btn.x, btn.b - btn.y);
         nvgFillColor(nvg, nvgRGBA(127, 255, 255, 255));
         nvgFill(nvg);
+    }
+
+    // imgui slider
+    {
+        int w = gui->plugin->width;
+        int h = gui->plugin->height;
+
+        struct imgui_widget slider = {w - 180, h - 80, w - 120, h - 20};
+        static float        v      = 0.5;
+        imgui_slider(&gui->imgui, &slider, &v, 0, 1);
+
+        nvgBeginPath(nvg);
+        nvgRect(nvg, slider.x, slider.y, slider.r - slider.x, slider.b - slider.y);
+        nvgFillColor(nvg, nvgRGBA(127, 255, 255, 255));
+        nvgFill(nvg);
+
+        char label[8];
+        snprintf(label, sizeof(label), "%.2f", v);
+        nvgFillColor(nvg, (NVGcolor){0, 0, 0, 1});
+        nvgTextAlign(nvg, NVG_ALIGN_CC);
+        float cx = (slider.x + slider.r) * 0.5f;
+        float cy = (slider.y + slider.b) * 0.5f;
+        nvgText(nvg, cx, cy, label, NULL);
     }
 
     // End frame
