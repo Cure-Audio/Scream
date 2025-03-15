@@ -543,8 +543,13 @@ void pw_tick(void* _gui)
         int w = gui->plugin->width;
         int h = gui->plugin->height;
 
-        struct imgui_widget btn = {w - 80, h - 80, w - 20, h - 20};
-        if (imgui_button(&gui->imgui, &btn))
+        struct imgui_widget btn   = {w - 80, h - 80, w - 20, h - 20};
+        bool                press = imgui_check_press(&gui->imgui, &btn);
+        if (press && gui->imgui.mouse_left_down_frame)
+        {
+            println("press");
+        }
+        if (press)
         {
             btn.y += 1;
             btn.b += 1;
