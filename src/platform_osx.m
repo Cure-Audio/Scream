@@ -11,6 +11,8 @@
 #define SOKOL_ASSERT(cond) (cond) ? (void)0 : __builtin_debugtrap()
 #endif
 
+#include "common.h"
+
 #include "libs/sokol_gfx.h"
 #include <cplug_extensions/window_osx.m>
 
@@ -23,6 +25,9 @@
 #include <xhl/maths.h>
 #include <xhl/thread.h>
 #include <xhl/time.h>
+
+CFRunLoopTimerRef g_timer;
+int               g_platform_init_counter = 0;
 
 #ifndef NDEBUG
 void println(const char* const fmt, ...)
@@ -58,3 +63,34 @@ void println(const char* const fmt, ...)
     }
 }
 #endif // NDEBUG
+
+extern void dequeue_global_events();
+void        g_timer_cb(CFRunLoopTimerRef timer, void* info) { dequeue_global_events(); }
+
+void library_load_platform()
+{
+    g_platform_init_counter++;
+
+    if (g_timer == NULL)
+    {
+        g_timer = CFRunLoopTimerCreate(NULL, CFAbsoluteTimeGetCurrent() + 0.2, 0.2, 0, 0, g_timer_cb, NULL);
+        xassert(g_timer != NULL);
+        if (g_timer)
+            CFRunLoopAddTimer(CFRunLoopGetCurrent(), g_timer, kCFRunLoopCommonModes);
+    }
+}
+void library_unload_platform()
+{
+    dequeue_global_events();
+
+    g_platform_init_counter--;
+    if (g_platform_init_counter == 0)
+    {
+        if (g_timer)
+        {
+            CFRunLoopTimerInvalidate(g_timer);
+            CFRelease(g_timer);
+        }
+        g_timer = NULL;
+    }
+}
