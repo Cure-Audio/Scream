@@ -67,7 +67,7 @@ void main_dequeue_events(Plugin* p)
     {
         GUI* gui = p->gui;
         if (head != tail)
-            gui->imgui.has_redrawn = false;
+            gui->imgui.num_duplicate_backbuffers = 0;
     }
 
     while (tail != head)
@@ -369,8 +369,15 @@ void pw_tick(void* _gui)
 
     main_dequeue_events(gui->plugin);
 
-    // NOTE: this can be used to stop redrawing when there are no new events
-    if (gui->imgui.has_redrawn)
+#if defined(_WIN32)
+    // Using the CPLUG window extension, we have configured our DXGI backbuffer count to a maximum of 2
+    const uint32_t MAX_DUP_BACKBUFFER_COUNT = 2;
+#elif defined(__APPLE__)
+    // Using the CPLUG window extension, we use the default settings in MTKView, which appears to work fine with
+    const uint32_t MAX_DUP_BACKBUFFER_COUNT = 1;
+#endif
+
+    if (gui->imgui.num_duplicate_backbuffers >= MAX_DUP_BACKBUFFER_COUNT)
         return;
 
     int width  = gui->plugin->width;

@@ -19,9 +19,14 @@ xvec2f imgui_centre(const imgui_widget* widget)
 
 typedef struct imgui_context
 {
-    // Set to false whenever there are new events
-    // Set to 0 on init
-    bool has_redrawn;
+    // Roughly tracks how many duplicate frames this library produces
+    // If you app receives new events that affect your widgets/display, you should set this number to 0
+    // Every call to imgui_end_frame() increments this number
+    // It can be used in event driven rendering. If you are, be warned: depending on your platform and swapchain
+    // settings, you may need to draw duplicate frames to all your backbuffers. If your app has stopped redrawing and
+    // one of your backbuffers is not a duplicate of the other, then you may get stuck with a flickering screen, which
+    // is caused by your driver cycling through backbuffers.
+    uint32_t num_duplicate_backbuffers;
 
     bool mouse_left_down;
     bool mouse_left_down_frame;
@@ -156,19 +161,19 @@ void imgui_slider(imgui_context* ctx, imgui_widget* widget, float* value, float 
 // Call at the end of every frame after all events have been processed
 void imgui_end_frame(imgui_context* ctx)
 {
-    ctx->has_redrawn           = true;
+    ctx->num_duplicate_backbuffers++;
     ctx->mouse_left_down_frame = false;
     if (ctx->mouse_left_up_frame)
     {
-        ctx->has_redrawn     = false;
-        ctx->mouse_left_down = false;
+        ctx->num_duplicate_backbuffers = 0;
+        ctx->mouse_left_down           = false;
     }
     ctx->mouse_left_up_frame = false;
 }
 
 void imgui_send_event(imgui_context* ctx, const PWEvent* e)
 {
-    ctx->has_redrawn = false;
+    ctx->num_duplicate_backbuffers = 0;
 
     if (e->type == PW_EVENT_MOUSE_LEFT_DOWN)
     {
