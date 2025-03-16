@@ -446,23 +446,20 @@ void pw_tick(void* _gui)
                 param_set(gui->plugin, i, value_d);
             }
         }
-        if (press != gui->drag_params[i])
+        if (imgui_check_drag(im, press, &gui->drag_params[i]))
         {
-            gui->drag_params[i] = press;
-            if (press)
+            if (gui->drag_params[i]) // drag start
                 param_change_begin(gui->plugin, i);
-            else
+            else // drag end
                 param_change_end(gui->plugin, i);
         }
-        if (press)
+        if (gui->drag_params[i]) // drag move
         {
             float next_value = value_f;
             imgui_drag_value(im, &next_value, 0, 1, IMGUI_DRAG_VERTICAL);
             bool changed = value_f != next_value;
             if (changed)
             {
-                im->left_click_counter = 0; // okay now this is jank. come up with better double clicks
-
                 value_d = value_f = next_value;
                 param_change_update(gui->plugin, i, value_d);
             }

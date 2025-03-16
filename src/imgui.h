@@ -69,6 +69,28 @@ bool imgui_check_hover(imgui_context* ctx, imgui_widget* widget, bool* last_hove
     return toggle;
 }
 
+// Returns true if drag state toggled
+bool imgui_check_drag(imgui_context* ctx, bool press, bool* last_drag)
+{
+    bool toggle = false;
+    if (*last_drag)
+    {
+        toggle = ctx->mouse_left_up_frame;
+    }
+    else if (press) // && !last_drag
+    {
+        float distance_x = fabsf(ctx->mouse_down.x - ctx->mouse_move.x);
+        float distance_y = fabsf(ctx->mouse_down.y - ctx->mouse_move.y);
+        float distance_r = hypotf(distance_x, distance_y);
+        toggle           = distance_r > 5;
+        if (toggle)
+            ctx->left_click_counter = 0;
+    }
+    if (toggle)
+        *last_drag = !(*last_drag);
+    return toggle;
+}
+
 enum ImguiDragType
 {
     IMGUI_DRAG_HORIZONTAL_VERTICAL,
@@ -78,9 +100,7 @@ enum ImguiDragType
 
 void imgui_drag_value(imgui_context* ctx, float* value, float vmin, float vmax, enum ImguiDragType drag_type)
 {
-    if (ctx->mouse_left_down_frame)
-        ctx->mouse_last_drag = ctx->mouse_down;
-
+    xassert(ctx->mouse_left_down); // Are you really dragging right now? Or has your drag ended?
     float delta_x = ctx->mouse_move.x - ctx->mouse_last_drag.x;
     float delta_y = ctx->mouse_last_drag.y - ctx->mouse_move.y;
 
@@ -158,6 +178,8 @@ void imgui_send_event(imgui_context* ctx, const PWEvent* e)
         ctx->mouse_move.y          = e->mouse.y;
         ctx->mouse_down.x          = e->mouse.x;
         ctx->mouse_down.y          = e->mouse.y;
+        ctx->mouse_last_drag.x     = e->mouse.x;
+        ctx->mouse_last_drag.y     = e->mouse.y;
 
         uint32_t diff = e->mouse.time_ms - ctx->last_left_click_time;
         if (diff > e->mouse.double_click_interval_ms)
