@@ -11,14 +11,18 @@ typedef struct imgui_widget
 
 typedef struct imgui_context
 {
-    xvec2f mouse_down;
-    xvec2f mouse_up;
-    xvec2f mouse_move;
-    xvec2f mouse_last_drag;
+    // Set to false whenever there are new events
+    // Set to 0 on init
+    bool has_redrawn;
 
     bool mouse_left_down;
     bool mouse_left_down_frame;
     bool mouse_left_up_frame;
+
+    xvec2f mouse_down;
+    xvec2f mouse_up;
+    xvec2f mouse_move;
+    xvec2f mouse_last_drag;
 } imgui_context;
 
 bool imgui_hittest(xvec2f pos, imgui_widget* widget)
@@ -80,16 +84,20 @@ void imgui_slider(imgui_context* ctx, imgui_widget* widget, float* value, float 
     }
 }
 
+// Call at the end of every frame after all events have been processed
 void imgui_end_frame(imgui_context* ctx)
 {
     ctx->mouse_left_down_frame = false;
     if (ctx->mouse_left_up_frame)
         ctx->mouse_left_down = false;
     ctx->mouse_left_up_frame = false;
+    ctx->has_redrawn         = true;
 }
 
 void imgui_send_event(imgui_context* ctx, const PWEvent* e)
 {
+    ctx->has_redrawn = false;
+
     if (e->type == PW_EVENT_MOUSE_LEFT_DOWN)
     {
         ctx->mouse_left_down       = true;

@@ -69,9 +69,6 @@ void send_to_global_event_queue(enum GlobalEvent type, Plugin* ptr)
     xt_spinlock_unlock(&g_event_queue.lock);
 }
 
-void main_set_param(Plugin* p, ParamID id, double value);
-void audio_set_param(Plugin* p, ParamID id, double value);
-
 void dequeue_global_events()
 {
     if (!g_is_main_thread)
@@ -148,37 +145,6 @@ void main_notify_host_param_change(Plugin* p, ParamID id, double value)
         event.type = CPLUG_EVENT_PARAM_CHANGE_END;
         p->cplug_ctx->sendParamEvent(p->cplug_ctx, &event);
     }
-}
-
-void main_dequeue_events(Plugin* p)
-{
-    CPLUG_LOG_ASSERT(is_main_thread());
-    uint32_t head = xt_atomic_load_u32(&p->queue_main_head) & EVENT_QUEUE_MASK;
-    uint32_t tail = p->queue_main_tail;
-
-    while (tail != head)
-    {
-        CplugEvent* event = &p->queue_main_events[tail];
-
-        switch (event->type)
-        {
-        case CPLUG_EVENT_PARAM_CHANGE_UPDATE:
-        case EVENT_SET_PARAMETER:
-        case EVENT_SET_PARAMETER_NOTIFYING_HOST:
-            main_set_param(p, event->parameter.id, event->parameter.value);
-            if (event->type == EVENT_SET_PARAMETER_NOTIFYING_HOST)
-                main_notify_host_param_change(p, event->parameter.id, event->parameter.value);
-            break;
-
-        default:
-            println("[MAIN] Unhandled event in main queue: %u", event->type);
-            break;
-        }
-
-        tail++;
-        tail &= EVENT_QUEUE_MASK;
-    }
-    p->queue_main_tail = tail;
 }
 
 void cplug_libraryLoad()

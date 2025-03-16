@@ -67,6 +67,44 @@ _Static_assert(ARRLEN(SLIDER_POSITIONS) == NUM_PARAMS);
 // end - start
 #define SLIDER_LENGTH_RAD 5.23577831647275f
 
+void main_dequeue_events(Plugin* p)
+{
+    CPLUG_LOG_ASSERT(is_main_thread());
+    uint32_t head = xt_atomic_load_u32(&p->queue_main_head) & EVENT_QUEUE_MASK;
+    uint32_t tail = p->queue_main_tail;
+
+    if (p->gui)
+    {
+        GUI* gui = p->gui;
+        if (head != tail)
+            gui->imgui.has_redrawn = false;
+    }
+
+    while (tail != head)
+    {
+        CplugEvent* event = &p->queue_main_events[tail];
+
+        switch (event->type)
+        {
+        case CPLUG_EVENT_PARAM_CHANGE_UPDATE:
+        case EVENT_SET_PARAMETER:
+        case EVENT_SET_PARAMETER_NOTIFYING_HOST:
+            main_set_param(p, event->parameter.id, event->parameter.value);
+            if (event->type == EVENT_SET_PARAMETER_NOTIFYING_HOST)
+                main_notify_host_param_change(p, event->parameter.id, event->parameter.value);
+            break;
+
+        default:
+            println("[MAIN] Unhandled event in main queue: %u", event->type);
+            break;
+        }
+
+        tail++;
+        tail &= EVENT_QUEUE_MASK;
+    }
+    p->queue_main_tail = tail;
+}
+
 static void my_sg_logger(
     const char* tag,              // always "sapp"
     uint32_t    log_level,        // 0=panic, 1=error, 2=warning, 3=info
@@ -406,6 +444,10 @@ void pw_tick(void* _gui)
 
     main_dequeue_events(gui->plugin);
 
+    // NOTE: this can be used to stop redrawing when there are no new events
+    if (gui->imgui.has_redrawn)
+        return;
+
     // Begin frame
     {
         int width  = gui->plugin->width;
@@ -522,20 +564,6 @@ void pw_tick(void* _gui)
         // plot_expander(nvg, width, height);
         // plot_peak_detection(nvg, width, height);
         plot_peak_distortion(nvg, 0, 2, height - 4, height - 4, gui->plugin->main_params[PARAM_FEEDBACK_GAIN]);
-    }
-
-    // Timer
-    {
-        uint64_t now  = xtime_now_ns();
-        now          /= 1000000;
-        double sec    = (double)now / 1000.0;
-        nvgFillColor(gui->nvg, col_text);
-        nvgFontSize(gui->nvg, gui->scale * 16);
-        nvgTextAlign(gui->nvg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        char str[24];
-        snprintf(str, sizeof(str), "%.3fsec", sec);
-        const float height = gui->plugin->height;
-        nvgText(gui->nvg, 20, height - 20, str, NULL);
     }
 
     // imgui button

@@ -1,5 +1,6 @@
 #pragma once
 #include <math.h>
+#include <xhl/debug.h>
 #include <xhl/maths.h>
 
 // SvfLinearTrapOptimised2
