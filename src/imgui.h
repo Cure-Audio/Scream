@@ -42,6 +42,50 @@ bool imgui_check_release(imgui_context* ctx, imgui_widget* widget)
 
 bool imgui_check_hover(imgui_context* ctx, imgui_widget* widget) { return imgui_hittest(ctx->mouse_move, widget); }
 
+enum ImguiDragType
+{
+    IMGUI_DRAG_HORIZONTAL_VERTICAL,
+    IMGUI_DRAG_HORIZONTAL,
+    IMGUI_DRAG_VERTICAL,
+};
+
+void imgui_drag_value(imgui_context* ctx, float* value, float vmin, float vmax, enum ImguiDragType drag_type)
+{
+    if (ctx->mouse_left_down_frame)
+        ctx->mouse_last_drag = ctx->mouse_down;
+
+    float delta_x = ctx->mouse_move.x - ctx->mouse_last_drag.x;
+    float delta_y = ctx->mouse_last_drag.y - ctx->mouse_move.y;
+
+    ctx->mouse_last_drag.x = ctx->mouse_move.x;
+    ctx->mouse_last_drag.y = ctx->mouse_move.y;
+
+    float delta_px = 0;
+    switch (drag_type)
+    {
+    case IMGUI_DRAG_HORIZONTAL_VERTICAL:
+        delta_px = fabsf(delta_x) > fabsf(delta_y) ? delta_x : delta_y;
+        break;
+    case IMGUI_DRAG_HORIZONTAL:
+        delta_px = delta_x;
+        break;
+    case IMGUI_DRAG_VERTICAL:
+        delta_px = delta_y;
+        break;
+    }
+    float delta_norm = delta_px / 300;
+
+    float delta_value  = vmin + delta_norm * (vmax - vmin); // lerp
+    float next_value   = *value;
+    next_value        += delta_value;
+    if (next_value > vmax)
+        next_value = vmax;
+    if (next_value < vmin)
+        next_value = vmin;
+
+    *value = next_value;
+}
+
 // Act on press
 bool imgui_button(imgui_context* ctx, imgui_widget* widget)
 {
@@ -58,29 +102,7 @@ void imgui_slider(imgui_context* ctx, imgui_widget* widget, float* value, float 
     xassert(vmin < vmax);
     if (imgui_check_press(ctx, widget))
     {
-        if (ctx->mouse_left_down_frame)
-            ctx->mouse_last_drag = ctx->mouse_down;
-
-        float delta_x = ctx->mouse_move.x - ctx->mouse_last_drag.x;
-        float delta_y = ctx->mouse_last_drag.y - ctx->mouse_move.y;
-
-        ctx->mouse_last_drag.x = ctx->mouse_move.x;
-        ctx->mouse_last_drag.y = ctx->mouse_move.y;
-
-        // float delta_px   = fabsf(delta_x) > fabsf(delta_y) ? delta_x : delta_y; // Vertical/horizontal drag
-        float delta_px = delta_y; // Vertical
-        // float delta_px   = delta_x; // Horizontal
-        float delta_norm = delta_px / 300;
-
-        float delta_value  = vmin + delta_norm * (vmax - vmin); // lerp
-        float next_value   = *value;
-        next_value        += delta_value;
-        if (next_value > vmax)
-            next_value = vmax;
-        if (next_value < vmin)
-            next_value = vmin;
-
-        *value = next_value;
+        imgui_drag_value(ctx, value, vmin, vmax, IMGUI_DRAG_VERTICAL);
     }
 }
 
