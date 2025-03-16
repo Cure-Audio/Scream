@@ -5,7 +5,6 @@
 #include "plot_dsp.h"
 #include "plugin.h"
 
-#include <xhl/component.h>
 #include <xhl/debug.h>
 #include <xhl/files.h>
 #include <xhl/maths.h>
@@ -43,20 +42,11 @@ typedef struct GUI
 
     struct imgui_context imgui;
 
+    bool hover_params[NUM_PARAMS];
+    bool drag_params[NUM_PARAMS];
     bool hover_panic_btn;
-
-    xcomp_root       root;      // root comp state
-    xcomp_component  component; // root level component
-    xcomp_component* children[NUM_PARAMS];
-    xcomp_component  sliders[NUM_PARAMS];
-
-    int    slider_drag_idx;
-    xvec2f drag_last;
-    double drag_val_normalised;
 } GUI;
 
-static const float SLIDER_POSITIONS[] = {0.1666, 0.3333, 0.5, 0.6666, 0.8333};
-_Static_assert(ARRLEN(SLIDER_POSITIONS) == NUM_PARAMS);
 // Relative to GUI width
 #define SLIDER_RADIUS 0.075f
 // Angle radians
@@ -195,32 +185,7 @@ void pw_get_info(struct PWGetInfo* info)
     }
 }
 
-void cb_xcomp_gui(xcomp_component* comp, uint32_t event, xcomp_event_data data)
-{
-    if (event == XCOMP_EVENT_DIMENSION_CHANGED)
-    {
-        GUI*  gui    = comp->data;
-        float width  = comp->dimensions.width;
-        float height = comp->dimensions.height;
-        // Retain size info for when the GUI is destroyed / reopened
-        gui->plugin->width  = width;
-        gui->plugin->height = height;
-
-        gui->scale = (float)width / (float)GUI_INIT_WIDTH;
-
-        float radius = SLIDER_RADIUS * width;
-        for (int i = 0; i < ARRLEN(SLIDER_POSITIONS); i++)
-        {
-            float pos = SLIDER_POSITIONS[i];
-            float x   = pos * width;
-            float y   = 0.5f * height;
-
-            xcomp_dimensions d = {x - radius, y - radius, 2 * radius, 2 * radius};
-            xcomp_set_dimensions(&gui->sliders[i], d);
-        }
-    }
-}
-
+/*
 void cb_xcomp_slider(xcomp_component* comp, uint32_t event, xcomp_event_data data)
 {
     GUI* gui        = comp->data;
@@ -334,6 +299,7 @@ void cb_xcomp_slider(xcomp_component* comp, uint32_t event, xcomp_event_data dat
         param_set(gui->plugin, slider_idx, v);
     }
 }
+*/
 
 void* pw_create_gui(void* _plugin, void* _pw)
 {
@@ -378,27 +344,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
     }
 
     gui->font_id = font_id;
-    gui->scale   = 1.0f;
-
-    gui->root.main               = &gui->component;
-    gui->component.children      = gui->children;
-    gui->component.event_handler = cb_xcomp_gui;
-    gui->component.data          = gui;
-
-    _Static_assert(ARRLEN(gui->sliders) == NUM_PARAMS);
-    for (int i = 0; i < ARRLEN(gui->sliders); i++)
-    {
-        xcomp_component* comp = &gui->sliders[i];
-        xcomp_add_child(&gui->component, comp);
-        comp->data          = gui;
-        comp->event_handler = cb_xcomp_slider;
-    }
-
-    gui->slider_drag_idx = -1;
-
-    xassert(gui->component.num_children == ARRLEN(gui->children));
-    xcomp_dimensions d = {0, 0, p->width, p->height};
-    xcomp_set_dimensions(&gui->component, d);
+    gui->scale   = (float)gui->plugin->width / (float)GUI_INIT_WIDTH;
 
     return gui;
 }
@@ -460,21 +406,55 @@ void pw_tick(void* _gui)
         nvgBeginFrame(gui->nvg, width, height, pw_get_dpi(gui->pw));
     }
 
-    NVGcontext* nvg = gui->nvg;
+    NVGcontext*    nvg = gui->nvg;
+    imgui_context* im  = &gui->imgui;
 
     const NVGcolor col_text = nvgRGBA(143, 150, 160, 255);
 
+    // Main parameters
+    static const float SLIDER_POSITIONS[] = {0.1666, 0.3333, 0.5, 0.6666, 0.8333};
+    _Static_assert(ARRLEN(SLIDER_POSITIONS) == NUM_PARAMS);
+    const float slider_radius = SLIDER_RADIUS * width;
     for (int i = 0; i < ARRLEN(SLIDER_POSITIONS); i++)
     {
-        xcomp_dimensions* d = &gui->sliders[i].dimensions;
+        xvec2f pt;
+        pt.x = SLIDER_POSITIONS[i] * width;
+        pt.y = height * 0.5f;
 
-        float cx     = d->x + 0.5f * d->width;
-        float cy     = d->y + 0.5f * d->height;
-        float radius = d->width * 0.5f;
+        double value_d = gui->plugin->main_params[i];
+        float  value_f = value_d;
+
+        bool dragging = im->mouse_left_down && imgui_hittest_circle(im->mouse_down, pt, slider_radius);
+        if (dragging != gui->drag_params[i])
+        {
+            gui->drag_params[i] = dragging;
+            if (dragging)
+                param_change_begin(gui->plugin, i);
+            else
+                param_change_end(gui->plugin, i);
+        }
+        if (dragging)
+        {
+            float next_value = value_f;
+            imgui_drag_value(im, &next_value, 0, 1, IMGUI_DRAG_VERTICAL);
+            bool changed = value_f != next_value;
+            if (changed)
+            {
+                value_d = value_f = next_value;
+                param_change_update(gui->plugin, i, value_d);
+            }
+        }
+        bool hover = imgui_hittest_circle(im->mouse_move, pt, slider_radius);
+        if (hover != gui->hover_params[i])
+        {
+            gui->hover_params[i]     = hover;
+            enum PWCursorType cursor = hover ? PW_CURSOR_RESIZE_NS : PW_CURSOR_ARROW;
+            pw_set_mouse_cursor(gui->pw, cursor);
+        }
 
         // Knob
         nvgBeginPath(nvg);
-        nvgCircle(nvg, cx, cy, radius);
+        nvgCircle(nvg, pt.x, pt.y, slider_radius);
         nvgFillColor(nvg, nvgRGBA(91, 100, 109, 255));
         nvgFill(nvg);
 
@@ -485,25 +465,24 @@ void pw_tick(void* _gui)
 
         char label[24];
         cplug_getParameterName(gui->plugin, i, label, sizeof(label));
-        nvgText(nvg, cx, cy + radius * 1.4, label, NULL);
+        nvgText(nvg, pt.x, pt.y + slider_radius * 1.4, label, NULL);
 
-        double value = gui->plugin->main_params[i];
-        cplug_parameterValueToString(gui->plugin, i, label, sizeof(label), value);
-        nvgText(nvg, cx, cy - radius * 1.2, label, NULL);
+        cplug_parameterValueToString(gui->plugin, i, label, sizeof(label), value_d);
+        nvgText(nvg, pt.x, pt.y - slider_radius * 1.2, label, NULL);
 
         // Slider Tick/Notch
-        float value_norm  = cplug_normaliseParameterValue(gui->plugin, i, value);
+        float value_norm  = cplug_normaliseParameterValue(gui->plugin, i, value_d);
         float angle_value = SLIDER_START_RAD + value_norm * SLIDER_LENGTH_RAD;
 
         float angle_x = cosf(angle_value);
         float angle_y = sinf(angle_value);
 
-        float tick_radius_start = radius * 0.8f;
-        float tick_radius_end   = radius * 0.4f;
+        float tick_radius_start = slider_radius * 0.8f;
+        float tick_radius_end   = slider_radius * 0.4f;
 
         nvgBeginPath(nvg);
-        nvgMoveTo(nvg, cx + tick_radius_start * angle_x, cy + tick_radius_start * angle_y);
-        nvgLineTo(nvg, cx + tick_radius_end * angle_x, cy + tick_radius_end * angle_y);
+        nvgMoveTo(nvg, pt.x + tick_radius_start * angle_x, pt.y + tick_radius_start * angle_y);
+        nvgLineTo(nvg, pt.x + tick_radius_end * angle_x, pt.y + tick_radius_end * angle_y);
         nvgStrokeWidth(nvg, gui->scale * 8);
         nvgStrokeColor(nvg, nvgRGBA(40, 47, 83, 255));
         nvgLineCap(nvg, NVG_ROUND);
@@ -561,25 +540,6 @@ void pw_tick(void* _gui)
         // plot_peak_distortion(nvg, 0, 2, height - 4, height - 4, gui->plugin->main_params[PARAM_FEEDBACK_GAIN]);
     }
 
-    // imgui slider
-    {
-        struct imgui_widget slider = {width - 180, height - 80, width - 120, height - 20};
-        static float        v      = 0.5;
-        imgui_slider(&gui->imgui, &slider, &v, 0, 1);
-
-        nvgBeginPath(nvg);
-        nvgRect(nvg, slider.x, slider.y, slider.r - slider.x, slider.b - slider.y);
-        nvgFillColor(nvg, nvgRGBA(127, 255, 255, 255));
-        nvgFill(nvg);
-
-        char label[8];
-        snprintf(label, sizeof(label), "%.2f", v);
-        nvgFillColor(nvg, (NVGcolor){0, 0, 0, 1});
-        nvgTextAlign(nvg, NVG_ALIGN_CC);
-        xvec2f pt = imgui_centre(&slider);
-        nvgText(nvg, pt.x, pt.y, label, NULL);
-    }
-
     // End frame
     nvgEndFrame(gui->nvg);
     sg_end_pass(gui->sg);
@@ -595,92 +555,13 @@ bool pw_event(const PWEvent* event)
     if (!gui || !gui->plugin)
         return false;
 
-    switch (event->type)
+    if (PW_EVENT_RESIZE)
     {
-    case PW_EVENT_RESIZE:
-    {
-        xcomp_dimensions dimensions = {0, 0, event->resize.width, event->resize.height};
-        xcomp_set_dimensions(&gui->component, dimensions);
-        break;
+        // Retain size info for when the GUI is destroyed / reopened
+        gui->plugin->width  = event->resize.width;
+        gui->plugin->height = event->resize.height;
+        gui->scale          = (float)event->resize.width / (float)GUI_INIT_WIDTH;
     }
-    case PW_EVENT_MOUSE_EXIT:
-    {
-        xcomp_event_data data = {
-            .x         = event->mouse.x,
-            .y         = event->mouse.y,
-            .modifiers = event->mouse.modifiers,
-        };
-        xcomp_send_mouse_position(&gui->root, data);
-        break;
-    }
-    case PW_EVENT_MOUSE_ENTER:
-    case PW_EVENT_MOUSE_MOVE:
-    {
-        xcomp_event_data data = {
-            .x         = event->mouse.x,
-            .y         = event->mouse.y,
-            .modifiers = event->mouse.modifiers,
-        };
-        xcomp_send_mouse_position(&gui->root, data);
-        break;
-    }
-    case PW_EVENT_MOUSE_SCROLL_WHEEL:
-    case PW_EVENT_MOUSE_SCROLL_TOUCHPAD:
-    {
-        if (gui->root.mouse_over)
-        {
-            xcomp_event_data data = {
-                .x         = event->mouse.x,
-                .y         = event->mouse.y,
-                .modifiers = event->mouse.modifiers,
-            };
-            bool     is_wheel = event->type == PW_EVENT_MOUSE_SCROLL_WHEEL;
-            uint32_t ev_type  = is_wheel ? XCOMP_EVENT_MOUSE_SCROLL_WHEEL : XCOMP_EVENT_MOUSE_SCROLL_TOUCHPAD;
-
-            gui->root.mouse_over->event_handler(gui->root.mouse_over, ev_type, data);
-        }
-        break;
-    }
-    case PW_EVENT_MOUSE_LEFT_DOWN:
-    case PW_EVENT_MOUSE_RIGHT_DOWN:
-    case PW_EVENT_MOUSE_MIDDLE_DOWN:
-    {
-        xcomp_event_data data = {
-            .x         = event->mouse.x,
-            .y         = event->mouse.y,
-            .modifiers = event->mouse.modifiers,
-        };
-        xcomp_send_mouse_down(&gui->root, data);
-        break;
-    }
-    case PW_EVENT_MOUSE_LEFT_UP:
-    case PW_EVENT_MOUSE_RIGHT_UP:
-    case PW_EVENT_MOUSE_MIDDLE_UP:
-    {
-        xcomp_event_data data = {
-            .x         = event->mouse.x,
-            .y         = event->mouse.y,
-            .modifiers = event->mouse.modifiers,
-        };
-        xcomp_send_mouse_up(&gui->root, data, event->mouse.time_ms, event->mouse.double_click_interval_ms);
-        break;
-    }
-
-    case PW_EVENT_KEY_FOCUS_LOST:
-        xcomp_root_give_keyboard_focus(&gui->root, NULL);
-        break;
-
-    case PW_EVENT_DPI_CHANGED:
-    case PW_EVENT_KEY_DOWN:
-    case PW_EVENT_KEY_UP:
-    case PW_EVENT_TEXT:
-    case PW_EVENT_FILE_ENTER:
-    case PW_EVENT_FILE_MOVE:
-    case PW_EVENT_FILE_DROP:
-    case PW_EVENT_FILE_EXIT:
-        break;
-    }
-
     imgui_send_event(&gui->imgui, event);
 
     return false;

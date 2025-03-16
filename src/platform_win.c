@@ -1,7 +1,6 @@
 #define SOKOL_D3D11
 #define SOKOL_GFX_IMPL
 #define XHL_ALLOC_IMPL
-#define XHL_COMPONENT_IMPL
 #define XHL_FILES_IMPL
 #define XHL_MATHS_IMPL
 #define XHL_THREAD_IMPL
@@ -18,7 +17,6 @@
 
 #include <stdio.h>
 #include <xhl/alloc.h>
-#include <xhl/component.h>
 #include <xhl/debug.h>
 #include <xhl/files.h>
 #include <xhl/maths.h>
