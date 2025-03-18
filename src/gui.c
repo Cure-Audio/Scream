@@ -185,122 +185,6 @@ void pw_get_info(struct PWGetInfo* info)
     }
 }
 
-/*
-void cb_xcomp_slider(xcomp_component* comp, uint32_t event, xcomp_event_data data)
-{
-    GUI* gui        = comp->data;
-    int  slider_idx = 0;
-    for (; slider_idx < ARRLEN(gui->sliders); slider_idx++)
-    {
-        if (comp == &gui->sliders[slider_idx])
-            break;
-    }
-    CPLUG_LOG_ASSERT(slider_idx != ARRLEN(gui->sliders));
-
-    // The xcomp lib only supports these drag callbacks for rectangles, and we are drawing a really large round rotary
-    // knob, and not using all vailable pixels within the square. The hit test flag helps us skip any click events that
-    // occur without the flag.
-    static const uint64_t FLAG_HIT_TEST = 1 << 16;
-
-    if (event == XCOMP_EVENT_MOUSE_MOVE)
-    {
-        // hit test
-        float cx = comp->dimensions.x + 0.5f * comp->dimensions.width;
-        float cy = comp->dimensions.y + 0.5f * comp->dimensions.height;
-
-        float diff_x      = data.x - cx;
-        float diff_y      = data.y - cy;
-        float distance_px = hypotf(fabsf(diff_x), fabsf(diff_y));
-
-        float radius = SLIDER_RADIUS * gui->component.dimensions.width;
-        if (distance_px <= radius)
-        {
-            if (!(comp->flags & FLAG_HIT_TEST))
-                pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_NS);
-            comp->flags |= FLAG_HIT_TEST;
-        }
-        else
-        {
-            if ((comp->flags & FLAG_HIT_TEST))
-                pw_set_mouse_cursor(gui->pw, PW_CURSOR_ARROW);
-            comp->flags &= ~FLAG_HIT_TEST;
-        }
-    }
-    else if (event == XCOMP_EVENT_MOUSE_EXIT)
-        pw_set_mouse_cursor(gui->pw, PW_CURSOR_ARROW);
-    else if (event == XCOMP_EVENT_MOUSE_LEFT_DOWN)
-    {
-        if (!(comp->flags & FLAG_HIT_TEST))
-            return;
-
-        double val = gui->plugin->main_params[slider_idx];
-        cplug_normaliseParameterValue(gui->plugin, slider_idx, val);
-        gui->slider_drag_idx     = slider_idx;
-        gui->drag_last.x         = data.x;
-        gui->drag_last.y         = data.y;
-        gui->drag_val_normalised = val;
-
-        param_change_begin(gui->plugin, slider_idx);
-    }
-    else if (event == XCOMP_EVENT_DRAG_MOVE)
-    {
-        if (gui->slider_drag_idx < 0)
-            return;
-
-        const bool fine_increment = data.modifiers & (XCOMP_MOD_PLATFORM_KEY_CTRL | XCOMP_MOD_KEY_SHIFT);
-
-        float diff = (data.x - gui->drag_last.x) + (gui->drag_last.y - data.y);
-        if (fine_increment)
-            diff *= 0.1f;
-
-        double       next_val;
-        const double drag_range_px = 400.0; // drag sensitivity
-
-        next_val = gui->drag_val_normalised + diff * (1.0f / drag_range_px);
-        if (next_val < 0)
-            next_val = 0;
-        if (next_val > 1)
-            next_val = 1;
-
-        gui->drag_last.x         = data.x;
-        gui->drag_last.y         = data.y;
-        gui->drag_val_normalised = next_val;
-
-        next_val = cplug_denormaliseParameterValue(gui->plugin, slider_idx, next_val);
-        param_change_update(gui->plugin, slider_idx, next_val);
-    }
-    else if (event == XCOMP_EVENT_DRAG_END)
-    {
-        if (gui->slider_drag_idx < 0)
-            return;
-
-        param_change_end(gui->plugin, slider_idx);
-        gui->slider_drag_idx = -1;
-    }
-    else if (event == XCOMP_EVENT_MOUSE_LEFT_DOUBLE_CLICK)
-    {
-        gui->root.left_click_counter = 0;
-
-        double v = cplug_getDefaultParameterValue(gui->plugin, slider_idx);
-        param_set(gui->plugin, slider_idx, v);
-    }
-    else if (event == XCOMP_EVENT_MOUSE_SCROLL_WHEEL)
-    {
-        double delta  = data.y / 120.0;
-        delta        *= 0.01;
-
-        const bool fine_increment = data.modifiers & (XCOMP_MOD_PLATFORM_KEY_CTRL | XCOMP_MOD_KEY_SHIFT);
-        if (fine_increment)
-            delta *= 0.01;
-
-        double v  = gui->plugin->main_params[slider_idx];
-        v        += delta;
-
-        param_set(gui->plugin, slider_idx, v);
-    }
-}
-*/
-
 void* pw_create_gui(void* _plugin, void* _pw)
 {
     CPLUG_LOG_ASSERT(_plugin);
@@ -371,7 +255,7 @@ void pw_tick(void* _gui)
 
 #if defined(_WIN32)
     // Using the CPLUG window extension, we have configured our DXGI backbuffer count to a maximum of 2
-    const uint32_t MAX_DUP_BACKBUFFER_COUNT = 2;
+    const uint32_t MAX_DUP_BACKBUFFER_COUNT = 2 + 2;
 #elif defined(__APPLE__)
     // Using the CPLUG window extension, we use the default settings in MTKView, which appears to work fine with
     const uint32_t MAX_DUP_BACKBUFFER_COUNT = 1;
@@ -463,6 +347,18 @@ void pw_tick(void* _gui)
         }
         if (events & IMGUI_EVENT_DRAG_END)
             param_change_end(gui->plugin, i);
+        if (events & IMGUI_EVENT_MOUSE_WHEEL)
+        {
+            double delta = im->mouse_wheel * 0.1;
+            if (im->mouse_wheel_mods & PW_MOD_PLATFORM_KEY_CTRL)
+                delta *= 0.1;
+            if (im->mouse_wheel_mods & PW_MOD_KEY_SHIFT)
+                delta *= 0.1;
+
+            double v  = gui->plugin->main_params[i];
+            v        += delta;
+            param_set(gui->plugin, i, v);
+        }
 
         // Knob
         nvgBeginPath(nvg);

@@ -2,7 +2,6 @@
 #include <cplug_extensions/window.h>
 #include <math.h>
 #include <stdbool.h>
-#include <stdint.h>
 
 typedef struct imgui_rect
 {
@@ -34,12 +33,12 @@ typedef struct imgui_context
     // be considered a design flaw and future improvements to the design should be made. Great design makes mistakes
     // difficult. Similar problems may exist when responding to drag drop + end events.
     // For now, you will need to be prepared to program like a ninja handling out of order events!
-    uint32_t id;
-    uint32_t mouse_over_id;
-    uint32_t mouse_over_last_frame_id;
-    uint32_t mouse_left_down_id;
-    uint32_t mouse_drag_id;
-    uint32_t mouse_drag_over_id;
+    unsigned id;
+    unsigned mouse_over_id;
+    unsigned mouse_over_last_frame_id;
+    unsigned mouse_left_down_id;
+    unsigned mouse_drag_id;
+    unsigned mouse_drag_over_id;
 
     // Roughly tracks how many duplicate frames this library produces
     // If you app receives new events that affect your widgets/display, you should set this number to 0
@@ -48,10 +47,10 @@ typedef struct imgui_context
     // settings, you may need to draw duplicate frames to all your backbuffers. If your app has stopped redrawing and
     // one of your backbuffers is not a duplicate of the other, then you may get stuck with a flickering screen, which
     // is caused by your driver cycling through backbuffers.
-    uint32_t num_duplicate_backbuffers;
+    unsigned num_duplicate_backbuffers;
 
-    uint32_t left_click_counter;
-    uint32_t last_left_click_time;
+    unsigned left_click_counter;
+    unsigned last_left_click_time;
 
     bool mouse_left_down;
     bool mouse_left_down_frame;
@@ -59,16 +58,19 @@ typedef struct imgui_context
     bool mouse_inside_window;
 
     imgui_pt mouse_down;
-    uint32_t mouse_down_mods;
+    unsigned mouse_down_mods;
 
-    uint32_t mouse_up_mods;
+    unsigned mouse_up_mods;
     imgui_pt mouse_up;
 
     imgui_pt mouse_move;
-    uint32_t mouse_move_mods;
+    unsigned mouse_move_mods;
 
-    uint32_t mouse_scroll_mods;
-    imgui_pt mouse_scroll;
+    unsigned mouse_touch_scroll_mods;
+    imgui_pt mouse_touch_scroll;
+
+    unsigned mouse_wheel_mods;
+    int      mouse_wheel;
 
     imgui_pt mouse_last_drag;
 } imgui_context;
@@ -100,6 +102,8 @@ enum
     IMGUI_EVENT_DRAG_END   = 1 << 7,
     IMGUI_EVENT_DRAG_MOVE  = 1 << 8,
 
+    IMGUI_EVENT_MOUSE_WHEEL = 1 << 9,
+
     // IMGUI_EVENT_DRAG_ENTER = 1 << 9, // Drag target
     // IMGUI_EVENT_DRAG_EXIT  = 1 << 10,
     // IMGUI_EVENT_DRAG_OVER  = 1 << 11,
@@ -111,10 +115,10 @@ enum
     // TODO: keyboard events
 };
 
-uint32_t _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool release)
+unsigned _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool release)
 {
-    uint32_t events = 0;
-    uint32_t id     = ++ctx->id;
+    unsigned events = 0;
+    unsigned id     = ++ctx->id;
 
     // Left mouse button
     if (press && ctx->mouse_left_down_frame)
@@ -151,10 +155,9 @@ uint32_t _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool rele
         events |= IMGUI_EVENT_DRAG_MOVE | IMGUI_EVENT_MOUSE_HOVER;
 
     // Hover
-    const bool not_hovering                          = hover && ctx->mouse_over_id != id;
     const bool not_dragging_anything                 = ctx->mouse_drag_id == 0;
     const bool will_release_another_widget_from_drag = ctx->mouse_left_up_frame && ctx->mouse_drag_id != id;
-    if (not_hovering && (not_dragging_anything || will_release_another_widget_from_drag))
+    if (hover && ctx->mouse_over_id != id && (not_dragging_anything || will_release_another_widget_from_drag))
     {
         events             |= IMGUI_EVENT_MOUSE_ENTER;
         ctx->mouse_over_id  = id;
@@ -168,7 +171,11 @@ uint32_t _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool rele
     if (hover && ctx->mouse_over_id == id)
         events |= IMGUI_EVENT_MOUSE_HOVER;
 
-    if (events & (IMGUI_EVENT_MOUSE_ENTER | IMGUI_EVENT_MOUSE_EXIT | IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_DRAG_END))
+    if (ctx->mouse_over_id == id && ctx->mouse_wheel)
+        events |= IMGUI_EVENT_MOUSE_WHEEL;
+
+    if (events & (IMGUI_EVENT_MOUSE_ENTER | IMGUI_EVENT_MOUSE_EXIT | IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_DRAG_END |
+                  IMGUI_EVENT_MOUSE_WHEEL))
     {
         ctx->left_click_counter        = 0;
         ctx->num_duplicate_backbuffers = 0;
@@ -177,7 +184,7 @@ uint32_t _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool rele
     return events;
 }
 
-uint32_t imgui_get_events_rect(imgui_context* ctx, const imgui_rect* rect)
+unsigned imgui_get_events_rect(imgui_context* ctx, const imgui_rect* rect)
 {
     bool hover   = ctx->mouse_inside_window && imgui_hittest_rect(ctx->mouse_move, rect);
     bool press   = ctx->mouse_left_down && imgui_hittest_rect(ctx->mouse_down, rect);
@@ -185,7 +192,7 @@ uint32_t imgui_get_events_rect(imgui_context* ctx, const imgui_rect* rect)
     return _imgui_get_events(ctx, hover, press, release);
 }
 
-uint32_t imgui_get_events_circle(imgui_context* ctx, imgui_pt pt, float radius)
+unsigned imgui_get_events_circle(imgui_context* ctx, imgui_pt pt, float radius)
 {
     bool hover   = ctx->mouse_inside_window && imgui_hittest_circle(ctx->mouse_move, pt, radius);
     bool press   = ctx->mouse_left_down && imgui_hittest_circle(ctx->mouse_down, pt, radius);
@@ -254,10 +261,12 @@ void imgui_end_frame(imgui_context* ctx)
 
     ctx->mouse_over_last_frame_id = ctx->mouse_over_id;
 
-    ctx->mouse_down_mods   = 0;
-    ctx->mouse_up_mods     = 0;
-    ctx->mouse_move_mods   = 0;
-    ctx->mouse_scroll_mods = 0;
+    ctx->mouse_down_mods         = 0;
+    ctx->mouse_up_mods           = 0;
+    ctx->mouse_move_mods         = 0;
+    ctx->mouse_touch_scroll_mods = 0;
+    ctx->mouse_wheel_mods        = 0;
+    ctx->mouse_wheel             = 0;
 
     ctx->id = 0;
 }
@@ -279,7 +288,7 @@ void imgui_send_event(imgui_context* ctx, const PWEvent* e)
 
         ctx->mouse_down_mods |= e->mouse.modifiers;
 
-        uint32_t diff = e->mouse.time_ms - ctx->last_left_click_time;
+        unsigned diff = e->mouse.time_ms - ctx->last_left_click_time;
         if (diff > e->mouse.double_click_interval_ms)
             ctx->left_click_counter = 0;
         if (ctx->left_click_counter >= 3)
@@ -305,9 +314,8 @@ void imgui_send_event(imgui_context* ctx, const PWEvent* e)
     }
     else if (e->type == PW_EVENT_MOUSE_SCROLL_WHEEL)
     {
-        ctx->mouse_scroll.x    += e->mouse.x;
-        ctx->mouse_scroll.y    += e->mouse.y;
-        ctx->mouse_scroll_mods |= e->mouse.modifiers;
+        ctx->mouse_wheel       = (int)(e->mouse.y / 120.0f);
+        ctx->mouse_wheel_mods |= e->mouse.modifiers;
     }
     else if (e->type == PW_EVENT_MOUSE_ENTER)
     {
