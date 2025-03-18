@@ -332,7 +332,7 @@ void pw_tick(void* _gui)
             }
         }
 
-        if (events & IMGUI_EVENT_DRAG_BEGIN)
+        if (events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_TOUCHPAD_BEGIN))
             param_change_begin(gui->plugin, i);
         if (events & IMGUI_EVENT_DRAG_MOVE)
         {
@@ -345,7 +345,26 @@ void pw_tick(void* _gui)
                 param_change_update(gui->plugin, i, value_d);
             }
         }
-        if (events & IMGUI_EVENT_DRAG_END)
+        if (events & IMGUI_EVENT_TOUCHPAD_MOVE)
+        {
+            float delta = im->mouse_touchpad.y / 500.0f;
+            if (im->mouse_touchpad_mods & PW_MOD_INVERTED_SCROLL)
+                delta = -delta;
+            if (im->mouse_touchpad_mods & PW_MOD_PLATFORM_KEY_CTRL)
+                delta *= 0.1f;
+            if (im->mouse_touchpad_mods & PW_MOD_KEY_SHIFT)
+                delta *= 0.1f;
+
+            float next_value = value_f + delta;
+
+            bool changed = value_f != next_value;
+            if (changed)
+            {
+                value_d = value_f = next_value;
+                param_change_update(gui->plugin, i, value_d);
+            }
+        }
+        if (events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
             param_change_end(gui->plugin, i);
         if (events & IMGUI_EVENT_MOUSE_WHEEL)
         {
@@ -465,7 +484,7 @@ bool pw_event(const PWEvent* event)
     if (!gui || !gui->plugin)
         return false;
 
-    if (PW_EVENT_RESIZE)
+    if (event->type == PW_EVENT_RESIZE)
     {
         // Retain size info for when the GUI is destroyed / reopened
         gui->plugin->width  = event->resize.width;

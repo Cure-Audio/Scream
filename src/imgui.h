@@ -52,6 +52,8 @@ typedef struct imgui_context
     unsigned left_click_counter;
     unsigned last_left_click_time;
 
+    unsigned frame_events;
+
     bool mouse_left_down;
     bool mouse_left_down_frame;
     bool mouse_left_up_frame;
@@ -66,8 +68,8 @@ typedef struct imgui_context
     imgui_pt mouse_move;
     unsigned mouse_move_mods;
 
-    unsigned mouse_touch_scroll_mods;
-    imgui_pt mouse_touch_scroll;
+    unsigned mouse_touchpad_mods;
+    imgui_pt mouse_touchpad;
 
     unsigned mouse_wheel_mods;
     int      mouse_wheel;
@@ -104,13 +106,16 @@ enum
 
     IMGUI_EVENT_MOUSE_WHEEL = 1 << 9,
 
+    IMGUI_EVENT_TOUCHPAD_BEGIN = 1 << 10,
+    IMGUI_EVENT_TOUCHPAD_MOVE  = 1 << 11,
+    IMGUI_EVENT_TOUCHPAD_END   = 1 << 12,
+
     // IMGUI_EVENT_DRAG_ENTER = 1 << 9, // Drag target
     // IMGUI_EVENT_DRAG_EXIT  = 1 << 10,
     // IMGUI_EVENT_DRAG_OVER  = 1 << 11,
     // IMGUI_EVENT_DRAG_DROP  = 1 << 12,
 
     // TODO: mouse right & middle
-    // TODO: scroll wheel & touchpad
     // TODO: file drag & drop, import/export
     // TODO: keyboard events
 };
@@ -171,9 +176,17 @@ unsigned _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool rele
     if (hover && ctx->mouse_over_id == id)
         events |= IMGUI_EVENT_MOUSE_HOVER;
 
+    // Mouse wheel & touchpad
     if (ctx->mouse_over_id == id && ctx->mouse_wheel)
         events |= IMGUI_EVENT_MOUSE_WHEEL;
+    if (ctx->mouse_over_id == id && (ctx->frame_events & (1 << PW_EVENT_MOUSE_TOUCHPAD_BEGIN)))
+        events |= IMGUI_EVENT_TOUCHPAD_BEGIN;
+    if (ctx->mouse_over_id == id && (ctx->frame_events & (1 << PW_EVENT_MOUSE_TOUCHPAD_MOVE)))
+        events |= IMGUI_EVENT_TOUCHPAD_MOVE;
+    if (ctx->mouse_over_id == id && (ctx->frame_events & (1 << PW_EVENT_MOUSE_TOUCHPAD_END)))
+        events |= IMGUI_EVENT_TOUCHPAD_END;
 
+    // Cleanup
     if (events & (IMGUI_EVENT_MOUSE_ENTER | IMGUI_EVENT_MOUSE_EXIT | IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_DRAG_END |
                   IMGUI_EVENT_MOUSE_WHEEL))
     {
@@ -252,7 +265,7 @@ void imgui_end_frame(imgui_context* ctx)
 {
     ctx->num_duplicate_backbuffers++;
     ctx->mouse_left_down_frame = false;
-    if (ctx->mouse_left_up_frame)
+    if (ctx->frame_events & (1 << PW_EVENT_MOUSE_LEFT_UP))
     {
         ctx->num_duplicate_backbuffers = 0;
         ctx->mouse_left_down           = false;
@@ -261,12 +274,13 @@ void imgui_end_frame(imgui_context* ctx)
 
     ctx->mouse_over_last_frame_id = ctx->mouse_over_id;
 
-    ctx->mouse_down_mods         = 0;
-    ctx->mouse_up_mods           = 0;
-    ctx->mouse_move_mods         = 0;
-    ctx->mouse_touch_scroll_mods = 0;
-    ctx->mouse_wheel_mods        = 0;
-    ctx->mouse_wheel             = 0;
+    ctx->mouse_down_mods     = 0;
+    ctx->mouse_up_mods       = 0;
+    ctx->mouse_move_mods     = 0;
+    ctx->mouse_touchpad_mods = 0;
+    ctx->mouse_wheel_mods    = 0;
+    ctx->mouse_wheel         = 0;
+    ctx->frame_events        = 0;
 
     ctx->id = 0;
 }
@@ -274,6 +288,7 @@ void imgui_end_frame(imgui_context* ctx)
 void imgui_send_event(imgui_context* ctx, const PWEvent* e)
 {
     ctx->num_duplicate_backbuffers = 0;
+    ctx->frame_events              = 1 << e->type;
 
     if (e->type == PW_EVENT_MOUSE_LEFT_DOWN)
     {
@@ -316,6 +331,14 @@ void imgui_send_event(imgui_context* ctx, const PWEvent* e)
     {
         ctx->mouse_wheel       = (int)(e->mouse.y / 120.0f);
         ctx->mouse_wheel_mods |= e->mouse.modifiers;
+    }
+    else if (
+        e->type == PW_EVENT_MOUSE_TOUCHPAD_MOVE || e->type == PW_EVENT_MOUSE_TOUCHPAD_BEGIN ||
+        e->type == PW_EVENT_MOUSE_TOUCHPAD_END)
+    {
+        ctx->mouse_touchpad.x     = e->mouse.x;
+        ctx->mouse_touchpad.y     = e->mouse.y;
+        ctx->mouse_touchpad_mods |= e->mouse.modifiers;
     }
     else if (e->type == PW_EVENT_MOUSE_ENTER)
     {
