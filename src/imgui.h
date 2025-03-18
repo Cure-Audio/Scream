@@ -126,7 +126,7 @@ uint32_t _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool rele
         float distance_x = fabsf(ctx->mouse_down.x - ctx->mouse_move.x);
         float distance_y = fabsf(ctx->mouse_down.y - ctx->mouse_move.y);
         float distance_r = hypotf(distance_x, distance_y);
-        if (distance_r > 5)
+        if (distance_r > 5) // Drag threshold
         {
             events             |= IMGUI_EVENT_DRAG_BEGIN;
             ctx->mouse_drag_id  = id;
@@ -141,7 +141,10 @@ uint32_t _imgui_get_events(imgui_context* ctx, bool hover, bool press, bool rele
         events |= IMGUI_EVENT_DRAG_MOVE | IMGUI_EVENT_MOUSE_HOVER;
 
     // Hover
-    if (hover && (ctx->mouse_over_id == 0 || ctx->mouse_left_up_frame))
+    const bool not_hovering                          = hover && ctx->mouse_over_id != id;
+    const bool not_dragging_anything                 = ctx->mouse_drag_id == 0;
+    const bool will_release_another_widget_from_drag = ctx->mouse_left_up_frame && ctx->mouse_drag_id != id;
+    if (not_hovering && (not_dragging_anything || will_release_another_widget_from_drag))
     {
         events             |= IMGUI_EVENT_MOUSE_ENTER;
         ctx->mouse_over_id  = id;
