@@ -431,21 +431,15 @@ void pw_tick(void* _gui)
         double value_d = gui->plugin->main_params[i];
         float  value_f = value_d;
 
-        bool hover = imgui_hittest_circle(im->mouse_move, pt, slider_radius);
-        if (hover != gui->hover_params[i]) // mouse enter/exit
-        {
-            gui->hover_params[i]     = hover;
-            enum PWCursorType cursor = hover ? PW_CURSOR_RESIZE_NS : PW_CURSOR_ARROW;
-            pw_set_mouse_cursor(gui->pw, cursor);
-            if (hover) // mouse enter
-                im->left_click_counter = 0;
-        }
+        uint32_t events = imgui_get_events_circle(im, pt, slider_radius);
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_NS);
+        if ((events & IMGUI_EVENT_MOUSE_EXIT) && im->mouse_over_id == 0)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_ARROW);
 
-        // Press/drag, same thing
-        bool press = im->mouse_left_down && imgui_hittest_circle(im->mouse_down, pt, slider_radius);
-        if (im->mouse_left_down_frame && press)
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
         {
-            if (im->left_click_counter == 2) // mouse double click
+            if (im->left_click_counter == 2)
             {
                 im->left_click_counter = 0; // single and triple click not supported
 
@@ -453,14 +447,10 @@ void pw_tick(void* _gui)
                 param_set(gui->plugin, i, value_d);
             }
         }
-        if (imgui_check_drag(im, press, &gui->drag_params[i]))
-        {
-            if (gui->drag_params[i]) // drag start
-                param_change_begin(gui->plugin, i);
-            else // drag end
-                param_change_end(gui->plugin, i);
-        }
-        if (gui->drag_params[i]) // drag move
+
+        if (events & IMGUI_EVENT_DRAG_BEGIN)
+            param_change_begin(gui->plugin, i);
+        if (events & IMGUI_EVENT_DRAG_MOVE)
         {
             float next_value = value_f;
             imgui_drag_value(im, &next_value, 0, 1, IMGUI_DRAG_VERTICAL);
@@ -471,6 +461,8 @@ void pw_tick(void* _gui)
                 param_change_update(gui->plugin, i, value_d);
             }
         }
+        if (events & IMGUI_EVENT_DRAG_END)
+            param_change_end(gui->plugin, i);
 
         // Knob
         nvgBeginPath(nvg);
@@ -521,9 +513,15 @@ void pw_tick(void* _gui)
 
     // Panic button
     {
-        imgui_widget d     = {width - 100, 0, width, 40};
-        bool         press = imgui_check_press(&gui->imgui, &d);
-        if (gui->imgui.mouse_left_down_frame && press)
+        imgui_widget d = {width - 100, 0, width, 40};
+
+        uint32_t events = imgui_get_events_rect(im, &d);
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+        if ((events & IMGUI_EVENT_MOUSE_EXIT) && im->mouse_over_id == 0)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_ARROW);
+
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
         {
             CplugEvent e = {0};
             e.type       = EVENT_PANIC_BUTTON_PRESSED;
@@ -531,20 +529,16 @@ void pw_tick(void* _gui)
             println("PANIC!");
         }
 
-        if (imgui_check_hover(&gui->imgui, &d, &gui->hover_panic_btn))
-        {
-            enum PWCursorType cursor = gui->hover_panic_btn ? PW_CURSOR_HAND_POINT : PW_CURSOR_ARROW;
-            pw_set_mouse_cursor(gui->pw, cursor);
-        }
-
         nvgBeginPath(nvg);
         nvgRect(nvg, d.x, d.y, d.r - d.x, d.b - d.y);
-        nvgFillColor(nvg, (NVGcolor){0.8f, 0.1f, 0.2f, 1.0f});
+        const bool hover = events & IMGUI_EVENT_MOUSE_HOVER;
+        NVGcolor   bgcol = hover ? (NVGcolor){1.0f, 0.15f, 0.3f, 1.0f} : (NVGcolor){0.8f, 0.1f, 0.2f, 1.0f};
+        nvgFillColor(nvg, bgcol);
         nvgFill(nvg);
 
         nvgFillColor(nvg, (NVGcolor){0.9f, 0.9f, 0.2f, 1.0f});
         nvgTextAlign(nvg, NVG_ALIGN_CC);
-        if (press)
+        if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
         {
             d.y += 1.0f;
             d.b += 1.0f;
