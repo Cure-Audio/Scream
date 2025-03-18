@@ -1,4 +1,5 @@
 #pragma once
+#include <cplug_extensions/window.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -58,8 +59,17 @@ typedef struct imgui_context
     bool mouse_inside_window;
 
     imgui_pt mouse_down;
+    uint32_t mouse_down_mods;
+
+    uint32_t mouse_up_mods;
     imgui_pt mouse_up;
+
     imgui_pt mouse_move;
+    uint32_t mouse_move_mods;
+
+    uint32_t mouse_scroll_mods;
+    imgui_pt mouse_scroll;
+
     imgui_pt mouse_last_drag;
 } imgui_context;
 
@@ -212,6 +222,11 @@ void imgui_drag_value(imgui_context* ctx, float* value, float vmin, float vmax, 
         delta_px = delta_y;
         break;
     }
+    if (ctx->mouse_move_mods & PW_MOD_PLATFORM_KEY_CTRL)
+        delta_px *= 0.1f;
+    if (ctx->mouse_move_mods & PW_MOD_KEY_SHIFT)
+        delta_px *= 0.1f;
+
     float delta_norm = delta_px / 300;
 
     float delta_value  = vmin + delta_norm * (vmax - vmin); // lerp
@@ -239,11 +254,14 @@ void imgui_end_frame(imgui_context* ctx)
 
     ctx->mouse_over_last_frame_id = ctx->mouse_over_id;
 
+    ctx->mouse_down_mods   = 0;
+    ctx->mouse_up_mods     = 0;
+    ctx->mouse_move_mods   = 0;
+    ctx->mouse_scroll_mods = 0;
+
     ctx->id = 0;
 }
 
-// NOTE: in order to port this library to work with other window libraries, simply rewrite this one function!
-#include <cplug_extensions/window.h>
 void imgui_send_event(imgui_context* ctx, const PWEvent* e)
 {
     ctx->num_duplicate_backbuffers = 0;
@@ -259,6 +277,8 @@ void imgui_send_event(imgui_context* ctx, const PWEvent* e)
         ctx->mouse_last_drag.x     = e->mouse.x;
         ctx->mouse_last_drag.y     = e->mouse.y;
 
+        ctx->mouse_down_mods |= e->mouse.modifiers;
+
         uint32_t diff = e->mouse.time_ms - ctx->last_left_click_time;
         if (diff > e->mouse.double_click_interval_ms)
             ctx->left_click_counter = 0;
@@ -270,16 +290,24 @@ void imgui_send_event(imgui_context* ctx, const PWEvent* e)
     }
     else if (e->type == PW_EVENT_MOUSE_LEFT_UP)
     {
-        ctx->mouse_left_up_frame = true;
-        ctx->mouse_move.x        = e->mouse.x;
-        ctx->mouse_move.y        = e->mouse.y;
-        ctx->mouse_up.x          = e->mouse.x;
-        ctx->mouse_up.y          = e->mouse.y;
+        ctx->mouse_left_up_frame  = true;
+        ctx->mouse_move.x         = e->mouse.x;
+        ctx->mouse_move.y         = e->mouse.y;
+        ctx->mouse_up.x           = e->mouse.x;
+        ctx->mouse_up.y           = e->mouse.y;
+        ctx->mouse_up_mods       |= e->mouse.modifiers;
     }
     else if (e->type == PW_EVENT_MOUSE_MOVE)
     {
-        ctx->mouse_move.x = e->mouse.x;
-        ctx->mouse_move.y = e->mouse.y;
+        ctx->mouse_move.x     = e->mouse.x;
+        ctx->mouse_move.y     = e->mouse.y;
+        ctx->mouse_move_mods |= e->mouse.modifiers;
+    }
+    else if (e->type == PW_EVENT_MOUSE_SCROLL_WHEEL)
+    {
+        ctx->mouse_scroll.x    += e->mouse.x;
+        ctx->mouse_scroll.y    += e->mouse.y;
+        ctx->mouse_scroll_mods |= e->mouse.modifiers;
     }
     else if (e->type == PW_EVENT_MOUSE_ENTER)
     {
