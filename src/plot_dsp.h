@@ -4,6 +4,7 @@
 #include <math.h>
 #include <nanovg.h>
 #include <stdio.h>
+#include <string.h>
 
 void im_slider(
     NVGcontext*    nvg,
@@ -198,6 +199,70 @@ float distort(float x, float drive)
     return y;
 }
 
+static float* buffer_saw       = NULL;
+static float* buffer_processed = NULL;
+static size_t buffer_saw_len   = 0;
+// E1 = 28 midi = 41.2Hz
+void make_saw(float Hz, float sample_rate)
+{
+    const int NUM_SAWS = 2;
+
+    const int samples_per_cycle = (int)(sample_rate / Hz);
+
+    const int next_buffer_len = samples_per_cycle * NUM_SAWS;
+
+    if (next_buffer_len != buffer_saw_len)
+    {
+        buffer_saw_len   = next_buffer_len;
+        buffer_saw       = realloc(buffer_saw, buffer_saw_len * sizeof(float));
+        buffer_processed = realloc(buffer_processed, buffer_saw_len * sizeof(float));
+
+        // Fill saw
+        const float inc = 2.0f / samples_per_cycle;
+        float       saw = -1;
+        for (int i = 0; i < samples_per_cycle; i++)
+        {
+            buffer_saw[i]  = saw;
+            saw           += inc;
+        }
+        for (int i = 1; i < NUM_SAWS; i++)
+        {
+            memcpy(buffer_saw + (i * samples_per_cycle), buffer_saw, sizeof(float) * samples_per_cycle);
+        }
+    }
+}
+
+void plot_line(
+    NVGcontext*  nvg,
+    float        x,
+    float        y,
+    float        width,
+    float        height,
+    const float* buf,
+    size_t       buflen,
+    NVGcolor     col)
+{
+    const float half_height = height * 0.5f;
+    const float cy          = y + half_height;
+    const float right       = x + width;
+    nvgBeginPath(nvg);
+    for (int i = 0; i < buflen; i++)
+    {
+        float sample = buf[i];
+
+        float pt_x = xm_mapf(i, 0, buffer_saw_len, x, right);
+        float pt_y = cy - sample * half_height;
+        if (i == 0)
+            nvgMoveTo(nvg, pt_x, pt_y);
+        else
+            nvgLineTo(nvg, pt_x, pt_y);
+    }
+
+    nvgStrokeColor(nvg, col);
+    nvgStrokeWidth(nvg, 2);
+    nvgStroke(nvg);
+}
+
 void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, float gui_height)
 {
     imgui_rect rect = {20, 20, 180, 40};
@@ -248,32 +313,72 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
     nvgStrokeColor(nvg, nvgRGBAf(0.2, 0.2, 0.3, 1.0f));
     nvgStroke(nvg);
 
-    float       sample_inc = 2 / width;
-    float       in_sample  = -1;
-    float       pt_x       = x;
-    const float right      = x + width;
+    // {
+    //     float       sample_inc = 2 / width;
+    //     float       in_sample  = -1;
+    //     float       pt_x       = x;
+    //     const float right      = x + width;
 
-    nvgBeginPath(nvg);
-    const float amt              = xm_fast_gain_to_dB(0.3);
-    float       pos_input_gain_G = xm_fast_dB_to_gain(pos_input_gain);
-    float       neg_input_gain_G = xm_fast_dB_to_gain(input_gain);
-    while (pt_x < right)
+    //     nvgBeginPath(nvg);
+    //     const float amt              = xm_fast_gain_to_dB(0.3);
+    //     float       pos_input_gain_G = xm_fast_dB_to_gain(pos_input_gain);
+    //     float       neg_input_gain_G = xm_fast_dB_to_gain(input_gain);
+    //     while (pt_x < right)
+    //     {
+    //         float pos        = tanhf(in_sample * pos_input_gain_G);
+    //         float neg        = waveshape_softknee(in_sample * neg_input_gain_G, threshold, ratio, knee);
+    //         float out_sample = in_sample >= 0 ? pos : neg;
+
+    //         float pt_y = cy - out_sample * half_height;
+    //         if (pt_x == x)
+    //             nvgMoveTo(nvg, pt_x, pt_y);
+    //         else
+    //             nvgLineTo(nvg, pt_x, pt_y);
+
+    //         in_sample += sample_inc;
+    //         pt_x      += 1;
+    //     }
+    // }
     {
-        float pos        = tanhf(in_sample * pos_input_gain_G);
-        float neg        = waveshape_softknee(in_sample * neg_input_gain_G, threshold, ratio, knee);
-        float out_sample = in_sample >= 0 ? pos : neg;
+        make_saw(41.2f, 48000.0f);
 
-        float pt_y = cy - out_sample * half_height;
-        if (pt_x == x)
-            nvgMoveTo(nvg, pt_x, pt_y);
-        else
-            nvgLineTo(nvg, pt_x, pt_y);
+        plot_line(nvg, x, y, width, height, buffer_saw, buffer_saw_len, nvgRGBA(0, 127, 127, 255));
 
-        in_sample += sample_inc;
-        pt_x      += 1;
+        enum
+        {
+            MA_LENGTH = 50
+        };
+        float ma_buf[MA_LENGTH];
+        int   ma_idx         = 0;
+        float ma_range_sum   = 0;
+        float ma_running_sum = 0;
+
+        memset(ma_buf, 0, sizeof(ma_buf));
+
+        float pos_input_gain_G = xm_fast_dB_to_gain(pos_input_gain);
+        for (int i = 0; i < buffer_saw_len; i++)
+        {
+            float saw = buffer_saw[i];
+
+            saw = xm_clampf(saw * pos_input_gain_G, -1, 1);
+
+            // MA stuff
+            float ma_prev  = ma_buf[ma_idx];
+            ma_buf[ma_idx] = saw;
+
+            ma_idx++;
+            if (ma_idx == MA_LENGTH)
+            {
+                ma_running_sum = ma_range_sum;
+                ma_idx         = 0;
+                ma_range_sum   = 0;
+            }
+            ma_running_sum += saw - ma_prev;
+            ma_range_sum   += saw;
+
+            float ma_sample     = ma_running_sum / MA_LENGTH;
+            buffer_processed[i] = ma_sample;
+        }
+        plot_line(nvg, x, y, width, height, buffer_processed, buffer_saw_len, nvgRGBA(255, 0, 127, 255));
     }
-
-    nvgStrokeColor(nvg, nvgRGBA(255, 0, 127, 255));
-    nvgStrokeWidth(nvg, 4);
-    nvgStroke(nvg);
 }
