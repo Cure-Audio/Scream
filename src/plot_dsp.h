@@ -15,6 +15,7 @@ void im_slider(
     const char*    fmt_value,
     const char*    name)
 {
+    xassert((*pValue) >= vmin && (*pValue) <= vmax);
     uint32_t events        = imgui_get_events_rect(im, &rect);
     float    slider_width  = rect.r - rect.x;
     float    slider_height = rect.b - rect.y;
@@ -151,10 +152,21 @@ float distort_compress(float x, float drive)
     // float ratio = 1.4 + drive * 0.6;
     // float ratio = 1.01;
 
-    float dB   = xm_fast_gain_to_dB(fabsf(x));
-    dB         = soft_knee_compress(dB, threshold, 1.0f / ratio, knee);
-    float gain = xm_fast_dB_to_gain(dB);
-    float y    = copysignf(gain, x);
+    float peak_dB  = xm_fast_gain_to_dB(fabsf(x));
+    float comp_dB  = soft_knee_compress(peak_dB, threshold, 1.0f / ratio, knee);
+    comp_dB       -= peak_dB;
+    float gain     = xm_fast_dB_to_gain(comp_dB);
+    float y        = gain * x;
+    return y;
+}
+
+float waveshape_softknee(float x, float threshold, float ratio, float knee)
+{
+    float peak_dB  = xm_fast_gain_to_dB(fabsf(x));
+    float comp_dB  = soft_knee_compress(peak_dB, threshold, 1.0f / ratio, knee);
+    comp_dB       -= peak_dB;
+    float gain     = xm_fast_dB_to_gain(comp_dB);
+    float y        = gain * x;
     return y;
 }
 
@@ -188,34 +200,32 @@ float distort(float x, float drive)
 
 void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, float gui_height)
 {
-    // Compressor params
-    static float       threshold     = -12;
-    static const float threshold_min = -60;
-    static const float threshold_max = 0;
-
-    static float       ratio     = 10;
-    static const float ratio_min = 1;
-    static const float ratio_max = 100;
-
-    static float       knee     = 6;
-    static const float knee_min = 1;
-    static const float knee_max = 60;
-
-    static float       drive     = 0;
-    static const float drive_min = 0;
-    static const float drive_max = 1;
-
     imgui_rect rect = {20, 20, 180, 40};
-    im_slider(nvg, im, rect, &threshold, threshold_min, threshold_max, "%.2f dB", "Threshold");
+    // Pos params
+    static float pos_input_gain = 12;
+    im_slider(nvg, im, rect, &pos_input_gain, 0, 60, "%.2f dB", "+ Input gain");
     rect.y += 40;
     rect.b += 40;
-    im_slider(nvg, im, rect, &ratio, ratio_min, ratio_max, "1:%.2f", "Ratio");
+
+    // Neg params
+    static float threshold  = -20;
+    static float ratio      = 3.5;
+    static float knee       = 12;
+    static float input_gain = 12;
+    static float drive      = 0;
+    im_slider(nvg, im, rect, &threshold, -60, 0, "%.2f dB", "- Threshold");
     rect.y += 40;
     rect.b += 40;
-    im_slider(nvg, im, rect, &knee, knee_min, knee_max, "%.2f dB", "Knee");
+    im_slider(nvg, im, rect, &ratio, 1, 10, "1:%.2f", "- Ratio");
     rect.y += 40;
     rect.b += 40;
-    im_slider(nvg, im, rect, &drive, drive_min, drive_max, "%.2f", "Drive");
+    im_slider(nvg, im, rect, &knee, 1, 60, "%.2f dB", "- Knee");
+    rect.y += 40;
+    rect.b += 40;
+    im_slider(nvg, im, rect, &input_gain, 0, 60, "%.2f dB", "- Input gain");
+    rect.y += 40;
+    rect.b += 40;
+    im_slider(nvg, im, rect, &drive, 0, 1, "%.2f", "Drive");
 
     float x, y, width, height;
 
@@ -244,9 +254,14 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
     const float right      = x + width;
 
     nvgBeginPath(nvg);
+    const float amt              = xm_fast_gain_to_dB(0.3);
+    float       pos_input_gain_G = xm_fast_dB_to_gain(pos_input_gain);
+    float       neg_input_gain_G = xm_fast_dB_to_gain(input_gain);
     while (pt_x < right)
     {
-        float out_sample = distort(in_sample, drive);
+        float pos        = tanhf(in_sample * pos_input_gain_G);
+        float neg        = waveshape_softknee(in_sample * neg_input_gain_G, threshold, ratio, knee);
+        float out_sample = in_sample >= 0 ? pos : neg;
 
         float pt_y = cy - out_sample * half_height;
         if (pt_x == x)
