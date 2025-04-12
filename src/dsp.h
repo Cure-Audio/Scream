@@ -119,3 +119,43 @@ static inline float detect_peak(float x, float yn_1, float attack, float release
 
     return y;
 }
+
+static inline float detect_rms(float x, float z1, float attack, float release)
+{
+    float y = 0.0f;
+
+    if (x > z1)
+        y = sqrtf(attack * z1 * z1 + (1 - attack) * x * x);
+    else
+        y = release * z1;
+
+    if (y < 1.0e-8f)
+        y = 0;
+
+    return y;
+}
+
+static inline float hard_knee_upwards_compress(float x_dB, float threshold_dB, float ratio_inv)
+{
+    float y_dB, hard_knee, soft_knee, v, cond;
+    hard_knee = threshold_dB + (x_dB - threshold_dB) * ratio_inv;
+
+    y_dB = x_dB > threshold_dB ? x_dB : hard_knee;
+    xassert(y_dB == y_dB);
+
+    return y_dB;
+}
+
+static inline float soft_knee_upwards_compress(float x_dB, float threshold_dB, float ratio_inv, float knee_dB)
+{
+    float y_dB, hard_knee, soft_knee, v, cond;
+    v         = x_dB - threshold_dB - knee_dB / 2.0f;
+    soft_knee = x_dB + (1.0f - ratio_inv) * v * v / (2 * knee_dB);
+    hard_knee = threshold_dB + (x_dB - threshold_dB) * ratio_inv;
+
+    cond = 2 * (x_dB - threshold_dB);
+    y_dB = cond <= -knee_dB ? hard_knee : cond > knee_dB ? x_dB : soft_knee;
+    xassert(y_dB == y_dB);
+
+    return y_dB;
+}

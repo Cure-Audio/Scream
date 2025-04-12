@@ -485,7 +485,8 @@ void pw_tick(void* _gui)
     {
         // plot_expander(nvg, width, height);
         // plot_peak_detection(nvg, width, height);
-        plot_peak_distortion(nvg, im, width, height);
+        // plot_peak_distortion(nvg, im, width, height);
+        plot_peak_upwards_compression(nvg, im, width, height);
     }
 
     // #ifndef NDEBUG

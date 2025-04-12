@@ -222,10 +222,41 @@ void make_saw(float Hz, float sample_rate)
         float       saw = -1;
         for (int i = 0; i < samples_per_cycle; i++)
         {
-            buffer_audio[i]  = saw;
+            buffer_audio[i]  = tanhf(saw);
             saw             += inc;
         }
         for (int i = 1; i < NUM_SAWS; i++)
+        {
+            memcpy(buffer_audio + (i * samples_per_cycle), buffer_audio, sizeof(float) * samples_per_cycle);
+        }
+    }
+}
+// E1 = 28 midi = 41.2Hz
+void make_sine(float Hz, float sample_rate)
+{
+    const int NUM_SINES = 3;
+
+    const int samples_per_cycle = (int)(sample_rate / Hz);
+
+    const int next_buffer_len = samples_per_cycle * NUM_SINES;
+
+    if (next_buffer_len != buffer_audio_len)
+    {
+        buffer_audio_len = next_buffer_len;
+        buffer_audio     = MY_REALLOC(buffer_audio, buffer_audio_len * sizeof(float));
+        buffer_processed = MY_REALLOC(buffer_processed, buffer_audio_len * sizeof(float));
+
+        // Fill saw
+        const float inc   = XM_TAUf / samples_per_cycle;
+        float       phase = 0;
+        for (int i = 0; i < samples_per_cycle; i++)
+        {
+            float sample     = sinf(phase);
+            sample          *= 0.25; // -12dB gain
+            buffer_audio[i]  = sample;
+            phase           += inc;
+        }
+        for (int i = 1; i < NUM_SINES; i++)
         {
             memcpy(buffer_audio + (i * samples_per_cycle), buffer_audio, sizeof(float) * samples_per_cycle);
         }
@@ -519,3 +550,188 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
     */
 }
 
+void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui_width, float gui_height)
+{
+    float x, y, width, height;
+
+    x      = gui_width * 0.3;
+    y      = 2;
+    width  = gui_width * 0.7;
+    height = gui_height - 4;
+
+    const float half_height = height * 0.5f;
+
+    const float cy = y + half_height;
+
+    nvgBeginPath(nvg);
+
+    nvgMoveTo(nvg, x + width * 0.5f, y);
+    nvgLineTo(nvg, x + width * 0.5f, y + gui_height);
+    nvgMoveTo(nvg, x, y + gui_height * 0.5f);
+    nvgLineTo(nvg, x + width, y + gui_height * 0.5f);
+    nvgStrokeWidth(nvg, 1.2);
+    nvgStrokeColor(nvg, nvgRGBAf(0.2, 0.2, 0.3, 1.0f));
+    nvgStroke(nvg);
+
+    {
+        enum
+        {
+            SAMPLE_RATE = 48000,
+        };
+
+        imgui_rect rect = {20, 20, 180, 40};
+
+        // Params
+        static float threshold_dB = 0;
+        static float ratio        = 50;
+        static float knee_dB      = 6;
+        static float attack_ms    = 5.0;
+        static float release_ms   = 5.0;
+        im_slider(nvg, im, rect, &threshold_dB, -60, 0, "%.2f dB", "Threshold");
+        rect.y += 40;
+        rect.b += 40;
+        im_slider(nvg, im, rect, &ratio, 1, 100, "1:%.2f", "Ratio");
+        rect.y += 40;
+        rect.b += 40;
+        im_slider(nvg, im, rect, &knee_dB, 1, 100, "%.2f dB", "Knee");
+        rect.y += 40;
+        rect.b += 40;
+        im_slider(nvg, im, rect, &attack_ms, 0, 500, "%.3f ms", "Attack");
+        rect.y += 40;
+        rect.b += 40;
+        im_slider(nvg, im, rect, &release_ms, 0, 500, "%.3f ms", "Release");
+        rect.y += 40;
+        rect.b += 40;
+
+        // make_sine(41.2f, SAMPLE_RATE);
+        make_saw(41.2f, SAMPLE_RATE);
+        plot_line(nvg, x, y, width, height, buffer_audio, buffer_audio_len, nvgRGBA(0, 127, 127, 255));
+
+        float atk_samples = SAMPLE_RATE * attack_ms * 0.001;
+        float rel_samples = SAMPLE_RATE * release_ms * 0.001;
+        atk_samples       = floorf(atk_samples);
+        rel_samples       = floorf(rel_samples);
+        if (atk_samples < 1)
+            atk_samples = 1;
+        if (rel_samples < 1)
+            rel_samples = 1;
+
+        const float atk       = convert_compressor_time(atk_samples);
+        const float rel       = convert_compressor_time(rel_samples);
+        const float ratio_inv = 1 / ratio;
+
+        // Test upwards compression
+        /*
+        float xn_1 = 0;
+        for (int i = 0; i < buffer_audio_len; i++)
+        {
+            float input = buffer_audio[i];
+
+            float processed_input = fabsf(input);
+            float peak_dB         = xm_fast_gain_to_dB(processed_input);
+
+            float dynamic_knee  = fabsf(threshold_dB);
+            float boost_dB      = soft_knee_upwards_compress(peak_dB, threshold_dB, ratio_inv, knee_dB);
+            boost_dB           -= peak_dB;
+            float reduction_G   = xm_fast_dB_to_gain(boost_dB);
+
+            float output        = input * reduction_G;
+            buffer_processed[i] = output;
+        }
+        */
+        // Test upwards -> downwards compression
+        float xn_1 = 0;
+        for (int i = 0; i < buffer_audio_len; i++)
+        {
+            float input = buffer_audio[i];
+
+            // up comp waveshaping
+            float in_dB     = xm_fast_gain_to_dB(fabsf(input));
+            float boost_dB  = hard_knee_upwards_compress(in_dB, 0, ratio_inv);
+            boost_dB       -= in_dB;
+            float boost_G   = xm_fast_dB_to_gain(boost_dB);
+
+            // down comp
+            xn_1           = detect_peak(fabsf(input * boost_G), xn_1, atk, rel);
+            float peak_dB  = xm_fast_gain_to_dB(xn_1);
+            float cut_dB   = soft_knee_compress(peak_dB, threshold_dB, ratio_inv, knee_dB);
+            cut_dB        -= peak_dB;
+            float cut_G    = xm_fast_dB_to_gain(cut_dB);
+
+            float output        = input * boost_G * cut_G;
+            buffer_processed[i] = output;
+        }
+        plot_line(nvg, x, y, width, height, buffer_processed, buffer_audio_len, nvgRGBA(255, 0, 127, 255));
+
+        nvgFillColor(nvg, nvgRGBAf(0, 0, 0, 1));
+        nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
+        char  label[64];
+        float label_y = height - 76;
+        snprintf(label, sizeof(label), "Buf length: %llu", buffer_audio_len);
+        nvgText(nvg, x + width - 5, label_y, label, NULL);
+
+        label_y += 15;
+        snprintf(label, sizeof(label), "Attack samples: %.lf", atk_samples);
+        nvgText(nvg, x + width - 5, label_y, label, NULL);
+        label_y += 15;
+        snprintf(label, sizeof(label), "Release samples: %.lf", rel_samples);
+        nvgText(nvg, x + width - 5, label_y, label, NULL);
+
+        label_y += 15;
+        snprintf(label, sizeof(label), "Attack: %.10lf", atk);
+        nvgText(nvg, x + width - 5, label_y, label, NULL);
+        label_y += 15;
+        snprintf(label, sizeof(label), "Release: %.10lf", rel);
+        nvgText(nvg, x + width - 5, label_y, label, NULL);
+
+        float chart_x      = 20;
+        float chart_r      = gui_width * 0.3;
+        float chart_width  = chart_r - chart_x;
+        float chart_y      = cy;
+        float chart_b      = gui_height - 20;
+        float chart_cy     = (chart_y + chart_b) * 0.5f;
+        float chart_height = (chart_b - chart_y);
+
+        for (int i = 0; i <= 5; i++)
+        {
+            float dB    = -60 + i * 12;
+            float x_pos = xm_mapf(dB, -60, 0, chart_x, chart_r);
+            float y_pos = xm_mapf(dB, -60, 0, chart_b, chart_y);
+
+            nvgBeginPath(nvg);
+            nvgMoveTo(nvg, chart_x, y_pos);
+            nvgLineTo(nvg, chart_r, y_pos);
+            nvgMoveTo(nvg, x_pos, chart_y);
+            nvgLineTo(nvg, x_pos, chart_b);
+            nvgStrokeWidth(nvg, 1.2);
+            nvgStrokeColor(nvg, (NVGcolor){0, 0, 0, 0.1});
+            nvgStroke(nvg);
+
+            // nvgTextAlign(nvg, NVG)
+        }
+
+        float chart_x_pos = chart_x;
+        bool  first       = true;
+        nvgBeginPath(nvg);
+        float threshold_G = xm_fast_dB_to_gain(threshold_dB);
+        while (chart_x_pos < chart_r)
+        {
+            float x_dB        = xm_mapf(chart_x_pos, chart_x, chart_r, -60, 0);
+            float y_dB        = soft_knee_upwards_compress(x_dB, threshold_dB, ratio_inv, knee_dB);
+            float chart_y_pos = xm_mapf(y_dB, -60, 0, chart_b, chart_y);
+            if (first)
+            {
+                nvgMoveTo(nvg, chart_x_pos, chart_y_pos);
+                first = false;
+            }
+            else
+            {
+                nvgLineTo(nvg, chart_x_pos, chart_y_pos);
+            }
+            chart_x_pos += 1.0f;
+        }
+        nvgStrokeWidth(nvg, 1.2);
+        nvgStrokeColor(nvg, (NVGcolor){0, 0, 0, 1});
+        nvgStroke(nvg);
+    }
+}
