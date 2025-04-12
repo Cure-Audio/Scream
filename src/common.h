@@ -48,7 +48,22 @@ void println(const char* const fmt, ...);
 #define XFILES_ASSERT(cond) CPLUG_LOG_ASSERT((cond))
 #endif // CPLUG_BUILD_STANDALONE
 
-#define PW_MALLOC xmalloc
-#define PW_FREE   xfree
+#define LOG_MALLOC(sz)       (println("malloc(%s) - %s:%d", #sz, __FILE__, __LINE__), xmalloc(sz))
+#define LOG_CALLOC(n, sz)    (println("calloc(%s, %s) - %s:%d", #n, #sz, __FILE__, __LINE__), xcalloc(n, sz))
+#define LOG_REALLOC(ptr, sz) (println("realloc(%s, %s) - %s:%d", #ptr, #sz, __FILE__, __LINE__), xrealloc(ptr, sz))
+#define LOG_FREE(ptr)        (println("free(%s) - %s:%d", #ptr, __FILE__, __LINE__), xfree(ptr))
+
+#define MY_MALLOC(sz)       xmalloc(sz)
+#define MY_CALLOC(n, sz)    xcalloc(n, sz)
+#define MY_REALLOC(ptr, sz) xrealloc(ptr, sz)
+#define MY_FREE(ptr)        xfree(ptr)
+
+#define PW_MALLOC(sz) MY_MALLOC(sz)
+#define PW_FREE(ptr)  MY_FREE(ptr)
+
+#define SGNVG_MALLOC(sz)       LOG_MALLOC(sz)
+#define SGNVG_REALLOC(ptr, sz) LOG_REALLOC(ptr, sz)
+#define SGNVG_FREE(ptr)        LOG_FREE(ptr)
+#define SGNVG_ASSERT           xassert
 
 #endif // PLUGIN_CONFIG_H

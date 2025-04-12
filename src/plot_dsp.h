@@ -199,9 +199,9 @@ float distort(float x, float drive)
     return y;
 }
 
-static float* buffer_saw       = NULL;
-static float* buffer_processed = NULL;
-static size_t buffer_saw_len   = 0;
+float* buffer_audio     = NULL;
+float* buffer_processed = NULL;
+size_t buffer_audio_len = 0;
 // E1 = 28 midi = 41.2Hz
 void make_saw(float Hz, float sample_rate)
 {
@@ -211,23 +211,23 @@ void make_saw(float Hz, float sample_rate)
 
     const int next_buffer_len = samples_per_cycle * NUM_SAWS;
 
-    if (next_buffer_len != buffer_saw_len)
+    if (next_buffer_len != buffer_audio_len)
     {
-        buffer_saw_len   = next_buffer_len;
-        buffer_saw       = realloc(buffer_saw, buffer_saw_len * sizeof(float));
-        buffer_processed = realloc(buffer_processed, buffer_saw_len * sizeof(float));
+        buffer_audio_len = next_buffer_len;
+        buffer_audio     = MY_REALLOC(buffer_audio, buffer_audio_len * sizeof(float));
+        buffer_processed = MY_REALLOC(buffer_processed, buffer_audio_len * sizeof(float));
 
         // Fill saw
         const float inc = 2.0f / samples_per_cycle;
         float       saw = -1;
         for (int i = 0; i < samples_per_cycle; i++)
         {
-            buffer_saw[i]  = saw;
-            saw           += inc;
+            buffer_audio[i]  = saw;
+            saw             += inc;
         }
         for (int i = 1; i < NUM_SAWS; i++)
         {
-            memcpy(buffer_saw + (i * samples_per_cycle), buffer_saw, sizeof(float) * samples_per_cycle);
+            memcpy(buffer_audio + (i * samples_per_cycle), buffer_audio, sizeof(float) * samples_per_cycle);
         }
     }
 }
@@ -250,7 +250,7 @@ void plot_line(
     {
         float sample = buf[i];
 
-        float pt_x = xm_mapf(i, 0, buffer_saw_len, x, right);
+        float pt_x = xm_mapf(i, 0, buffer_audio_len, x, right);
         float pt_y = cy - sample * half_height;
         if (i == 0)
             nvgMoveTo(nvg, pt_x, pt_y);
@@ -333,7 +333,7 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
         rect.b += 40;
 
         make_saw(41.2f, SAMPLE_RATE);
-        plot_line(nvg, x, y, width, height, buffer_saw, buffer_saw_len, nvgRGBA(0, 127, 127, 255));
+        plot_line(nvg, x, y, width, height, buffer_audio, buffer_audio_len, nvgRGBA(0, 127, 127, 255));
 
         float atk_samples = SAMPLE_RATE * attack_ms * 0.001;
         float rel_samples = SAMPLE_RATE * release_ms * 0.001;
@@ -356,9 +356,9 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
         const float output_gain_G    = xm_fast_dB_to_gain(output_gain_dB);
 
         float xn_1 = 0;
-        for (int i = 0; i < buffer_saw_len; i++)
+        for (int i = 0; i < buffer_audio_len; i++)
         {
-            float input = buffer_saw[i];
+            float input = buffer_audio[i];
 
             float input_gain_G = input > 0 ? pos_input_gain_G : neg_input_gain_G;
             float threshold_dB = input > 0 ? pos_threshold_dB : neg_threshold_dB;
@@ -377,7 +377,7 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
 
             buffer_processed[i] = output;
         }
-        plot_line(nvg, x, y, width, height, buffer_processed, buffer_saw_len, nvgRGBA(255, 0, 127, 255));
+        plot_line(nvg, x, y, width, height, buffer_processed, buffer_audio_len, nvgRGBA(255, 0, 127, 255));
 
         nvgFillColor(nvg, nvgRGBAf(0, 0, 0, 1));
         nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
@@ -464,7 +464,7 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
 
         make_saw(41.2f, 48000.0f);
 
-        plot_line(nvg, x, y, width, height, buffer_saw, buffer_saw_len, nvgRGBA(0, 127, 127, 255));
+        plot_line(nvg, x, y, width, height, buffer_audio, buffer_audio_len, nvgRGBA(0, 127, 127, 255));
 
         float ma_buf[MA_LENGTH];
         int   ma_write_idx   = 0;
@@ -477,9 +477,9 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
         memset(ma_buf, 0, sizeof(ma_buf));
 
         float pos_input_gain_G = xm_fast_dB_to_gain(pos_input_gain);
-        for (int i = 0; i < buffer_saw_len; i++)
+        for (int i = 0; i < buffer_audio_len; i++)
         {
-            float saw = buffer_saw[i];
+            float saw = buffer_audio[i];
 
             saw = xm_clampf(saw * pos_input_gain_G, -1, 1);
 
@@ -514,7 +514,8 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
             float ma_sample     = ma_running_sum / ma_idx_offset;
             buffer_processed[i] = ma_sample;
         }
-        plot_line(nvg, x, y, width, height, buffer_processed, buffer_saw_len, nvgRGBA(255, 0, 127, 255));
+        plot_line(nvg, x, y, width, height, buffer_processed, buffer_audio_len, nvgRGBA(255, 0, 127, 255));
     }
     */
 }
+

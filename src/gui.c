@@ -190,7 +190,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
     CPLUG_LOG_ASSERT(_plugin);
     CPLUG_LOG_ASSERT(_pw);
     Plugin* p   = _plugin;
-    GUI*    gui = xcalloc(1, sizeof(*gui));
+    GUI*    gui = MY_CALLOC(1, sizeof(*gui));
     gui->plugin = p;
     gui->pw     = _pw;
     p->gui      = gui;
@@ -237,10 +237,22 @@ void pw_destroy_gui(void* _gui)
 {
     GUI* gui = _gui;
 
+    nvgDeleteSokol(gui->nvg);
     sg_shutdown(gui->sg);
 
     gui->plugin->gui = NULL;
-    xfree(gui);
+    MY_FREE(gui);
+
+    if (buffer_audio)
+    {
+        MY_FREE(buffer_audio);
+        buffer_audio = NULL;
+    }
+    if (buffer_processed)
+    {
+        MY_FREE(buffer_processed);
+        buffer_processed = NULL;
+    }
 }
 
 void pw_tick(void* _gui)
@@ -496,7 +508,7 @@ void pw_tick(void* _gui)
         nvgTextAlign(nvg, NVG_ALIGN_BL);
         nvgFontSize(nvg, gui->scale * 12);
         nvgFillColor(nvg, nvgRGBAf(0, 0, 0, 1));
-        char text[48] = {0};
+        char text[64] = {0};
         int  len      = snprintf(
             text,
             sizeof(text),

@@ -162,7 +162,7 @@ void*       cplug_createPlugin(CplugHostContext* ctx)
     g_is_main_thread = true;
     library_load_platform();
 
-    struct Plugin* p = xcalloc(1, sizeof(*p));
+    struct Plugin* p = MY_CALLOC(1, sizeof(*p));
     p->cplug_ctx     = ctx;
 
     p->width  = GUI_INIT_WIDTH;
@@ -178,7 +178,7 @@ void*       cplug_createPlugin(CplugHostContext* ctx)
 void cplug_destroyPlugin(void* p)
 {
     CPLUG_LOG_ASSERT(p != NULL);
-    xfree(p);
+    MY_FREE(p);
 
     library_unload_platform();
 }

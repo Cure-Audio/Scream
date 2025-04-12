@@ -1,8 +1,6 @@
 #include "nanovg_sokol.h"
-#include <assert.h>
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 /*
@@ -224,6 +222,18 @@ void main(void) {
 
 #include "nanovg_sokol.glsl.h"
 
+#if !defined(SGNVG_MALLOC) || !defined(SGNVG_REALLOC) || !defined(SGNVG_FREE)
+#include <stdlib.h>
+#define SGNVG_MALLOC(sz)       malloc(sz)
+#define SGNVG_REALLOC(ptr, sz) realloc(ptr, sz)
+#define SGNVG_FREE(ptr)        free(ptr)
+#endif
+
+#if !defined(SGNVG_ASSERT)
+#include <assert.h>
+#define SGNVG_ASSERT(cond) assert((cond))
+#endif
+
 enum SGNVGshaderType
 {
     NSVG_SHADER_FILLGRAD,
@@ -426,8 +436,8 @@ static unsigned int sgnvg__nearestPow2(unsigned int num)
 // #define SGNVG_DEBUG_LOG
 
 #ifdef SGNVG_DEBUG_LOG
-#define SGNVG_EXTLOG(...) printf("- " __VA_ARGS__);
-#define SGNVG_INTLOG(...) printf("  - " __VA_ARGS__);
+#define SGNVG_EXTLOG(...) fprintf(stderr, "- " __VA_ARGS__);
+#define SGNVG_INTLOG(...) fprintf(stderr, "  - " __VA_ARGS__);
 #else
 #define SGNVG_EXTLOG(...)
 #define SGNVG_INTLOG(...)
@@ -453,7 +463,7 @@ static SGNVGtexture* sgnvg__allocTexture(SGNVGcontext* sg)
         {
             SGNVGtexture* textures;
             int           ctextures = sgnvg__maxi(sg->ntextures + 1, 4) + sg->ctextures / 2; // 1.5x Overallocate
-            textures                = (SGNVGtexture*)realloc(sg->textures, sizeof(SGNVGtexture) * ctextures);
+            textures                = (SGNVGtexture*)SGNVG_REALLOC(sg->textures, sizeof(SGNVGtexture) * ctextures);
             if (textures == NULL)
                 return NULL;
             sg->textures  = textures;
@@ -484,15 +494,17 @@ static int sgnvg__deleteTexture(SGNVGcontext* sg, int id)
     int i;
     for (i = 0; i < sg->ntextures; i++)
     {
-        if (sg->textures[i].id == id)
+        SGNVGtexture* tex = &sg->textures[i];
+        if (tex->id == id)
         {
-            if (sg->textures[i].img.id != 0 && (sg->textures[i].flags & NVG_IMAGE_NODELETE) == 0)
-                sg_destroy_image(sg->_sg, sg->textures[i].img);
-            free(sg->textures[i].imgData);
-            memset(&sg->textures[i], 0, sizeof(sg->textures[i]));
+            if (tex->img.id != 0 && (tex->flags & NVG_IMAGE_NODELETE) == 0)
+                sg_destroy_image(sg->_sg, tex->img);
+            SGNVG_FREE(tex->imgData);
+            memset(tex, 0, sizeof(*tex));
             return 1;
         }
     }
+    SGNVG_ASSERT(0);
     return 0;
 }
 
@@ -507,7 +519,7 @@ static uint16_t sgnvg__getCombinedBlendNumber(sg_blend_state blend)
 #if __STDC_VERSION__ >= 201112L
     _Static_assert(_SG_BLENDFACTOR_NUM <= 17, "too many blend factors for 16-bit blend number");
 #else
-    assert(_SG_BLENDFACTOR_NUM <= 17); // can be a _Static_assert
+    SGNVG_ASSERT(_SG_BLENDFACTOR_NUM <= 17); // can be a _Static_assert
 #endif
     return blend.src_factor_rgb | (blend.dst_factor_rgb << 4) | (blend.src_factor_alpha << 8) |
            (blend.dst_factor_alpha << 12);
@@ -536,7 +548,7 @@ static void sgnvg__initPipeline(
                 {
                     // .buffers[0] = {.stride = sizeof(SGNVGattribute)},
                     .attrs =
-                        {                            
+                        {
                             [ATTR_nanovg_sg_vertex].format = SG_VERTEXFORMAT_FLOAT2,
                             [ATTR_nanovg_sg_tcoord].format = SG_VERTEXFORMAT_FLOAT2,
                         },
@@ -574,7 +586,7 @@ static bool sgnvg__pipelineTypeIsInUse(SGNVGcontext* sg, SGNVGpipelineType type)
     case SGNVG_PIP_NUM_: // to avoid warnings
         break;           /* fall through to assert */
     }
-    assert(0);
+    SGNVG_ASSERT(0);
     return false;
 }
 
@@ -621,7 +633,7 @@ static int sgnvg__getIndexFromCache(SGNVGcontext* sg, uint16_t blendNumber)
 static sg_pipeline sgnvg__getPipelineFromCache(SGNVGcontext* sg, SGNVGpipelineType type)
 {
     SGNVG_INTLOG("sgnvg__getPipelineFromCache(sg: %p, type: %d)\n", sg, type);
-    assert(sgnvg__pipelineTypeIsInUse(sg, type));
+    SGNVG_ASSERT(sgnvg__pipelineTypeIsInUse(sg, type));
 
     int         pipelineCacheIndex = sg->pipelineCacheIndex;
     sg_pipeline pipeline           = sg->pipelineCache.pipelines[pipelineCacheIndex][type];
@@ -783,7 +795,7 @@ static sg_pipeline sgnvg__getPipelineFromCache(SGNVGcontext* sg, SGNVGpipelineTy
             break;
 
         default:
-            assert(0);
+            SGNVG_ASSERT(0);
         }
     }
     return pipeline;
@@ -811,8 +823,8 @@ static void sgnvg__setUniforms(SGNVGcontext* sg, int uniformOffset, int image)
     sg_apply_bindings(
         sg->_sg,
         &(sg_bindings){
-            .vertex_buffers[0]            = sg->vertBuf,
-            .index_buffer                 = sg->indexBuf,
+            .vertex_buffers[0]        = sg->vertBuf,
+            .index_buffer             = sg->indexBuf,
             .images[IMG_nanovg_tex]   = tex ? tex->img : (sg_image){0},
             .samplers[SMP_nanovg_smp] = tex ? tex->smp : (sg_sampler){0},
         });
@@ -914,7 +926,7 @@ static int sgnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
         }
     }
 #endif
-    assert(!(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && "TODO mipmaps");
+    SGNVG_ASSERT(!(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && "TODO mipmaps");
 
     // if we have mipmaps, we forbid updating
     bool immutable = !!(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && data;
@@ -941,7 +953,7 @@ static int sgnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
                                                                                 : (sg_image_data){.subimage[0][0] = {NULL, 0}},
             .label        = "nanovg.image[]",
         });
-    tex->imgData = malloc(w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1));
+    tex->imgData = SGNVG_MALLOC(w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1));
     if (data != NULL)
     {
         memcpy(tex->imgData, data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1));
@@ -1436,7 +1448,7 @@ static SGNVGcall* sgnvg__allocCall(SGNVGcontext* sg)
     {
         SGNVGcall* calls;
         int        ccalls = sgnvg__maxi(sg->ncalls + 1, 128) + sg->ccalls / 2; // 1.5x Overallocate
-        calls             = (SGNVGcall*)realloc(sg->calls, sizeof(SGNVGcall) * ccalls);
+        calls             = (SGNVGcall*)SGNVG_REALLOC(sg->calls, sizeof(SGNVGcall) * ccalls);
         if (calls == NULL)
             return NULL;
         sg->calls  = calls;
@@ -1455,7 +1467,7 @@ static int sgnvg__allocPaths(SGNVGcontext* sg, int n)
     {
         SGNVGpath* paths;
         int        cpaths = sgnvg__maxi(sg->npaths + n, 128) + sg->cpaths / 2; // 1.5x Overallocate
-        paths             = (SGNVGpath*)realloc(sg->paths, sizeof(SGNVGpath) * cpaths);
+        paths             = (SGNVGpath*)SGNVG_REALLOC(sg->paths, sizeof(SGNVGpath) * cpaths);
         if (paths == NULL)
             return -1;
         sg->paths  = paths;
@@ -1474,7 +1486,7 @@ static int sgnvg__allocVerts(SGNVGcontext* sg, int n)
     {
         SGNVGattribute* verts;
         int             cverts = sgnvg__maxi(sg->nverts + n, 4096) + sg->cverts / 2; // 1.5x Overallocate
-        verts                  = (SGNVGattribute*)realloc(sg->verts, sizeof(SGNVGattribute) * cverts);
+        verts                  = (SGNVGattribute*)SGNVG_REALLOC(sg->verts, sizeof(SGNVGattribute) * cverts);
         if (verts == NULL)
             return -1;
         sg->verts  = verts;
@@ -1493,7 +1505,7 @@ static int sgnvg__allocIndexes(SGNVGcontext* sg, int n)
     {
         uint32_t* indexes;
         int       cindexes = sgnvg__maxi(sg->nindexes + n, 4096) + sg->cindexes / 2; // 1.5x Overallocate
-        indexes            = (uint32_t*)realloc(sg->indexes, sizeof(uint32_t) * cindexes);
+        indexes            = (uint32_t*)SGNVG_REALLOC(sg->indexes, sizeof(uint32_t) * cindexes);
         if (indexes == NULL)
             return -1;
         sg->indexes  = indexes;
@@ -1512,7 +1524,7 @@ static int sgnvg__allocFragUniforms(SGNVGcontext* sg, int n)
     {
         unsigned char* uniforms;
         int            cuniforms = sgnvg__maxi(sg->nuniforms + n, 128) + sg->cuniforms / 2; // 1.5x Overallocate
-        uniforms                 = (unsigned char*)realloc(sg->uniforms, structSize * cuniforms);
+        uniforms                 = (unsigned char*)SGNVG_REALLOC(sg->uniforms, structSize * cuniforms);
         if (uniforms == NULL)
             return -1;
         sg->uniforms  = uniforms;
@@ -1917,20 +1929,39 @@ static void sgnvg__renderDelete(void* uptr)
         sg_uninit_buffer(sg->_sg, sg->indexBuf);
     sg_dealloc_buffer(sg->_sg, sg->indexBuf);
 
+    sgnvg__renderDeleteTexture(sg, sg->dummyTex);
     for (i = 0; i < sg->ntextures; i++)
     {
         if (sg->textures[i].img.id != 0 && (sg->textures[i].flags & NVG_IMAGE_NODELETE) == 0)
             sg_destroy_image(sg->_sg, sg->textures[i].img);
     }
-    free(sg->textures);
 
-    free(sg->paths);
-    free(sg->verts);
-    free(sg->indexes);
-    free(sg->uniforms);
-    free(sg->calls);
+    if (sg->textures)
+    {
+        SGNVG_FREE(sg->textures);
+    }
+    if (sg->calls)
+    {
+        SGNVG_FREE(sg->calls);
+    }
+    if (sg->paths)
+    {
+        SGNVG_FREE(sg->paths);
+    }
+    if (sg->verts)
+    {
+        SGNVG_FREE(sg->verts);
+    }
+    if (sg->indexes)
+    {
+        SGNVG_FREE(sg->indexes);
+    }
+    if (sg->uniforms)
+    {
+        SGNVG_FREE(sg->uniforms);
+    }
 
-    free(sg);
+    SGNVG_FREE(sg);
 }
 
 NVGcontext* nvgCreateSokol(_sg_state_t* _sg, int flags)
@@ -1938,7 +1969,7 @@ NVGcontext* nvgCreateSokol(_sg_state_t* _sg, int flags)
     SGNVG_EXTLOG("nvgCreateSokol(flags: %d)\n", flags);
     NVGparams     params;
     NVGcontext*   ctx = NULL;
-    SGNVGcontext* sg  = (SGNVGcontext*)malloc(sizeof(SGNVGcontext));
+    SGNVGcontext* sg  = (SGNVGcontext*)SGNVG_MALLOC(sizeof(SGNVGcontext));
     if (sg == NULL)
         goto error;
     memset(sg, 0, sizeof(SGNVGcontext));

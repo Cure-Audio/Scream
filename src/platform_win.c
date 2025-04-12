@@ -49,12 +49,12 @@ void println(const char* const fmt, ...)
         OutputDebugStringA(buf);
         // fwrite(buf, 1, n, stderr);
 #else
-        char path[1024];
-        bool ok = xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_DESKTOP);
-        xassert(ok);
-        strcat(path, "\\log.txt");
-        ok = ok && xfiles_append(path, buf, n);
-        xassert(ok);
+        // char path[1024];
+        // bool ok = xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_DESKTOP);
+        // xassert(ok);
+        // strcat(path, "\\log.txt");
+        // ok = ok && xfiles_append(path, buf, n);
+        // xassert(ok);
 #endif
     }
 }
