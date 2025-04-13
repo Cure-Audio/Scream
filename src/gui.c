@@ -246,6 +246,7 @@ void pw_destroy_gui(void* _gui)
     gui->plugin->gui = NULL;
     MY_FREE(gui);
 
+#ifndef NDEBUG
     if (buffer_audio)
     {
         MY_FREE(buffer_audio);
@@ -256,6 +257,12 @@ void pw_destroy_gui(void* _gui)
         MY_FREE(buffer_processed);
         buffer_processed = NULL;
     }
+    if (oscilloscope_ringbuf)
+    {
+        MY_FREE(oscilloscope_ringbuf);
+        oscilloscope_ringbuf = NULL;
+    }
+#endif
 }
 
 void pw_tick(void* _gui)
@@ -278,6 +285,11 @@ void pw_tick(void* _gui)
 #elif defined(__APPLE__)
     // Using the CPLUG window extension, we use the default settings in MTKView, which appears to work fine with
     const uint32_t MAX_DUP_BACKBUFFER_COUNT = 1;
+#endif
+
+#ifndef NDEBUG
+    if (oscilloscope_ringbuf)
+        gui->imgui.num_duplicate_backbuffers = 0;
 #endif
 
     if (gui->imgui.num_duplicate_backbuffers >= MAX_DUP_BACKBUFFER_COUNT)
@@ -319,7 +331,6 @@ void pw_tick(void* _gui)
     NVGcontext*    nvg = gui->nvg;
     imgui_context* im  = &gui->imgui;
 
-    /*
     const NVGcolor col_text = nvgRGBA(143, 150, 160, 255);
 
     // Main parameters
@@ -436,16 +447,15 @@ void pw_tick(void* _gui)
         nvgStroke(nvg);
     }
 
-    if (gui->plugin->is_clipping)
+    if (gui->plugin->gui_is_clipping)
     {
         nvgTextAlign(nvg, NVG_ALIGN_BR);
         nvgFillColor(nvg, nvgRGBAf(1, 0.1, 0.1, 1));
-        float dB = xm_fast_gain_to_dB(gui->plugin->peak_gain);
+        float dB = xm_fast_gain_to_dB(gui->plugin->gui_peak_gain);
         char  label[48];
         snprintf(label, sizeof(label), "[WARNING] Auto hardclipper: ON. %.2fdB", dB);
         nvgText(nvg, width - 20, height - 20, label, NULL);
     }
-    */
 
     // Panic button
     /*
@@ -488,10 +498,14 @@ void pw_tick(void* _gui)
 
 #ifndef NDEBUG
     {
+        Plugin* p = gui->plugin;
         // plot_expander(nvg, width, height);
         // plot_peak_detection(nvg, width, height);
         // plot_peak_distortion(nvg, im, width, height);
-        plot_peak_upwards_compression(nvg, im, width, height);
+        // plot_peak_upwards_compression(nvg, im, width, height);
+        float midi  = xt_atomic_load_f32(&p->gui_osc_midi);
+        float phase = xt_atomic_load_f32(&p->gui_osc_phase);
+        plot_oscilloscope(nvg, width - 130, height - 90, 120, 80, p->sample_rate, midi, phase);
     }
 #endif
     // #ifndef NDEBUG

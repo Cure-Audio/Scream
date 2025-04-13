@@ -42,10 +42,12 @@ typedef struct Plugin
     CplugHostContext* cplug_ctx;
 
     // Retained data for GUI
-    void* gui;
-    int   width, height;
-    bool  is_clipping;
-    float peak_gain;
+    void*           gui;
+    int             width, height;
+    bool            gui_is_clipping;
+    xt_atomic_float gui_peak_gain;
+    xt_atomic_float gui_osc_phase;
+    xt_atomic_float gui_osc_midi;
 
     double main_params[NUM_PARAMS];
 

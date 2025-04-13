@@ -1,4 +1,9 @@
 #pragma once
+
+#ifdef NDEBUG
+#error This is for testing only
+#endif
+
 #include "dsp.h"
 #include "imgui.h"
 #include <math.h>
@@ -675,7 +680,7 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
         nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
         char  label[64];
         float label_y = height - 76;
-        snprintf(label, sizeof(label), "Buf length: %llu", buffer_audio_len);
+        snprintf(label, sizeof(label), "Buf length: %zu", buffer_audio_len);
         nvgText(nvg, x + width - 5, label_y, label, NULL);
 
         label_y += 15;
@@ -751,4 +756,118 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
         }
         */
     }
+}
+
+float* oscilloscope_ringbuf      = NULL;
+int    oscilloscope_ringbuf_len  = 0;
+int    oscilloscope_ringbuf_head = 0;
+int    oscilloscope_ringbuf_tail = 0;
+
+void oscilloscope_push(float* const* buf, int buflen, int nchannels)
+{
+    if (!oscilloscope_ringbuf)
+    {
+        oscilloscope_ringbuf_len = 1024 * 16;
+        oscilloscope_ringbuf     = MY_CALLOC(1, oscilloscope_ringbuf_len * sizeof(float));
+    }
+    xassert(buflen >= 0 && buflen < oscilloscope_ringbuf_len);
+
+    int          remaining = buflen;
+    int          head      = oscilloscope_ringbuf_head;
+    const float* src       = buf[0]; // mono
+    while (remaining)
+    {
+        int end = head + remaining;
+        if (end > oscilloscope_ringbuf_len)
+            end = oscilloscope_ringbuf_len;
+
+        int    worklen = end - head;
+        float* dst     = oscilloscope_ringbuf + head;
+        memcpy(dst, src, sizeof(*dst) * worklen);
+
+        remaining -= worklen;
+        head      += worklen;
+        src       += worklen;
+        if (head == oscilloscope_ringbuf_len)
+            head = 0;
+        xassert(remaining >= 0);
+        xassert(head >= 0 && head < oscilloscope_ringbuf_len);
+    }
+
+    // TODO: sum right channel. for now this only pushes the left channel
+
+    oscilloscope_ringbuf_head = head;
+}
+
+void plot_oscilloscope(
+    NVGcontext* nvg,
+    float       x,
+    float       y,
+    float       width,
+    float       height,
+    float       sample_rate,
+    float       osc_midi,
+    float       osc_phase)
+{
+    if (osc_midi <= 0)
+        return;
+    if (oscilloscope_ringbuf_len == 0)
+        return;
+
+    const float right = floorf(x + width);
+    x                 = floorf(x);
+    width             = right - x;
+
+    float samples_per_cycle = 1;
+    float idx_inc           = 0.1;
+
+    if (osc_midi > 0)
+    {
+        float Hz          = xm_midi_to_Hz(osc_midi);
+        samples_per_cycle = sample_rate / Hz;
+        idx_inc           = samples_per_cycle / width;
+    }
+
+    float idx_delta = osc_phase * samples_per_cycle + samples_per_cycle;
+    float idx       = (float)oscilloscope_ringbuf_head - idx_delta;
+
+    float     line_x      = floorf(x);
+    float     half_height = height * 0.5f;
+    float     cy          = y + half_height;
+    bool      first       = true;
+    const int mask        = oscilloscope_ringbuf_len - 1;
+    // test is power of 2
+    xassert(xm_popcountu(oscilloscope_ringbuf_len) == 1);
+    nvgBeginPath(nvg);
+    while (line_x < right)
+    {
+        // read sample from oscilloscope
+        int   idx0       = idx;
+        int   idx1       = idx0 + 1;
+        float remainder  = idx - idx0;
+        idx0            &= mask;
+        idx1            &= mask;
+        xassert(idx0 >= 0 && idx0 < oscilloscope_ringbuf_len);
+        xassert(idx1 >= 0 && idx1 < oscilloscope_ringbuf_len);
+        float sample = xm_lerpf(remainder, oscilloscope_ringbuf[idx0], oscilloscope_ringbuf[idx1]);
+
+        float line_y = cy - sample * half_height;
+        if (first)
+        {
+            first = false;
+            nvgMoveTo(nvg, line_x, line_y);
+        }
+        else
+        {
+            nvgLineTo(nvg, line_x, line_y);
+        }
+
+        line_x += 1.0f;
+        idx    += idx_inc;
+    }
+    nvgRect(nvg, x, y, width, height);
+    NVGcolor col = {0, 0, 0, 1};
+    nvgStrokeWidth(nvg, 1.2f);
+    nvgStrokeColor(nvg, col);
+    nvgStroke(nvg);
 }

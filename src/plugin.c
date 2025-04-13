@@ -232,8 +232,6 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
         v = xm_normd(XM_SQRT1_2f, 0.1, 20);
         break;
     case PARAM_FEEDBACK_GAIN:
-        v = xm_normd(2.0, -18.0, 24);
-        break;
     case PARAM_HP_CUTOFF:
     default:
         break;
@@ -309,8 +307,8 @@ double cplug_parameterStringToValue(void*, uint32_t paramId, const char* str)
     }
     case PARAM_FEEDBACK_GAIN:
     {
-        scanf(str, "%fdB", &val);
-        val = xm_normd(val, -18, 24);
+        scanf(str, "%lf%%", &val);
+        val *= 0.01;
         break;
     }
     default:
@@ -339,11 +337,8 @@ void cplug_parameterValueToString(void*, uint32_t paramId, char* buf, size_t buf
         break;
     }
     case PARAM_FEEDBACK_GAIN:
-    {
-        float dB = xm_lerpf(value, -18, 24);
-        snprintf(buf, bufsize, "%.2fdB", dB);
+        snprintf(buf, bufsize, "%.2f%%", value * 100);
         break;
-    }
     default:
         snprintf(buf, bufsize, "%f", value);
         break;
@@ -446,6 +441,12 @@ void cplug_setSampleRateAndBlockSize(void* _p, double sampleRate, uint32_t maxBl
     memset(&p->state, 0, sizeof(p->state));
 }
 
+#ifdef CPLUG_BUILD_STANDALONE
+// static char note_down_midi = -1;
+char  osc_midi  = 28; // E1
+float osc_phase = 0;
+#endif
+
 void cplug_process(void* _p, CplugProcessContext* ctx)
 {
     DISABLE_DENORMALS
@@ -543,8 +544,9 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
     uint32_t   frame = 0;
 
 #ifdef CPLUG_BUILD_STANDALONE
-    static char note_down_midi = -1;
+    float phase = osc_phase;
 #endif
+
     while (ctx->dequeueEvent(ctx, &event, frame))
     {
         switch (event.type)
@@ -562,9 +564,9 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         case CPLUG_EVENT_MIDI:
         {
             if (event.midi.status == 144)
-                note_down_midi = event.midi.data1;
-            else if (event.midi.status == 128 && event.midi.data1 == note_down_midi)
-                note_down_midi = -1;
+                osc_midi = event.midi.data1;
+            else if (event.midi.status == 128 && event.midi.data1 == osc_midi)
+                osc_midi = -1;
             break;
         }
 
@@ -577,15 +579,14 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
 #ifdef CPLUG_BUILD_STANDALONE
             // Saw wave oscillator for testing
-            if (note_down_midi != -1)
+            if (osc_midi != -1)
             {
-                static float phase = 0;
-                float        freq  = xm_midi_to_Hz((float)note_down_midi);
-                const float  inc   = freq * fs_inv; // ~A1
+                float       freq = xm_midi_to_Hz((float)osc_midi);
+                const float inc  = freq * fs_inv; // ~A1
                 for (int i = frame; i < event.processAudio.endFrame; i++)
                 {
-                    float saw_wave  = -1 + phase * 2;
-                    saw_wave       *= 0.25; // volume
+                    float saw_wave = -1 + phase * 2;
+                    // saw_wave       *= 0.25; // volume
 
                     output[0][i] = saw_wave;
 
@@ -603,18 +604,21 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 #endif
 
             // Setup params
-            float lp_cutoff     = p->audio_params[PARAM_LP_CUTOFF];
-            float lp_Q          = p->audio_params[PARAM_LP_RESONANCE];
-            float hp_cutoff     = p->audio_params[PARAM_HP_CUTOFF];
-            float hp_Q          = p->audio_params[PARAM_HP_RESONANCE];
-            float feedback_gain = p->audio_params[PARAM_FEEDBACK_GAIN];
+            float lp_cutoff = p->audio_params[PARAM_LP_CUTOFF];
+            float lp_Q      = p->audio_params[PARAM_LP_RESONANCE];
+            float hp_cutoff = p->audio_params[PARAM_HP_CUTOFF];
+            float hp_Q      = p->audio_params[PARAM_HP_RESONANCE];
+            float drive     = p->audio_params[PARAM_FEEDBACK_GAIN];
 
-            lp_cutoff     = xm_fast_denomalise_Hz(lp_cutoff);
-            hp_cutoff     = xm_fast_denomalise_Hz(hp_cutoff);
-            lp_Q          = xm_lerpf(lp_Q, 0.1, 20);
-            hp_Q          = xm_lerpf(hp_Q, 0.1, 20);
-            feedback_gain = xm_lerpf(feedback_gain, -18, 24);
-            feedback_gain = xm_fast_dB_to_gain(feedback_gain);
+            lp_cutoff = xm_fast_denomalise_Hz(lp_cutoff);
+            hp_cutoff = xm_fast_denomalise_Hz(hp_cutoff);
+            lp_Q      = xm_lerpf(lp_Q, 0.1, 20);
+            hp_Q      = xm_lerpf(hp_Q, 0.1, 20);
+
+            // const float ratio     = powf(100, drive);
+            // const float inv_ratio = 1 / ratio;
+            float feedback_gain = xm_lerpf(drive, -18, 24);
+            feedback_gain       = xm_fast_dB_to_gain(feedback_gain);
 
             // Process
             Coeffs lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
@@ -701,6 +705,19 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         }
     }
 
+#ifndef NDEBUG
+    if (p->gui)
+    {
+        extern void oscilloscope_push(float* const* buf, int buflen, int nchannels);
+        oscilloscope_push(output, ctx->numFrames, 2);
+    }
+#endif
+#ifdef CPLUG_BUILD_STANDALONE
+    xt_atomic_store_f32(&p->gui_osc_midi, osc_midi);
+    xt_atomic_store_f32(&p->gui_osc_phase, phase);
+    osc_phase = phase;
+#endif
+
     if (panic_btn_pressed)
     {
         // Self oscillation is caused by existing feedback & filter state
@@ -724,8 +741,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         }
     }
 
-    p->is_clipping = is_clipping;
-    p->peak_gain   = peak_gain;
+    p->gui_is_clipping = is_clipping;
+    p->gui_peak_gain   = peak_gain;
     RESTORE_DENORMALS
 
     if (should_post_to_global && p->cplug_ctx->type != CPLUG_PLUGIN_IS_STANDALONE)
