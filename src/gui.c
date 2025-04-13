@@ -386,7 +386,7 @@ void pw_tick(void* _gui)
             if (im->mouse_touchpad_mods & PW_MOD_KEY_SHIFT)
                 delta *= 0.1f;
 
-            float next_value = value_f + delta;
+            float next_value = xm_clampf(value_f + delta, 0, 1);
 
             bool changed = value_f != next_value;
             if (changed)
