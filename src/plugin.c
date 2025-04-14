@@ -225,11 +225,13 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
     switch ((ParamID)paramId)
     {
     case PARAM_LP_CUTOFF:
-        v = 0.5;
+        v = 1;
         break;
     case PARAM_LP_RESONANCE:
-    case PARAM_HP_RESONANCE:
         v = xm_normd(XM_SQRT1_2f, 0.1, 20);
+        break;
+    case PARAM_HP_RESONANCE:
+        v = xm_normd(XM_SQRT2f, 0.1, 20);
         break;
     case PARAM_FEEDBACK_GAIN:
     case PARAM_HP_CUTOFF:
@@ -615,21 +617,17 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             lp_Q      = xm_lerpf(lp_Q, 0.1, 20);
             hp_Q      = xm_lerpf(hp_Q, 0.1, 20);
 
-            // const float ratio     = powf(100, drive);
-            // const float inv_ratio = 1 / ratio;
-            float feedback_gain = xm_lerpf(drive, -18, 24);
-            feedback_gain       = xm_fast_dB_to_gain(feedback_gain);
+            const float ratio         = powf(100, drive);
+            const float inv_ratio     = 1 / ratio;
+            float       feedback_gain = xm_lerpf(drive, -18, 24);
+            feedback_gain             = xm_fast_dB_to_gain(feedback_gain);
 
             // Process
             Coeffs lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
             Coeffs hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
 
-            float release         = 0.005; // 5 ms
-            float attack_samples  = 1;
-            float release_samples = p->sample_rate * release;
-
-            float atk = convert_compressor_time(attack_samples);
-            float rel = convert_compressor_time(release_samples);
+            float time_fast = convert_compressor_time(1);
+            float time_slow = convert_compressor_time(p->sample_rate * 0.005); // 5 ms
 
             for (int ch = 0; ch < 2; ch++)
             {
@@ -641,8 +639,14 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     const float x = *it;
 
                     // Feedforward
-                    float y = tanhf(x + s.fb_yn_1);
-                    y       = filter_process(y, &lp_c, s.lp);
+                    // float y = tanhf(x + s.fb_yn_1 * feedback_gain);
+                    // float y = x + s.fb_yn_1 * drive;
+                    float y = (x + s.fb_yn_1) * 0.5;
+                    // y       = y * (1 + drive);
+                    // y = tanhf(y);
+                    y = distort_upwards_compress(y, &s.comp_yn_1, inv_ratio, time_slow * 2, time_slow * 2);
+                    // y       = tanh(y);
+                    y = filter_process(y, &lp_c, s.lp);
 
                     CPLUG_LOG_ASSERT(y == y);
                     if (y != y) // NaN protection. TODO: remove when filter algo is solid
@@ -666,10 +670,10 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
                     // Feedback
                     float feed = filter_process(y, &hp_c, s.hp);
-                    feed       = tanhf(feed * feedback_gain);
+                    // feed       = tanhf(feed * feedback_gain);
 
                     // Feedback gate, triggered by input
-                    s.peak_xn_1        = detect_peak(fabsf(x), s.peak_xn_1, atk, rel);
+                    s.peak_xn_1        = detect_peak(fabsf(x), s.peak_xn_1, time_fast, time_slow);
                     float peak_dB      = xm_fast_gain_to_dB(s.peak_xn_1);
                     float reduction_dB = hard_knee_expander(peak_dB, -60.0f, 10);
                     xassert(reduction_dB == reduction_dB);

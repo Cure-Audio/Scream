@@ -176,34 +176,6 @@ float waveshape_softknee(float x, float threshold, float ratio, float knee)
     return y;
 }
 
-float distort(float x, float drive)
-{
-    // float y = tanhf(x * (1 + drive * 3));
-    // float y = x;
-
-    float tanh_y = tanhf(x * (1 + drive * 4));
-    float comp_y = distort_compress(x, drive);
-
-    // float mix = fabsf(comp_y);
-    float mix = fabsf(x);
-    if (mix > 1)
-        mix = 1;
-
-    // float y = comp_y * (1 - mix) + tanh_y * mix; // mix wet/dry
-    // float y = comp_y * (1 - 0.5 * drive) + tanh_y * drive * 0.5; // mix wet/dry
-    float y = comp_y;
-
-    xassert(y == y);
-    if (y != y)
-        y = 0;
-    if (y > 1)
-        y = 1;
-    if (y < -1)
-        y = -1;
-
-    return y;
-}
-
 float* buffer_audio     = NULL;
 float* buffer_processed = NULL;
 size_t buffer_audio_len = 0;

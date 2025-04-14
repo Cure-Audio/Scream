@@ -159,3 +159,24 @@ static inline float soft_knee_upwards_compress(float x_dB, float threshold_dB, f
 
     return y_dB;
 }
+
+static inline float distort_upwards_compress(float input, float* xn_1, float ratio_inv, float atk, float rel)
+{
+    // up comp waveshaping
+    float in_dB     = xm_fast_gain_to_dB(fabsf(input));
+    float boost_dB  = hard_knee_upwards_compress(in_dB, 0, ratio_inv);
+    boost_dB       -= in_dB;
+    float boost_G   = xm_fast_dB_to_gain(boost_dB);
+
+    // down comp
+    // *xn_1          = detect_peak(fabsf(input), *xn_1, atk, rel);
+    *xn_1          = detect_peak(fabsf(input * boost_G), *xn_1, atk, rel);
+    float peak_dB  = xm_fast_gain_to_dB(*xn_1);
+    float cut_dB   = soft_knee_compress(peak_dB, -6, ratio_inv, 6);
+    cut_dB        -= peak_dB;
+    float cut_G    = xm_fast_dB_to_gain(cut_dB);
+
+    float output = input * boost_G * cut_G;
+    // float output = input * cut_G;
+    return output;
+}
