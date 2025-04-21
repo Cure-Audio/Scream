@@ -537,7 +537,7 @@ void pw_tick(void* _gui)
         uint64_t cpu_denominator = max_frame_time_ns >> 10;      // fast integer divide by 1024
 
         double cpu_amt       = (double)cpu_numerator / (double)cpu_denominator;
-        double frame_time_ms = (double)cpu_numerator * 1.024; // correct for 1024 int 'division'
+        double frame_time_ms = (double)cpu_numerator * 1024e-6; // correct for 1024 int 'division'
         double approx_fps    = 1000 / frame_time_ms;
 
         nvgTextAlign(nvg, NVG_ALIGN_BL);
