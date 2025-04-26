@@ -3,6 +3,8 @@
 #include <cplug.h>
 #include <xhl/thread.h>
 
+#include "param_smoothing.h"
+
 typedef enum ParamID
 {
     PARAM_CUTOFF,
@@ -55,6 +57,8 @@ typedef struct Plugin
 
     struct FilterState
     {
+        SmoothedValue values[NUM_PARAMS];
+
         float comp_yn_1;
         float fb_yn_1;
 

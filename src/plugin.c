@@ -416,6 +416,14 @@ void cplug_setSampleRateAndBlockSize(void* _p, double sampleRate, uint32_t maxBl
     p->max_block_size = maxBlockSize;
 
     memset(&p->state, 0, sizeof(p->state));
+
+    for (int ch = 0; ch < ARRLEN(p->state); ch++)
+    {
+        struct FilterState* s = &p->state[ch];
+
+        for (int i = 0; i < ARRLEN(p->audio_params); i++)
+            smoothvalue_reset(&s->values[i], p->audio_params[i]);
+    }
 }
 
 #ifdef CPLUG_BUILD_STANDALONE
@@ -592,45 +600,44 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 #endif
 
             // Setup params
-            float lp_cutoff = p->audio_params[PARAM_CUTOFF];
-            float hp_cutoff = p->audio_params[PARAM_SCREAM];
-            float resonance = p->audio_params[PARAM_RESONANCE];
-            // float lp_Q      = XM_SQRT2f;
-            // float hp_Q      = XM_SQRT2f;
-            lp_Q = xm_lerpf(resonance, XM_SQRT1_2f, XM_SQRT2f);
-            hp_Q = xm_lerpf(resonance, XM_SQRT1_2f, 3 * XM_SQRT1_2f);
 
-            lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, MIDI_NOTE_NUM_20kHz);
-            hp_cutoff  = xm_lerpf(hp_cutoff, 0, MIDI_NOTE_NUM_20kHz);
-            hp_cutoff -= MIDI_NOTE_NUM_20kHz - lp_cutoff;
-
-            lp_cutoff = xm_midi_to_Hz(lp_cutoff);
-            hp_cutoff = xm_midi_to_Hz(hp_cutoff);
-            lp_cutoff = xm_clampf(lp_cutoff, 20, 20000);
-            hp_cutoff = xm_clampf(hp_cutoff, 20, 20000);
-
-            // float feedback_gain = xm_lerpf(resonance, -6, 36);
-            // float feedback_gain = xm_lerpf(resonance, -6, 6);
-            float feedback_gain = xm_lerpf(resonance, -12, 12);
-            // float feedback_gain = xm_lerpf(resonance, -6, 24);
-            // float feedback_gain = xm_lerpf(resonance, -12, 12);
-            feedback_gain = xm_fast_dB_to_gain(feedback_gain);
-
-            const float ratio     = 2.0f + feedback_gain;
-            const float inv_ratio = 1.0f / ratio;
-
-            // Process
-            Coeffs lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
-            Coeffs hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
-
-            float expander_attack  = convert_compressor_time(1);
-            float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
+            const float expander_attack  = convert_compressor_time(1);
+            const float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
 
             for (int ch = 0; ch < 2; ch++)
             {
                 float*             it  = output[ch] + frame;
                 const float* const end = output[ch] + event.processAudio.endFrame;
                 struct FilterState s   = p->state[ch];
+
+                for (int i = 0; i < ARRLEN(p->audio_params); i++)
+                    smoothvalue_set_target(&s.values[i], p->audio_params[i], num_frames);
+
+                float lp_cutoff = s.values[PARAM_CUTOFF].current;
+                float hp_cutoff = s.values[PARAM_SCREAM].current;
+                float resonance = s.values[PARAM_RESONANCE].current;
+                lp_Q            = xm_lerpf(resonance, XM_SQRT1_2f, XM_SQRT2f);
+                hp_Q            = xm_lerpf(resonance, XM_SQRT1_2f, 3 * XM_SQRT1_2f);
+
+                lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, MIDI_NOTE_NUM_20kHz);
+                hp_cutoff  = xm_lerpf(hp_cutoff, 0, MIDI_NOTE_NUM_20kHz);
+                hp_cutoff -= MIDI_NOTE_NUM_20kHz - lp_cutoff;
+
+                lp_cutoff = xm_midi_to_Hz(lp_cutoff);
+                hp_cutoff = xm_midi_to_Hz(hp_cutoff);
+                lp_cutoff = xm_clampf(lp_cutoff, 20, 20000);
+                hp_cutoff = xm_clampf(hp_cutoff, 20, 20000);
+
+                float feedback_gain = xm_lerpf(resonance, -12, 12);
+                feedback_gain       = xm_fast_dB_to_gain(feedback_gain);
+
+                Coeffs lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
+                Coeffs hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
+
+                const bool smooth_params = s.values[PARAM_CUTOFF].remaining | s.values[PARAM_SCREAM].remaining |
+                                           s.values[PARAM_RESONANCE].remaining;
+
+                // Process
                 for (; it != end; it++)
                 {
                     const float x = *it;
@@ -683,6 +690,33 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     xassert(feed == feed);
 
                     s.fb_yn_1 = feed;
+
+                    if (smooth_params)
+                    {
+                        for (int i = 0; i < ARRLEN(s.values); i++)
+                            smoothvalue_tick(&s.values[i]);
+
+                        lp_cutoff = s.values[PARAM_CUTOFF].current;
+                        hp_cutoff = s.values[PARAM_SCREAM].current;
+                        resonance = s.values[PARAM_RESONANCE].current;
+                        lp_Q      = xm_lerpf(resonance, XM_SQRT1_2f, XM_SQRT2f);
+                        hp_Q      = xm_lerpf(resonance, XM_SQRT1_2f, 3 * XM_SQRT1_2f);
+
+                        lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, MIDI_NOTE_NUM_20kHz);
+                        hp_cutoff  = xm_lerpf(hp_cutoff, 0, MIDI_NOTE_NUM_20kHz);
+                        hp_cutoff -= MIDI_NOTE_NUM_20kHz - lp_cutoff;
+
+                        lp_cutoff = xm_midi_to_Hz(lp_cutoff);
+                        hp_cutoff = xm_midi_to_Hz(hp_cutoff);
+                        lp_cutoff = xm_clampf(lp_cutoff, 20, 20000);
+                        hp_cutoff = xm_clampf(hp_cutoff, 20, 20000);
+
+                        feedback_gain = xm_lerpf(resonance, -12, 12);
+                        feedback_gain = xm_fast_dB_to_gain(feedback_gain);
+
+                        lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
+                        hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
+                    }
                 }
 #define ROUND_STATE_TO_ZERO(n)                                                                                         \
     if (fabsf(n) < 1.0e-8f)                                                                                            \
@@ -766,7 +800,8 @@ typedef struct PluginStatev0_0_1
         };
         uint32_t number;
     } version;
-    double params[NUM_PARAMS];
+    uint32_t size;
+    double   params[NUM_PARAMS];
 } PluginState;
 
 void cplug_saveState(void* _p, const void* stateCtx, cplug_writeProc writeProc)
@@ -778,6 +813,7 @@ void cplug_saveState(void* _p, const void* stateCtx, cplug_writeProc writeProc)
     state.version.minor = 0;
     state.version.patch = 1;
     state.version.tweak = 0;
+    state.size          = sizeof(state);
 
     _Static_assert(sizeof(state.params) == sizeof(p->main_params), "Must match");
     memcpy(state.params, p->main_params, sizeof(p->main_params));
@@ -790,26 +826,25 @@ void cplug_loadState(void* _p, const void* stateCtx, cplug_readProc readProc)
     Plugin*     p     = _p;
     PluginState state = {0};
 
-    readProc(stateCtx, &state, sizeof(state));
-
-    _Static_assert(sizeof(state.params) == sizeof(p->main_params), "Must match");
-    memcpy(p->main_params, state.params, sizeof(p->main_params));
-    memcpy(p->audio_params, state.params, sizeof(p->main_params));
-
-    for (int i = 0; i < ARRLEN(state.params); i++)
+    int64_t ret = readProc(stateCtx, &state, sizeof(state));
+    if (ret == 0)
     {
-        double v = state.params[i];
-        if (v < 0)
-            v = 0;
-        if (v > 1)
-            v = 1;
-        if (v != p->main_params[i] || v != p->audio_params[i])
+        _Static_assert(sizeof(state.params) == sizeof(p->main_params), "Must match");
+        memcpy(p->main_params, state.params, sizeof(p->main_params));
+        memcpy(p->audio_params, state.params, sizeof(p->main_params));
+
+        for (int i = 0; i < ARRLEN(state.params); i++)
         {
-            p->main_params[i]  = v;
-            p->audio_params[i] = v;
-            param_change_begin(p, i);
-            param_change_update(p, i, v);
-            param_change_end(p, i);
+            double   v        = state.params[i];
+            double   min      = 0;
+            double   max      = 1;
+            uint32_t param_id = cplug_getParameterID(p, i);
+            cplug_getParameterRange(p, param_id, &min, &max);
+            if (v < min)
+                v = min;
+            if (v > max)
+                v = max;
         }
+        p->cplug_ctx->rescan(p->cplug_ctx, CPLUG_FLAG_RESCAN_PARAM_VALUES);
     }
 }

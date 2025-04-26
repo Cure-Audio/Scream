@@ -292,8 +292,9 @@ void pw_tick(void* _gui)
         gui->imgui.num_duplicate_backbuffers = 0;
 #endif
 
-    if (gui->imgui.num_duplicate_backbuffers >= MAX_DUP_BACKBUFFER_COUNT)
-        return;
+    // Uncomment to enable event driven redrawing
+    // if (gui->imgui.num_duplicate_backbuffers >= MAX_DUP_BACKBUFFER_COUNT)
+    //     return;
 
     int width  = gui->plugin->width;
     int height = gui->plugin->height;
@@ -518,12 +519,12 @@ void pw_tick(void* _gui)
         // rect.y += offset;
         // rect.b += offset;
         // im_slider(nvg, im, rect, &release_ms, 0, 50, "%.2fms", "Release");
-        rect.y += offset;
-        rect.b += offset;
-        im_slider(nvg, im, rect, &lp_Q, 0.01, 10, "%.3f", "LP Q");
-        rect.y += offset;
-        rect.b += offset;
-        im_slider(nvg, im, rect, &hp_Q, 0.05, 2, "%.3f", "HP Q");
+        // rect.y += offset;
+        // rect.b += offset;
+        // im_slider(nvg, im, rect, &lp_Q, 0.01, 10, "%.3f", "LP Q");
+        // rect.y += offset;
+        // rect.b += offset;
+        // im_slider(nvg, im, rect, &hp_Q, 0.05, 2, "%.3f", "HP Q");
     }
 #endif
     // #ifndef NDEBUG
