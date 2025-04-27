@@ -60,6 +60,8 @@ typedef struct GUI
 // end - start
 #define SLIDER_LENGTH_RAD 5.23577831647275f
 
+void main_set_param(Plugin* p, ParamID id, double value);
+void main_notify_host_param_change(Plugin* p, ParamID id, double value);
 void main_dequeue_events(Plugin* p)
 {
     CPLUG_LOG_ASSERT(is_main_thread());

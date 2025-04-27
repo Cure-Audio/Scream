@@ -107,12 +107,8 @@ void send_to_main_event_queue(Plugin* p, const CplugEvent event);
 void param_change_begin(Plugin* p, ParamID id);
 void param_change_end(Plugin* p, ParamID id);
 void param_change_update(Plugin* p, ParamID id, double value);
-// [Main thread] Calls begin > update > end
+// Calls begin > update > end
 void param_set(Plugin* p, ParamID id, double value);
-
-void main_set_param(Plugin* p, ParamID id, double value);
-void audio_set_param(Plugin* p, ParamID id, double value);
-void main_notify_host_param_change(Plugin* p, ParamID id, double value);
 
 #ifndef NDEBUG
 static const char* PARAM_STR[] = {
