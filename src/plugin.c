@@ -176,12 +176,13 @@ void* cplug_createPlugin(CplugHostContext* ctx)
 
     return p;
 }
+
 void cplug_destroyPlugin(void* p)
 {
     CPLUG_LOG_ASSERT(p != NULL);
-    MY_FREE(p);
-
     library_unload_platform();
+
+    MY_FREE(p);
 }
 
 uint32_t cplug_getNumInputBusses(void* ptr) { return 1; }
@@ -826,25 +827,30 @@ void cplug_loadState(void* _p, const void* stateCtx, cplug_readProc readProc)
     Plugin*     p     = _p;
     PluginState state = {0};
 
-    int64_t ret = readProc(stateCtx, &state, sizeof(state));
-    if (ret == 0)
+    int64_t ret = readProc(stateCtx, &state, sizeof(state) + 8);
+    if (ret != 0 && ret != 32)
     {
-        _Static_assert(sizeof(state.params) == sizeof(p->main_params), "Must match");
-        memcpy(p->main_params, state.params, sizeof(p->main_params));
-        memcpy(p->audio_params, state.params, sizeof(p->main_params));
-
+        println("Error: Unexpected state version. Ret %lld", ret);
+    }
+    else
+    {
         for (int i = 0; i < ARRLEN(state.params); i++)
         {
             double   v        = state.params[i];
-            double   min      = 0;
-            double   max      = 1;
+            double   vmin     = 0;
+            double   vmax     = 1;
             uint32_t param_id = cplug_getParameterID(p, i);
-            cplug_getParameterRange(p, param_id, &min, &max);
-            if (v < min)
-                v = min;
-            if (v > max)
-                v = max;
+            cplug_getParameterRange(p, param_id, &vmin, &vmax);
+            xassert(vmax > vmin);
+            if (v < vmin)
+                v = vmin;
+            if (v > vmax)
+                v = vmax;
+            p->main_params[i] = xm_clampd(v, vmin, vmax);
+            _Static_assert(sizeof(state.params) == sizeof(p->main_params), "Must match");
         }
+        memcpy(p->audio_params, p->main_params, sizeof(p->main_params));
+
         p->cplug_ctx->rescan(p->cplug_ctx, CPLUG_FLAG_RESCAN_PARAM_VALUES);
     }
 }

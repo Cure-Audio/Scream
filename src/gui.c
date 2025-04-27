@@ -270,14 +270,16 @@ void pw_tick(void* _gui)
     GUI* gui = _gui;
     CPLUG_LOG_ASSERT(gui->plugin);
     CPLUG_LOG_ASSERT(gui->nvg);
-    if (!gui || !gui->plugin || !gui->nvg)
+    if (!gui || !gui->plugin)
         return;
+
+    main_dequeue_events(gui->plugin);
 
     // #ifndef NDEBUG
     uint64_t frame_time_start = xtime_now_ns();
     // #endif
-
-    main_dequeue_events(gui->plugin);
+    if (!gui->nvg)
+        return;
 
 #if defined(_WIN32)
     // Using the CPLUG window extension, we have configured our DXGI backbuffer count to a maximum of 2

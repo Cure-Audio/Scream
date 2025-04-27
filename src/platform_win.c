@@ -25,8 +25,8 @@
 
 static const UINT_PTR UNIQUE_INT_ID = (UINT_PTR)'CURE' | ((UINT_PTR)'SCRM' << 32);
 
-static UINT_PTR g_timer;
-int             g_platform_init_counter = 0;
+static UINT_PTR g_timer                 = 0;
+volatile int    g_platform_init_counter = 0;
 
 #ifndef NDEBUG
 void println(const char* const fmt, ...)
@@ -68,9 +68,11 @@ void        TimerFunc(HWND unnamedParam1, UINT unnamedParam2, UINT_PTR unnamedPa
 
 void library_load_platform()
 {
-    g_platform_init_counter++;
-    if (g_platform_init_counter == 1)
+    int refcount = cplug_atomic_fetch_add_i32(&g_platform_init_counter, 1);
+    if (refcount == 0)
     {
+        println("Creating global timer");
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-settimer
         g_timer = SetTimer(NULL, UNIQUE_INT_ID, 200, TimerFunc);
     }
 }
@@ -79,11 +81,15 @@ void library_unload_platform()
 {
     dequeue_global_events();
 
-    g_platform_init_counter--;
-    if (g_platform_init_counter == 0)
+    int refcount = cplug_atomic_fetch_add_i32(&g_platform_init_counter, 1);
+    if (refcount == 1)
     {
         if (g_timer != 0)
-            KillTimer(NULL, UNIQUE_INT_ID);
+        {
+            println("Destroying global timer");
+            // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-killtimer
+            KillTimer(NULL, g_timer);
+        }
         g_timer = 0;
     }
 }
