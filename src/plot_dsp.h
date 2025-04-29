@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
+extern float input_gain_dB;
 extern float output_gain_dB;
 extern float attack_ms;
 extern float release_ms;

@@ -118,10 +118,11 @@ char osc_midi = -1;
 float osc_phase = 0;
 
 #endif
-// float output_gain_dB = -6;
+float input_gain_dB  = 0;
 float output_gain_dB = 0;
-float attack_ms      = 5;
-float release_ms     = 5.0;
+// float output_gain_dB = -6;
+float attack_ms  = 5;
+float release_ms = 5.0;
 
 // float lp_Q = XM_SQRT1_2f;
 float lp_Q = XM_SQRT2f;
@@ -272,14 +273,19 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 const float inc  = freq * fs_inv; // ~A1
                 for (int i = frame; i < event.processAudio.endFrame; i++)
                 {
-                    // float v = 1 - powf(1 - phase, 2);
-                    float v = 1 - (1 - phase) * (1 - phase);
-                    v       = xm_lerpf(0.85, phase, v);
-                    // float saw_wave = -1 + phase * 2;
-                    float saw_wave = -1 + v * 2;
-                    // saw_wave       *= 0.25; // volume
+                    // Shabby attempt at recreating the default Saw wave
+                    // float v        = 1 - (1 - phase) * (1 - phase);
+                    // v              = xm_lerpf(0.85, phase, v);
+                    // float wave = -1 + v * 2;
 
-                    output[0][i] = saw_wave;
+                    // Tri
+                    float wave = -1 + phase * 4;
+                    if (wave > 1)
+                        wave = 2 - wave;
+                    if (wave < -1)
+                        wave = -2 - wave;
+
+                    output[0][i] = wave;
 
                     phase += inc;
                     if (phase >= 1)
@@ -313,14 +319,16 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 float resonance = s.values[PARAM_RESONANCE].current;
 
 // #define CUTOFF_MAX    MIDI_NOTE_NUM_20kHz
-#define CUTOFF_MAX (MIDI_NOTE_NUM_20kHz - 24)
+#define CUTOFF_MAX (MIDI_NOTE_NUM_20kHz)
 // #define HP_CUTOFF_MIN 0
 #define HP_CUTOFF_MIN (MIDI_NOTE_NUM_20Hz - 12)
 #define LP_Q_MIN      XM_SQRT1_2f
-#define LP_Q_MAX      XM_SQRT2f
-#define HP_Q_MIN      XM_SQRT1_2f
+#define LP_Q_MAX      XM_SQRT1_2f
+// #define LP_Q_MAX      XM_SQRT2f
+#define HP_Q_MIN XM_SQRT1_2f
 // #define HP_Q_MAX    (3 * XM_SQRT1_2f)
-#define HP_Q_MAX    (XM_SQRT2f)
+#define HP_Q_MAX (XM_SQRT2f)
+// #define HP_Q_MAX    (XM_SQRT1_2f)
 #define FB_GAIN_MIN -12.0f
 #define FB_GAIN_MAX 12.0f
 
@@ -348,7 +356,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 // Process
                 for (; it != end; it++)
                 {
-                    const float x = *it;
+                    const float x = *it * xm_fast_dB_to_gain(input_gain_dB);
 
                     // Feedforward
                     // float y = x + s.fb_yn_1 * feedback_gain;
@@ -371,6 +379,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
                     // *it = xm_clampf(y, -1, 1);
                     *it = y;
+                    // *it = x;
 
 #ifdef CPLUG_BUILD_STANDALONE
                     *it *= xm_fast_dB_to_gain(output_gain_dB);

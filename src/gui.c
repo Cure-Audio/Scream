@@ -502,7 +502,7 @@ void pw_tick(void* _gui)
     }
     */
 
-#ifndef NDEBUG
+    // #ifndef NDEBUG
     {
         Plugin* p = gui->plugin;
         // plot_expander(nvg, width, height);
@@ -515,6 +515,9 @@ void pw_tick(void* _gui)
 
         imgui_rect  rect   = {10, 10, 180, 25};
         const float offset = 10 + (rect.b - rect.y);
+        im_slider(nvg, im, rect, &input_gain_dB, -24, 24, "%.2fdB", "Input");
+        rect.y += offset;
+        rect.b += offset;
         im_slider(nvg, im, rect, &output_gain_dB, -24, 0, "%.2fdB", "Output");
         // rect.y += offset;
         // rect.b += offset;
@@ -529,7 +532,7 @@ void pw_tick(void* _gui)
         // rect.b += offset;
         // im_slider(nvg, im, rect, &hp_Q, 0.05, 2, "%.3f", "HP Q");
     }
-#endif
+    // #endif
     // #ifndef NDEBUG
     {
         uint64_t frame_time_end         = xtime_now_ns();
