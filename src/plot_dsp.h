@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef NDEBUG
+#ifndef CPLUG_BUILD_STANDALONE
 #error This is for testing only
 #endif
 
@@ -11,12 +11,14 @@
 #include <stdio.h>
 #include <string.h>
 
-extern float input_gain_dB;
-extern float output_gain_dB;
-extern float attack_ms;
-extern float release_ms;
-extern float lp_Q;
-extern float hp_Q;
+#ifdef CPLUG_BUILD_STANDALONE
+extern float g_input_gain_dB;
+extern float g_output_gain_dB;
+extern float g_attack_ms;
+extern float g_release_ms;
+extern float g_lp_Q;
+extern float g_hp_Q;
+#endif
 
 void im_slider(
     NVGcontext*    nvg,
@@ -316,9 +318,9 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
         static float neg_input_gain_dB = 12;
         static float neg_threshold_dB  = -14;
         static float neg_ratio         = 5;
-        // static float attack_ms         = 0.0;
-        // static float release_ms        = 0.86;
-        // static float output_gain_dB    = 8;
+        // static float g_attack_ms         = 0.0;
+        // static float g_release_ms        = 0.86;
+        // static float g_output_gain_dB    = 8;
         im_slider(nvg, im, rect, &pos_input_gain_dB, 0, 60, "%.2f dB", "+ Input gain");
         rect.y += 40;
         rect.b += 40;
@@ -337,21 +339,21 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
         im_slider(nvg, im, rect, &neg_ratio, 1, 100, "1:%.2f", "- Ratio");
         rect.y += 40;
         rect.b += 40;
-        im_slider(nvg, im, rect, &attack_ms, 0, 10, "%.3f ms", "Attack");
+        im_slider(nvg, im, rect, &g_attack_ms, 0, 10, "%.3f ms", "Attack");
         rect.y += 40;
         rect.b += 40;
-        im_slider(nvg, im, rect, &release_ms, 0, 100, "%.3f ms", "Release");
+        im_slider(nvg, im, rect, &g_release_ms, 0, 100, "%.3f ms", "Release");
         rect.y += 40;
         rect.b += 40;
-        im_slider(nvg, im, rect, &output_gain_dB, 0, 60, "%.2f dB", "Output gain");
+        im_slider(nvg, im, rect, &g_output_gain_dB, 0, 60, "%.2f dB", "Output gain");
         rect.y += 40;
         rect.b += 40;
 
         make_saw(41.2f, SAMPLE_RATE);
         plot_line(nvg, x, y, width, height, buffer_audio, buffer_audio_len, nvgRGBA(0, 127, 127, 255));
 
-        float atk_samples = SAMPLE_RATE * attack_ms * 0.001;
-        float rel_samples = SAMPLE_RATE * release_ms * 0.001;
+        float atk_samples = SAMPLE_RATE * g_attack_ms * 0.001;
+        float rel_samples = SAMPLE_RATE * g_release_ms * 0.001;
         atk_samples       = floorf(atk_samples);
         rel_samples       = floorf(rel_samples);
         if (atk_samples < 1)
@@ -368,7 +370,7 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
         const float neg_ratio_inv    = 1 / neg_ratio;
         const float pos_input_gain_G = xm_fast_dB_to_gain(pos_input_gain_dB);
         const float neg_input_gain_G = xm_fast_dB_to_gain(neg_input_gain_dB);
-        const float output_gain_G    = xm_fast_dB_to_gain(output_gain_dB);
+        const float output_gain_G    = xm_fast_dB_to_gain(g_output_gain_dB);
 
         float xn_1 = 0;
         for (int i = 0; i < buffer_audio_len; i++)
@@ -569,8 +571,8 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
         static float threshold_dB = 0;
         static float ratio        = 50;
         static float knee_dB      = 6;
-        // static float attack_ms    = 5.0;
-        // static float release_ms   = 5.0;
+        // static float g_attack_ms    = 5.0;
+        // static float g_release_ms   = 5.0;
         static float drive = 1.0;
         // im_slider(nvg, im, rect, &threshold_dB, -60, 0, "%.2f dB", "Threshold");
         // rect.y += 40;
@@ -581,10 +583,10 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
         // im_slider(nvg, im, rect, &knee_dB, 1, 100, "%.2f dB", "Knee");
         // rect.y += 40;
         // rect.b += 40;
-        // im_slider(nvg, im, rect, &attack_ms, 0, 50, "%.3f ms", "Attack");
+        // im_slider(nvg, im, rect, &g_attack_ms, 0, 50, "%.3f ms", "Attack");
         // rect.y += 40;
         // rect.b += 40;
-        // im_slider(nvg, im, rect, &release_ms, 0, 50, "%.3f ms", "Release");
+        // im_slider(nvg, im, rect, &g_release_ms, 0, 50, "%.3f ms", "Release");
         // rect.y += 40;
         // rect.b += 40;
         im_slider(nvg, im, rect, &drive, 0, 1, "%.3f", "Drive");
@@ -595,8 +597,8 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
         make_saw(41.2f, SAMPLE_RATE);
         plot_line(nvg, x, y, width, height, buffer_audio, buffer_audio_len, nvgRGBA(0, 127, 127, 255));
 
-        float atk_samples = SAMPLE_RATE * attack_ms * 0.001;
-        float rel_samples = SAMPLE_RATE * release_ms * 0.001;
+        float atk_samples = SAMPLE_RATE * g_attack_ms * 0.001;
+        float rel_samples = SAMPLE_RATE * g_release_ms * 0.001;
         atk_samples       = floorf(atk_samples);
         rel_samples       = floorf(rel_samples);
         if (atk_samples < 1)

@@ -4,7 +4,7 @@
 #include "imgui.h"
 #include "plugin.h"
 
-#ifndef NDEBUG
+#ifdef CPLUG_BUILD_STANDALONE
 #include "plot_dsp.h"
 #endif
 
@@ -502,7 +502,7 @@ void pw_tick(void* _gui)
     }
     */
 
-    // #ifndef NDEBUG
+#ifdef CPLUG_BUILD_STANDALONE
     {
         Plugin* p = gui->plugin;
         // plot_expander(nvg, width, height);
@@ -515,24 +515,24 @@ void pw_tick(void* _gui)
 
         imgui_rect  rect   = {10, 10, 180, 25};
         const float offset = 10 + (rect.b - rect.y);
-        im_slider(nvg, im, rect, &input_gain_dB, -24, 24, "%.2fdB", "Input");
+        im_slider(nvg, im, rect, &g_input_gain_dB, -24, 24, "%.2fdB", "Input");
         rect.y += offset;
         rect.b += offset;
-        im_slider(nvg, im, rect, &output_gain_dB, -24, 0, "%.2fdB", "Output");
+        im_slider(nvg, im, rect, &g_output_gain_dB, -24, 0, "%.2fdB", "Output");
         // rect.y += offset;
         // rect.b += offset;
-        // im_slider(nvg, im, rect, &attack_ms, 0, 50, "%.2fms", "Attack");
+        // im_slider(nvg, im, rect, &g_attack_ms, 0, 50, "%.2fms", "Attack");
         // rect.y += offset;
         // rect.b += offset;
-        // im_slider(nvg, im, rect, &release_ms, 0, 50, "%.2fms", "Release");
+        // im_slider(nvg, im, rect, &g_release_ms, 0, 50, "%.2fms", "Release");
         // rect.y += offset;
         // rect.b += offset;
-        // im_slider(nvg, im, rect, &lp_Q, 0.01, 10, "%.3f", "LP Q");
+        // im_slider(nvg, im, rect, &g_lp_Q, 0.01, 10, "%.3f", "LP Q");
         // rect.y += offset;
         // rect.b += offset;
-        // im_slider(nvg, im, rect, &hp_Q, 0.05, 2, "%.3f", "HP Q");
+        // im_slider(nvg, im, rect, &g_hp_Q, 0.05, 2, "%.3f", "HP Q");
     }
-    // #endif
+#endif
     // #ifndef NDEBUG
     {
         uint64_t frame_time_end         = xtime_now_ns();

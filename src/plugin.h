@@ -59,13 +59,11 @@ typedef struct Plugin
     {
         SmoothedValue values[NUM_PARAMS];
 
-        float comp_yn_1;
         float fb_yn_1;
+        float peak_xn_1;
 
         float lp[2];
         float hp[2];
-
-        float peak_xn_1;
     } state[2];
 
     // Event stuff
