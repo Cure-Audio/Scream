@@ -304,8 +304,9 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
             // Setup params
 
-            const float expander_attack  = convert_compressor_time(1);
-            const float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
+            const float expander_attack = convert_compressor_time(1);
+            // const float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
+            const float expander_release = convert_compressor_time(p->sample_rate * 0.001); // 1 ms
 
             for (int ch = 0; ch < 2; ch++)
             {
@@ -313,8 +314,9 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 const float* const end = output[ch] + event.processAudio.endFrame;
                 struct FilterState s   = p->state[ch];
 
+                const int param_smoothing_time = xm_droundi(p->sample_rate * 0.010); // 10ms
                 for (int i = 0; i < ARRLEN(p->audio_params); i++)
-                    smoothvalue_set_target(&s.values[i], p->audio_params[i], num_frames);
+                    smoothvalue_set_target(&s.values[i], p->audio_params[i], param_smoothing_time);
 
                 float lp_cutoff = s.values[PARAM_CUTOFF].current;
                 float hp_cutoff = s.values[PARAM_SCREAM].current;

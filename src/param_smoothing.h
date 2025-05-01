@@ -1,4 +1,5 @@
 #include <math.h>
+#include <xhl/maths.h>
 
 typedef struct SmoothedValue
 {
@@ -23,6 +24,7 @@ static inline float smoothvalue_tick(SmoothedValue* sv)
     {
         sv->remaining--;
         sv->current += sv->inc;
+        xassert(sv->current >= 0 && sv->current <= 1);
     }
 
     return v;
