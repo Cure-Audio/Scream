@@ -207,8 +207,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
 #if __APPLE__
     env.metal.device = pw_get_metal_device(gui->pw);
 #elif _WIN32
-    env.d3d11.device         = pw_get_dx11_device(gui->pw);
-    env.d3d11.device_context = pw_get_dx11_device_context(gui->pw);
+    env.d3d11.device             = pw_get_dx11_device(gui->pw);
+    env.d3d11.device_context     = pw_get_dx11_device_context(gui->pw);
 #endif
     gui->sg = sg_setup(&(sg_desc){
         .environment        = env,
@@ -247,7 +247,7 @@ void pw_destroy_gui(void* _gui)
     gui->plugin->gui = NULL;
     MY_FREE(gui);
 
-#ifndef NDEBUG
+#ifdef CPLUG_BUILD_STANDALONE
     if (buffer_audio)
     {
         MY_FREE(buffer_audio);
@@ -263,7 +263,7 @@ void pw_destroy_gui(void* _gui)
         MY_FREE(oscilloscope_ringbuf);
         oscilloscope_ringbuf = NULL;
     }
-#endif
+#endif // CPLUG_BUILD_STANDALONE
 }
 
 void pw_tick(void* _gui)
@@ -290,7 +290,7 @@ void pw_tick(void* _gui)
     const uint32_t MAX_DUP_BACKBUFFER_COUNT = 1;
 #endif
 
-#ifndef NDEBUG
+#ifdef CPLUG_BUILD_STANDALONE
     if (oscilloscope_ringbuf)
         gui->imgui.num_duplicate_backbuffers = 0;
 #endif

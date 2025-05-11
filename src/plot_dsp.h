@@ -185,6 +185,7 @@ float waveshape_softknee(float x, float threshold, float ratio, float knee)
     return y;
 }
 
+#ifdef CPLUG_BUILD_STANDALONE
 float* buffer_audio     = NULL;
 float* buffer_processed = NULL;
 size_t buffer_audio_len = 0;
@@ -852,3 +853,4 @@ void plot_oscilloscope(
     nvgStrokeColor(nvg, col);
     nvgStroke(nvg);
 }
+#endif // CPLUG_BUILD_STANDALONE
