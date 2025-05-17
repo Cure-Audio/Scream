@@ -10,10 +10,15 @@ typedef enum ParamID
     PARAM_CUTOFF,
     PARAM_SCREAM,
     PARAM_RESONANCE,
+    PARAM_INPUT_GAIN,
 } ParamID;
+
+#define RANGE_INPUT_GAIN_MIN -72.0
+#define RANGE_INPUT_GAIN_MAX 24.0
+
 enum
 {
-    NUM_PARAMS = PARAM_RESONANCE + 1,
+    NUM_PARAMS = PARAM_INPUT_GAIN + 1,
 
     GUI_INIT_WIDTH  = 800,
     GUI_INIT_HEIGHT = GUI_INIT_WIDTH / 2,
@@ -42,9 +47,13 @@ typedef struct Plugin
     CplugHostContext* cplug_ctx;
 
     // Retained data for GUI
-    void*           gui;
-    int             width, height;
-    xt_atomic_float gui_peak_gain;
+    void* gui;
+    int   width, height;
+
+    // two floats, stored as a u64
+    xt_atomic_uint64_t gui_input_peak_gain;
+
+    xt_atomic_float gui_output_peak_gain;
     xt_atomic_float gui_osc_phase;
     xt_atomic_float gui_osc_midi;
 
@@ -113,6 +122,7 @@ static const char* PARAM_STR[] = {
     "PARAM_CUTOFF",
     "PARAM_SCREAM",
     "PARAM_RESONANCE",
+    "PARAM_INPUT_GAIN",
 };
 _Static_assert(ARRLEN(PARAM_STR) == NUM_PARAMS, "");
 #endif

@@ -45,13 +45,14 @@ typedef struct GUI
 
     struct imgui_context imgui;
 
-    bool hover_params[NUM_PARAMS];
-    bool drag_params[NUM_PARAMS];
+    float input_gain_peaks_slow[2];
+    float input_gain_peaks_fast[2];
+
     bool hover_panic_btn;
 } GUI;
 
 // Relative to GUI width
-#define SLIDER_RADIUS 0.075f
+#define SLIDER_RADIUS 0.085f
 // Angle radians
 // 120deg
 #define SLIDER_START_RAD 2.0943951023931953f
@@ -59,6 +60,21 @@ typedef struct GUI
 #define SLIDER_END_RAD 7.330173418865945f
 // end - start
 #define SLIDER_LENGTH_RAD 5.23577831647275f
+
+// clang-format off
+#define nvgHexColour(hex) (NVGcolor){( hex >> 24)         / 255.0f,\
+                                     ((hex >> 16) & 0xff) / 255.0f,\
+                                     ((hex >>  8) & 0xff) / 255.0f,\
+                                     ( hex        & 0xff) / 255.0f}
+// clang-format on
+
+static const NVGcolor COLOUR_TEXT = nvgHexColour(0x8D949BFF);
+
+static const NVGcolor COLOUR_BG_LIGHT = nvgHexColour(0xC9D3DDFF);
+static const NVGcolor COLOUR_BG_DARK  = nvgHexColour(0x151B32FF);
+
+static const NVGcolor COLOUR_GREY_1 = nvgHexColour(0xB5BEC7FF);
+static const NVGcolor COLOUR_GREY_2 = nvgHexColour(0x636A78FF);
 
 void main_set_param(Plugin* p, ParamID id, double value);
 void main_notify_host_param_change(Plugin* p, ParamID id, double value);
@@ -187,6 +203,77 @@ void pw_get_info(struct PWGetInfo* info)
         info->constrain_size.width  = width;
         info->constrain_size.height = height;
     }
+}
+
+double handle_param_events(GUI* gui, ParamID param_id, uint32_t events)
+{
+    imgui_context* im      = &gui->imgui;
+    double         value_d = gui->plugin->main_params[param_id];
+    float          value_f = value_d;
+
+    if (events & IMGUI_EVENT_MOUSE_ENTER)
+        pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_NS);
+    if ((events & IMGUI_EVENT_MOUSE_EXIT) && im->mouse_over_id == 0)
+        pw_set_mouse_cursor(gui->pw, PW_CURSOR_ARROW);
+
+    if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+    {
+        if (im->left_click_counter == 2)
+        {
+            im->left_click_counter = 0; // single and triple click not supported
+
+            value_d = value_f = cplug_getDefaultParameterValue(gui->plugin, param_id);
+            param_set(gui->plugin, param_id, value_d);
+        }
+    }
+
+    if (events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_TOUCHPAD_BEGIN))
+        param_change_begin(gui->plugin, param_id);
+    if (events & IMGUI_EVENT_DRAG_MOVE)
+    {
+        float next_value = value_f;
+        imgui_drag_value(im, &next_value, 0, 1, 300, IMGUI_DRAG_VERTICAL);
+        bool changed = value_f != next_value;
+        if (changed)
+        {
+            value_d = value_f = next_value;
+            param_change_update(gui->plugin, param_id, value_d);
+        }
+    }
+    if (events & IMGUI_EVENT_TOUCHPAD_MOVE)
+    {
+        float delta = im->mouse_touchpad.y / 500.0f;
+        if (im->mouse_touchpad_mods & PW_MOD_INVERTED_SCROLL)
+            delta = -delta;
+        if (im->mouse_touchpad_mods & PW_MOD_PLATFORM_KEY_CTRL)
+            delta *= 0.1f;
+        if (im->mouse_touchpad_mods & PW_MOD_KEY_SHIFT)
+            delta *= 0.1f;
+
+        float next_value = xm_clampf(value_f + delta, 0, 1);
+
+        bool changed = value_f != next_value;
+        if (changed)
+        {
+            value_d = value_f = next_value;
+            param_change_update(gui->plugin, param_id, value_d);
+        }
+    }
+    if (events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
+        param_change_end(gui->plugin, param_id);
+    if (events & IMGUI_EVENT_MOUSE_WHEEL)
+    {
+        double delta = im->mouse_wheel * 0.1;
+        if (im->mouse_wheel_mods & PW_MOD_PLATFORM_KEY_CTRL)
+            delta *= 0.1;
+        if (im->mouse_wheel_mods & PW_MOD_KEY_SHIFT)
+            delta *= 0.1;
+
+        double v  = gui->plugin->main_params[param_id];
+        v        += delta;
+        param_set(gui->plugin, param_id, v);
+    }
+    return value_d;
 }
 
 void* pw_create_gui(void* _plugin, void* _pw)
@@ -335,85 +422,17 @@ void pw_tick(void* _gui)
     NVGcontext*    nvg = gui->nvg;
     imgui_context* im  = &gui->imgui;
 
-    const NVGcolor col_text = nvgRGBA(143, 150, 160, 255);
-
     // Main parameters
-    // static const float SLIDER_POSITIONS[] = {0.1666, 0.3333, 0.5, 0.6666, 0.8333};
-    static const float SLIDER_POSITIONS[] = {0.25, 0.5, 0.75};
-    _Static_assert(ARRLEN(SLIDER_POSITIONS) == NUM_PARAMS);
-    const float slider_radius = SLIDER_RADIUS * width;
+    static const float SLIDER_POSITIONS[] = {0.3, 0.575, 0.825};
+    const float        slider_radius      = SLIDER_RADIUS * width;
     for (int i = 0; i < ARRLEN(SLIDER_POSITIONS); i++)
     {
         imgui_pt pt;
         pt.x = SLIDER_POSITIONS[i] * width;
         pt.y = height * 0.5f;
 
-        double value_d = gui->plugin->main_params[i];
-        float  value_f = value_d;
-
-        uint32_t events = imgui_get_events_circle(im, pt, slider_radius);
-        if (events & IMGUI_EVENT_MOUSE_ENTER)
-            pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_NS);
-        if ((events & IMGUI_EVENT_MOUSE_EXIT) && im->mouse_over_id == 0)
-            pw_set_mouse_cursor(gui->pw, PW_CURSOR_ARROW);
-
-        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
-        {
-            if (im->left_click_counter == 2)
-            {
-                im->left_click_counter = 0; // single and triple click not supported
-
-                value_d = value_f = cplug_getDefaultParameterValue(gui->plugin, i);
-                param_set(gui->plugin, i, value_d);
-            }
-        }
-
-        if (events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_TOUCHPAD_BEGIN))
-            param_change_begin(gui->plugin, i);
-        if (events & IMGUI_EVENT_DRAG_MOVE)
-        {
-            float next_value = value_f;
-            imgui_drag_value(im, &next_value, 0, 1, 300, IMGUI_DRAG_VERTICAL);
-            bool changed = value_f != next_value;
-            if (changed)
-            {
-                value_d = value_f = next_value;
-                param_change_update(gui->plugin, i, value_d);
-            }
-        }
-        if (events & IMGUI_EVENT_TOUCHPAD_MOVE)
-        {
-            float delta = im->mouse_touchpad.y / 500.0f;
-            if (im->mouse_touchpad_mods & PW_MOD_INVERTED_SCROLL)
-                delta = -delta;
-            if (im->mouse_touchpad_mods & PW_MOD_PLATFORM_KEY_CTRL)
-                delta *= 0.1f;
-            if (im->mouse_touchpad_mods & PW_MOD_KEY_SHIFT)
-                delta *= 0.1f;
-
-            float next_value = xm_clampf(value_f + delta, 0, 1);
-
-            bool changed = value_f != next_value;
-            if (changed)
-            {
-                value_d = value_f = next_value;
-                param_change_update(gui->plugin, i, value_d);
-            }
-        }
-        if (events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
-            param_change_end(gui->plugin, i);
-        if (events & IMGUI_EVENT_MOUSE_WHEEL)
-        {
-            double delta = im->mouse_wheel * 0.1;
-            if (im->mouse_wheel_mods & PW_MOD_PLATFORM_KEY_CTRL)
-                delta *= 0.1;
-            if (im->mouse_wheel_mods & PW_MOD_KEY_SHIFT)
-                delta *= 0.1;
-
-            double v  = gui->plugin->main_params[i];
-            v        += delta;
-            param_set(gui->plugin, i, v);
-        }
+        uint32_t events  = imgui_get_events_circle(im, pt, slider_radius);
+        double   value_d = handle_param_events(gui, i, events);
 
         // Knob
         nvgBeginPath(nvg);
@@ -422,16 +441,16 @@ void pw_tick(void* _gui)
         nvgFill(nvg);
 
         // Labels
-        nvgFillColor(nvg, col_text);
+        nvgFillColor(nvg, COLOUR_TEXT);
         nvgTextAlign(nvg, NVG_ALIGN_CC);
         nvgFontSize(nvg, gui->scale * 16);
 
         char label[24];
         cplug_getParameterName(gui->plugin, i, label, sizeof(label));
-        nvgText(nvg, pt.x, pt.y + slider_radius * 1.4, label, NULL);
+        nvgText(nvg, pt.x, height * 0.75, label, NULL);
 
         cplug_parameterValueToString(gui->plugin, i, label, sizeof(label), value_d);
-        nvgText(nvg, pt.x, pt.y - slider_radius * 1.2, label, NULL);
+        nvgText(nvg, pt.x, height * 0.25, label, NULL);
 
         // Slider Tick/Notch
         float value_norm  = cplug_normaliseParameterValue(gui->plugin, i, value_d);
@@ -447,12 +466,154 @@ void pw_tick(void* _gui)
         nvgMoveTo(nvg, pt.x + tick_radius_start * angle_x, pt.y + tick_radius_start * angle_y);
         nvgLineTo(nvg, pt.x + tick_radius_end * angle_x, pt.y + tick_radius_end * angle_y);
         nvgStrokeWidth(nvg, gui->scale * 8);
-        nvgStrokeColor(nvg, nvgRGBA(40, 47, 83, 255));
+        nvgStrokeColor(nvg, COLOUR_BG_DARK);
         nvgLineCap(nvg, NVG_ROUND);
         nvgStroke(nvg);
     }
 
-    const float peak_gain = gui->plugin->gui_peak_gain;
+    // Input gain
+    {
+        imgui_rect rect;
+        rect.x = width * 0.075;
+        rect.r = width * 0.115;
+        rect.y = height * 0.5 - slider_radius;
+        rect.b = height * 0.5 + slider_radius;
+
+        float rect_r    = rect.r;
+        float icon_r    = rect.r + 20;
+        rect.r          = icon_r;
+        uint32_t events = imgui_get_events_rect(im, &rect);
+        rect.r          = rect_r;
+
+        double value_d = handle_param_events(gui, PARAM_INPUT_GAIN, events);
+
+        nvgBeginPath(nvg);
+        nvgRoundedRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y, 4);
+        nvgFillColor(nvg, nvgHexColour(0x2C2F35FF));
+
+        static const NVGcolor bg_grad_stop0 = nvgHexColour(0x2C2F35FF);
+        static const NVGcolor bg_grad_stop1 = nvgHexColour(0x585E6AFF);
+        const NVGpaint        bg_paint = nvgLinearGradient(nvg, 0, rect.y, 0, rect.b, bg_grad_stop0, bg_grad_stop1);
+        nvgFillPaint(nvg, bg_paint);
+        nvgFill(nvg);
+
+        float icon_x = rect.r + 8;
+        float icon_y = xm_lerpf(value_d, rect.b, rect.y);
+        nvgBeginPath(nvg);
+        nvgMoveTo(nvg, icon_x, icon_y);
+        nvgLineTo(nvg, icon_r, icon_y - 8);
+        nvgLineTo(nvg, icon_r, icon_y + 8);
+        nvgClosePath(nvg);
+        nvgFillColor(nvg, COLOUR_TEXT);
+        nvgFill(nvg);
+
+        xvec2f peaks;
+        peaks.u64 = xt_atomic_load_u64(&gui->plugin->gui_input_peak_gain);
+
+        float meter_width    = rect.r - rect.x;
+        float channel_width  = meter_width * 0.25;
+        float padding        = meter_width / 6.0f;
+        float channel_height = rect.b - rect.y - 2 * padding;
+
+        for (int ch = 0; ch < 2; ch++)
+        {
+            imgui_rect ch_rect = rect;
+
+            ch_rect.x += padding;
+            if (ch == 1)
+                ch_rect.x += padding + channel_width;
+
+            ch_rect.y += padding;
+            ch_rect.r  = ch_rect.x + channel_width;
+            ch_rect.b  = ch_rect.y + channel_height;
+
+            // Background
+
+            nvgBeginPath(nvg);
+            nvgRoundedRect(nvg, ch_rect.x, ch_rect.y, ch_rect.r - ch_rect.x, ch_rect.b - ch_rect.y, 2);
+            static const NVGcolor ch_grad_stop0 = nvgHexColour(0x6C7483FF);
+            static const NVGcolor ch_grad_stop1 = nvgHexColour(0x7C8493FF);
+            nvgFillPaint(nvg, nvgLinearGradient(nvg, 0, ch_rect.y, 0, ch_rect.b, ch_grad_stop0, ch_grad_stop1));
+            nvgFill(nvg);
+
+            // double release_time_slow = convert_compressor_time(6);
+            // double release_time_fast = convert_compressor_time(1);
+            double release_time_slow = xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / (60 * 2));
+            double release_time_fast = xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / 30);
+            gui->input_gain_peaks_slow[ch] =
+                detect_peak(peaks.data[ch], gui->input_gain_peaks_slow[ch], 0, release_time_slow);
+            gui->input_gain_peaks_fast[ch] =
+                detect_peak(peaks.data[ch], gui->input_gain_peaks_fast[ch], 0, release_time_fast);
+
+            float decaying_peaks[2] = {
+                xm_fast_gain_to_dB(gui->input_gain_peaks_slow[ch]),
+                xm_fast_gain_to_dB(gui->input_gain_peaks_fast[ch]),
+            };
+            static const NVGcolor peak_colours[2] = {
+                nvgHexColour(0x459DB5FF),
+                nvgHexColour(0xACDEECFF),
+            };
+            for (int i = 0; i < 2; i++)
+            {
+                float    peak_dB = decaying_peaks[i];
+                NVGcolor col     = peak_colours[i];
+
+                if (peak_dB > RANGE_INPUT_GAIN_MIN)
+                {
+                    float norm        = xm_normf(peak_dB, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                    float peak_height = norm * channel_height;
+                    nvgBeginPath(nvg);
+                    nvgRect(nvg, ch_rect.x, ch_rect.b - peak_height, ch_rect.r - ch_rect.x, peak_height);
+                    nvgFillColor(nvg, col);
+                    nvgFill(nvg);
+                }
+            }
+            // Decaying Peak
+            // float peak_dB_1 = xm_fast_gain_to_dB(gui->input_gain_peaks_slow[ch]);
+            // if (peak_dB_1 > RANGE_INPUT_GAIN_MIN)
+            // {
+            //     float norm        = xm_normf(peak_dB_1, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+            //     float peak_height = norm * channel_height;
+            //     nvgBeginPath(nvg);
+            //     nvgRect(nvg, ch_rect.x, ch_rect.b - peak_height, ch_rect.r - ch_rect.x, peak_height);
+            //     nvgFillColor(nvg, nvgHexColour(0x459DB5FF));
+            //     nvgFill(nvg);
+            // }
+
+            // // Realtime Peak
+            // float rt_peak_dB = xm_fast_gain_to_dB(peaks.data[ch]);
+            // if (rt_peak_dB > RANGE_INPUT_GAIN_MIN)
+            // {
+            //     float norm        = xm_normf(rt_peak_dB, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+            //     float peak_height = norm * channel_height;
+            //     nvgBeginPath(nvg);
+            //     nvgRect(nvg, ch_rect.x, ch_rect.b - peak_height, ch_rect.r - ch_rect.x, peak_height);
+            //     nvgFillColor(nvg, nvgHexColour(0xACDEECFF));
+            //     nvgFill(nvg);
+            // }
+        }
+
+        // 0dB notch
+        float zero_dB_pos = xm_normf(0, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+        float zero_dB_y   = rect.b - padding - zero_dB_pos * channel_height;
+        nvgBeginPath(nvg);
+        nvgMoveTo(nvg, rect.x, zero_dB_y);
+        nvgLineTo(nvg, rect.r, zero_dB_y);
+        nvgStrokePaint(nvg, bg_paint);
+        nvgStrokeWidth(nvg, 1);
+        nvgStroke(nvg);
+
+        nvgFillColor(nvg, COLOUR_TEXT);
+        float cx = (rect.x + rect.r) * 0.5f;
+        char  label[24];
+        cplug_getParameterName(gui->plugin, PARAM_INPUT_GAIN, label, sizeof(label));
+        nvgText(nvg, cx, height * 0.75, label, NULL);
+
+        cplug_parameterValueToString(gui->plugin, PARAM_INPUT_GAIN, label, sizeof(label), value_d);
+        nvgText(nvg, cx, height * 0.25, label, NULL);
+    }
+
+    const float peak_gain = gui->plugin->gui_output_peak_gain;
     if (peak_gain > 1)
     {
         nvgTextAlign(nvg, NVG_ALIGN_BR);
@@ -515,9 +676,6 @@ void pw_tick(void* _gui)
 
         imgui_rect  rect   = {10, 10, 180, 25};
         const float offset = 10 + (rect.b - rect.y);
-        im_slider(nvg, im, rect, &g_input_gain_dB, -24, 24, "%.2fdB", "Input");
-        rect.y += offset;
-        rect.b += offset;
         im_slider(nvg, im, rect, &g_output_gain_dB, -24, 0, "%.2fdB", "Output");
         // rect.y += offset;
         // rect.b += offset;
@@ -561,8 +719,25 @@ void pw_tick(void* _gui)
             approx_fps);
         nvgText(nvg, 5, height - 5, text, NULL);
 
+        // TODO: remove after release
+        const char*    plugin_type_name = "";
+        const uint32_t plugin_type      = gui->plugin->cplug_ctx->type;
+        if (plugin_type == CPLUG_PLUGIN_IS_STANDALONE)
+            plugin_type_name = "Standalone";
+        if (plugin_type == CPLUG_PLUGIN_IS_VST3)
+            plugin_type_name = "VST3";
+        if (plugin_type == CPLUG_PLUGIN_IS_CLAP)
+            plugin_type_name = "CLAP";
+        if (plugin_type == CPLUG_PLUGIN_IS_AUV2)
+            plugin_type_name = "Audio Unit";
+#ifdef _WIN32
+        const char* os_name = "Windows";
+#elif __APPLE__
+        const char* os_name = "macoS";
+#endif
+        snprintf(text, sizeof(text), "%s | %s | %s", os_name, plugin_type_name, "Version " CPLUG_PLUGIN_VERSION);
         nvgTextAlign(nvg, NVG_ALIGN_BR);
-        nvgText(nvg, width - 5, height - 5, "Version " CPLUG_PLUGIN_VERSION, NULL);
+        nvgText(nvg, width - 5, height - 5, text, NULL);
     }
     // #endif
 

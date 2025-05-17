@@ -200,7 +200,7 @@ uint32_t cplug_getParameterFlags(void* p, uint32_t paramId) { return CPLUG_FLAG_
 void cplug_getParameterName(void*, uint32_t paramId, char* buf, size_t buflen)
 {
     const char*        str     = "";
-    static const char* NAMES[] = {"Cutoff", "Scream", "Resonance"};
+    static const char* NAMES[] = {"Cutoff", "Scream", "Resonance", "Input"};
     _Static_assert(ARRLEN(NAMES) == NUM_PARAMS);
     if (paramId < NUM_PARAMS)
     {
@@ -229,6 +229,9 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
         break;
     case PARAM_RESONANCE:
         // v = 0.5;
+        break;
+    case PARAM_INPUT_GAIN:
+        v = xm_normd(0, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
         break;
     }
     return v;
@@ -287,13 +290,17 @@ double cplug_parameterStringToValue(void*, uint32_t paramId, const char* str)
     switch ((ParamID)paramId)
     {
     case PARAM_CUTOFF:
-        if (1 == scanf(str, "%fHz", &val))
+        if (1 == scanf(str, "%lfHz", &val))
             val = xm_fast_normalise_Hz1(val);
         break;
     case PARAM_SCREAM:
     case PARAM_RESONANCE:
-        if (1 == scanf(str, "%f%%", &val))
+        if (1 == scanf(str, "%lf%%", &val))
             val *= 0.01;
+        break;
+    case PARAM_INPUT_GAIN:
+        if (1 == scanf(str, "%lfdB", &val))
+            val = xm_normd(val, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
         break;
     }
     return val;
@@ -314,5 +321,13 @@ void cplug_parameterValueToString(void*, uint32_t paramId, char* buf, size_t buf
     case PARAM_RESONANCE:
         snprintf(buf, bufsize, "%.2f%%", value * 100);
         break;
+    case PARAM_INPUT_GAIN:
+    {
+        double dB = xm_lerpd(value, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+        // if (dB > -0.01 && dB < 0.01)
+        //     dB = 0;
+        snprintf(buf, bufsize, "%.2fdB", dB);
+        break;
+    }
     }
 }

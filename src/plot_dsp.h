@@ -12,7 +12,6 @@
 #include <string.h>
 
 #ifdef CPLUG_BUILD_STANDALONE
-extern float g_input_gain_dB;
 extern float g_output_gain_dB;
 extern float g_attack_ms;
 extern float g_release_ms;

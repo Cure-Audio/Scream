@@ -9,6 +9,7 @@
 #include <xhl/maths.h>
 #include <xhl/thread.h>
 #include <xhl/time.h>
+#include <xhl/vector.h>
 
 #include "params_and_events.c"
 #include "state.c"
@@ -117,7 +118,6 @@ char g_osc_midi = -1;
 // char  g_osc_midi  = 28; // E1
 float g_osc_phase = 0;
 
-float g_input_gain_dB  = 0;
 float g_output_gain_dB = 0;
 // float g_output_gain_dB = -6;
 const float g_attack_ms  = 5;
@@ -220,7 +220,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         }
     }
 
-    float peak_gain = 0;
+    xvec2f peak_input_gain  = {0};
+    float  peak_output_gain = 0;
 
     CplugEvent event;
     uint32_t   frame = 0;
@@ -285,8 +286,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     // if (wave < -1)
                     //     wave = -2 - wave;
 
-                    wave *= xm_fast_dB_to_gain(g_input_gain_dB);
-
                     output[0][i] = wave;
 
                     phase += inc;
@@ -321,6 +320,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 float lp_cutoff = s.values[PARAM_CUTOFF].current;
                 float hp_cutoff = s.values[PARAM_SCREAM].current;
                 float resonance = s.values[PARAM_RESONANCE].current;
+                float in_gain   = s.values[PARAM_INPUT_GAIN].current;
 
 // #define CUTOFF_MAX    MIDI_NOTE_NUM_20kHz
 #define CUTOFF_MAX (MIDI_NOTE_NUM_20kHz)
@@ -351,16 +351,26 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 float feedback_gain = xm_lerpf(resonance, FB_GAIN_MIN, FB_GAIN_MAX);
                 feedback_gain       = xm_fast_dB_to_gain(feedback_gain);
 
+                in_gain = xm_lerpf(in_gain, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                in_gain = xm_fast_dB_to_gain(in_gain);
+
                 Coeffs lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
                 Coeffs hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
 
                 const bool smooth_params = s.values[PARAM_CUTOFF].remaining | s.values[PARAM_SCREAM].remaining |
-                                           s.values[PARAM_RESONANCE].remaining;
+                                           s.values[PARAM_RESONANCE].remaining | s.values[PARAM_INPUT_GAIN].remaining;
+
+                float peak_input = 0;
 
                 // Process
                 for (; it != end; it++)
                 {
-                    const float x = *it;
+                    float x = *it;
+
+                    x *= in_gain;
+
+                    if (fabsf(x) > peak_input)
+                        peak_input = fabsf(x);
 
                     // Feedforward
                     // float y = x + s.fb_yn_1 * feedback_gain;
@@ -378,8 +388,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     if (y != y) // NaN protection. TODO: remove when filter algo is solid
                         y = 0;
                     // Hard clip protection. Remove later
-                    if (fabsf(y) > peak_gain)
-                        peak_gain = fabsf(y);
+                    if (fabsf(y) > peak_output_gain)
+                        peak_output_gain = fabsf(y);
 
                     // *it = xm_clampf(y, -1, 1);
                     *it = y;
@@ -423,8 +433,10 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                         lp_cutoff = s.values[PARAM_CUTOFF].current;
                         hp_cutoff = s.values[PARAM_SCREAM].current;
                         resonance = s.values[PARAM_RESONANCE].current;
-                        lp_Q      = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
-                        hp_Q      = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
+                        in_gain   = s.values[PARAM_INPUT_GAIN].current;
+
+                        lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
+                        hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
 
                         lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX);
                         hp_cutoff  = xm_lerpf(hp_cutoff, HP_CUTOFF_MIN, CUTOFF_MAX);
@@ -437,6 +449,9 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
                         feedback_gain = xm_lerpf(resonance, FB_GAIN_MIN, FB_GAIN_MAX);
                         feedback_gain = xm_fast_dB_to_gain(feedback_gain);
+
+                        in_gain = xm_lerpf(in_gain, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                        in_gain = xm_fast_dB_to_gain(in_gain);
 
                         lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
                         hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
@@ -451,6 +466,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 ROUND_STATE_TO_ZERO(s.hp[0])
                 ROUND_STATE_TO_ZERO(s.hp[1])
                 ROUND_STATE_TO_ZERO(s.fb_yn_1)
+
+                peak_input_gain.data[ch] = peak_input;
 
                 p->state[ch] = s;
             }
@@ -498,7 +515,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         }
     }
 
-    p->gui_peak_gain = peak_gain;
+    p->gui_output_peak_gain = peak_output_gain;
+    xt_atomic_store_u64(&p->gui_input_peak_gain, peak_input_gain.u64);
     RESTORE_DENORMALS
 
     if (should_post_to_global && p->cplug_ctx->type != CPLUG_PLUGIN_IS_STANDALONE)
