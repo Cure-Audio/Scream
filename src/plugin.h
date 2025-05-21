@@ -11,6 +11,7 @@ typedef enum ParamID
     PARAM_SCREAM,
     PARAM_RESONANCE,
     PARAM_INPUT_GAIN,
+    PARAM_WET,
 } ParamID;
 
 #define RANGE_INPUT_GAIN_MIN -72.0
@@ -18,9 +19,9 @@ typedef enum ParamID
 
 enum
 {
-    NUM_PARAMS = PARAM_INPUT_GAIN + 1,
+    NUM_PARAMS = PARAM_WET + 1,
 
-    GUI_INIT_WIDTH  = 800,
+    GUI_INIT_WIDTH  = 900,
     GUI_INIT_HEIGHT = GUI_INIT_WIDTH / 2,
 
     GUI_RATIO_X = 2,
@@ -123,6 +124,7 @@ static const char* PARAM_STR[] = {
     "PARAM_SCREAM",
     "PARAM_RESONANCE",
     "PARAM_INPUT_GAIN",
+    "PARAM_WET",
 };
 _Static_assert(ARRLEN(PARAM_STR) == NUM_PARAMS, "");
 #endif

@@ -321,6 +321,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 float hp_cutoff = s.values[PARAM_SCREAM].current;
                 float resonance = s.values[PARAM_RESONANCE].current;
                 float in_gain   = s.values[PARAM_INPUT_GAIN].current;
+                float wet       = s.values[PARAM_WET].current;
 
 // #define CUTOFF_MAX    MIDI_NOTE_NUM_20kHz
 #define CUTOFF_MAX (MIDI_NOTE_NUM_20kHz)
@@ -392,7 +393,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                         peak_output_gain = fabsf(y);
 
                     // *it = xm_clampf(y, -1, 1);
-                    *it = y;
+                    *it = wet * y + (1 - wet) * (*it);
                     // *it = x;
 
 #ifdef CPLUG_BUILD_STANDALONE
@@ -434,6 +435,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                         hp_cutoff = s.values[PARAM_SCREAM].current;
                         resonance = s.values[PARAM_RESONANCE].current;
                         in_gain   = s.values[PARAM_INPUT_GAIN].current;
+                        wet       = s.values[PARAM_WET].current;
 
                         lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
                         hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);

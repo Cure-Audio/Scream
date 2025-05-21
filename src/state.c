@@ -20,8 +20,13 @@ typedef struct PluginStatev0_0_1
 typedef struct PluginStatev0_0_3
 {
     double params[4];
+} PluginStatev0_0_3;
+
+typedef struct PluginStatev0_0_4
+{
+    double params[5];
 } PluginState;
-_Static_assert(NUM_PARAMS == 4, "If params change, update state");
+_Static_assert(NUM_PARAMS == 5, "If params change, update state");
 
 plugin_version get_plugin_version()
 {
@@ -95,6 +100,13 @@ void cplug_loadState(void* _p, const void* stateCtx, cplug_readProc readProc)
             PluginStatev0_0_1 state;
             readProc(stateCtx, &state, sizeof(state));
 
+            state_update_params(p, state.params, ARRLEN(state.params));
+        }
+        else if (header.version.u32 == v0_0_3.u32)
+        {
+            PluginStatev0_0_3 state;
+            xassert(header.size == sizeof(state));
+            readProc(stateCtx, &state, sizeof(state));
             state_update_params(p, state.params, ARRLEN(state.params));
         }
         else

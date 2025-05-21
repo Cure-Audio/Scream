@@ -205,7 +205,7 @@ void pw_get_info(struct PWGetInfo* info)
     }
 }
 
-double handle_param_events(GUI* gui, ParamID param_id, uint32_t events)
+double handle_param_events(GUI* gui, ParamID param_id, uint32_t events, float drag_range_px)
 {
     imgui_context* im      = &gui->imgui;
     double         value_d = gui->plugin->main_params[param_id];
@@ -232,7 +232,7 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events)
     if (events & IMGUI_EVENT_DRAG_MOVE)
     {
         float next_value = value_f;
-        imgui_drag_value(im, &next_value, 0, 1, 300, IMGUI_DRAG_VERTICAL);
+        imgui_drag_value(im, &next_value, 0, 1, drag_range_px, IMGUI_DRAG_VERTICAL);
         bool changed = value_f != next_value;
         if (changed)
         {
@@ -242,7 +242,7 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events)
     }
     if (events & IMGUI_EVENT_TOUCHPAD_MOVE)
     {
-        float delta = im->mouse_touchpad.y / 500.0f;
+        float delta = im->mouse_touchpad.y / drag_range_px;
         if (im->mouse_touchpad_mods & PW_MOD_INVERTED_SCROLL)
             delta = -delta;
         if (im->mouse_touchpad_mods & PW_MOD_PLATFORM_KEY_CTRL)
@@ -353,6 +353,25 @@ void pw_destroy_gui(void* _gui)
 #endif // CPLUG_BUILD_STANDALONE
 }
 
+bool pw_event(const PWEvent* event)
+{
+    GUI* gui = event->gui;
+
+    if (!gui || !gui->plugin)
+        return false;
+
+    if (event->type == PW_EVENT_RESIZE)
+    {
+        // Retain size info for when the GUI is destroyed / reopened
+        gui->plugin->width  = event->resize.width;
+        gui->plugin->height = event->resize.height;
+        gui->scale          = (float)event->resize.width / (float)GUI_INIT_WIDTH;
+    }
+    imgui_send_event(&gui->imgui, event);
+
+    return false;
+}
+
 void pw_tick(void* _gui)
 {
     GUI* gui = _gui;
@@ -423,7 +442,7 @@ void pw_tick(void* _gui)
     imgui_context* im  = &gui->imgui;
 
     // Main parameters
-    static const float SLIDER_POSITIONS[] = {0.3, 0.575, 0.825};
+    static const float SLIDER_POSITIONS[] = {0.3, 0.5, 0.7};
     const float        slider_radius      = SLIDER_RADIUS * width;
     for (int i = 0; i < ARRLEN(SLIDER_POSITIONS); i++)
     {
@@ -432,7 +451,7 @@ void pw_tick(void* _gui)
         pt.y = height * 0.5f;
 
         uint32_t events  = imgui_get_events_circle(im, pt, slider_radius);
-        double   value_d = handle_param_events(gui, i, events);
+        double   value_d = handle_param_events(gui, i, events, 300);
 
         // Knob
         nvgBeginPath(nvg);
@@ -485,7 +504,7 @@ void pw_tick(void* _gui)
         uint32_t events = imgui_get_events_rect(im, &rect);
         rect.r          = rect_r;
 
-        double value_d = handle_param_events(gui, PARAM_INPUT_GAIN, events);
+        double value_d = handle_param_events(gui, PARAM_INPUT_GAIN, events, rect.b - rect.y);
 
         nvgBeginPath(nvg);
         nvgRoundedRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y, 4);
@@ -610,6 +629,75 @@ void pw_tick(void* _gui)
         nvgText(nvg, cx, height * 0.75, label, NULL);
 
         cplug_parameterValueToString(gui->plugin, PARAM_INPUT_GAIN, label, sizeof(label), value_d);
+        nvgText(nvg, cx, height * 0.25, label, NULL);
+    }
+
+    // Wet/dry
+    {
+        imgui_rect rect;
+        rect.x = width * 0.885;
+        rect.r = width * 0.925;
+        rect.y = height * 0.5 - slider_radius;
+        rect.b = height * 0.5 + slider_radius;
+
+        imgui_rect slider_dimensions  = rect;
+        slider_dimensions.x          += 4; // padding
+        slider_dimensions.y          += 4;
+        slider_dimensions.r          -= 4;
+        slider_dimensions.b          -= 4;
+        float handle_width            = slider_dimensions.r - slider_dimensions.x;
+        float drag_y                  = slider_dimensions.y + handle_width * 0.5f;
+        float drag_b                  = slider_dimensions.b - handle_width * 0.5f;
+        float drag_height             = drag_b - drag_y;
+
+        uint32_t events  = imgui_get_events_rect(im, &rect);
+        double   value_d = handle_param_events(gui, PARAM_WET, events, drag_height);
+
+        // Draw BG
+        nvgBeginPath(nvg);
+        nvgRoundedRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y, 4);
+        nvgFillColor(nvg, nvgHexColour(0x2C2F35FF));
+        nvgFill(nvg);
+
+        // Draw BG notches
+        enum
+        {
+            NOTCH_COUNT = 16
+        };
+        const float y_inc   = drag_height / (float)NOTCH_COUNT;
+        const float notch_x = slider_dimensions.x + handle_width * 0.25;
+        const float notch_r = slider_dimensions.x + handle_width * 0.75;
+        nvgBeginPath(nvg);
+        for (int i = 0; i < NOTCH_COUNT; i++)
+        {
+            float y = roundf(drag_y + i * y_inc) + 0.5f;
+            nvgMoveTo(nvg, notch_x, y);
+            nvgLineTo(nvg, notch_r, y);
+        }
+        nvgStrokeColor(nvg, COLOUR_GREY_2);
+        nvgStrokeWidth(nvg, 1);
+        nvgStroke(nvg);
+
+        // Draw handle
+        float handle_cy = xm_lerpf(value_d, drag_b, drag_y);
+        nvgBeginPath(nvg);
+        nvgRoundedRect(nvg, slider_dimensions.x, handle_cy - handle_width * 0.5f, handle_width, handle_width, 2);
+        nvgFillColor(nvg, COLOUR_GREY_1);
+        nvgFill(nvg);
+        // Handle notch
+        nvgBeginPath(nvg);
+        nvgMoveTo(nvg, notch_x, handle_cy);
+        nvgLineTo(nvg, notch_r, handle_cy);
+        nvgStrokeColor(nvg, nvgHexColour(0x2C2F35FF));
+        nvgStroke(nvg);
+
+        nvgFillColor(nvg, COLOUR_TEXT);
+        char  label[24];
+        float cx = (rect.x + rect.r) * 0.5f;
+        cplug_getParameterName(gui->plugin, PARAM_WET, label, sizeof(label));
+        nvgText(nvg, cx, height * 0.75, label, NULL);
+
+        cplug_parameterValueToString(gui->plugin, PARAM_WET, label, sizeof(label), value_d);
         nvgText(nvg, cx, height * 0.25, label, NULL);
     }
 
@@ -747,23 +835,4 @@ void pw_tick(void* _gui)
     sg_commit(gui->sg);
 
     imgui_end_frame(&gui->imgui);
-}
-
-bool pw_event(const PWEvent* event)
-{
-    GUI* gui = event->gui;
-
-    if (!gui || !gui->plugin)
-        return false;
-
-    if (event->type == PW_EVENT_RESIZE)
-    {
-        // Retain size info for when the GUI is destroyed / reopened
-        gui->plugin->width  = event->resize.width;
-        gui->plugin->height = event->resize.height;
-        gui->scale          = (float)event->resize.width / (float)GUI_INIT_WIDTH;
-    }
-    imgui_send_event(&gui->imgui, event);
-
-    return false;
 }
