@@ -411,8 +411,8 @@ void pw_tick(void* _gui)
     {
         nvgBeginPath(nvg);
         nvgRect(nvg, 0, 0, gui_width, gui_height);
-        NVGcolour stop0 = nvgHexColour(0x151B33FF);
-        NVGcolour stop1 = nvgHexColour(0x090E1FFF);
+        static const NVGcolour stop0 = nvgHexColour(0x151B33FF);
+        static const NVGcolour stop1 = nvgHexColour(0x090E1FFF);
         nvgFillPaint(nvg, nvgLinearGradient(nvg, 0, 0, 0, gui_height, stop0, stop1));
         nvgFill(nvg);
     }
@@ -511,6 +511,8 @@ void pw_tick(void* _gui)
         {
             PARAMS_BOUNDARY_LEFT  = 32,
             VERTICAL_SLIDER_WIDTH = 60,
+            METER_WIDTH           = 24,
+            METER_HEIGHT          = 146,
             ROTARY_PARAM_DIAMETER = 160,
 
             _MINIMUM_WIDTH = PARAMS_BOUNDARY_LEFT * 2 + VERTICAL_SLIDER_WIDTH * 2 + ROTARY_PARAM_DIAMETER * 3,
@@ -528,7 +530,7 @@ void pw_tick(void* _gui)
 #define snapf(val, interval) (roundf((val) / (interval)) * (interval))
 
         const float veritcal_slider_width = snapf(VERTICAL_SLIDER_WIDTH * param_scale, 2);
-        const float rotary_param_diameter = snapf(VERTICAL_SLIDER_WIDTH * param_scale, 2);
+        const float rotary_param_diameter = snapf(ROTARY_PARAM_DIAMETER * param_scale, 2);
 
         const float total_param_width = veritcal_slider_width * 2 + rotary_param_diameter * 3;
         const float param_padding     = (PARAMS_WIDTH - total_param_width) / 4;
@@ -538,12 +540,12 @@ void pw_tick(void* _gui)
             ParamID param_id;
             float   cx;
         } param_positions[] = {
-            {PARAM_INPUT_GAIN, PARAMS_BOUNDARY_LEFT + veritcal_slider_width * 0.5f},
             {PARAM_CUTOFF, PARAMS_BOUNDARY_LEFT + veritcal_slider_width + param_padding + rotary_param_diameter * 0.5f},
             {PARAM_SCREAM,
              PARAMS_BOUNDARY_LEFT + veritcal_slider_width + param_padding * 2 + rotary_param_diameter * 1.5f},
             {PARAM_RESONANCE,
              PARAMS_BOUNDARY_LEFT + veritcal_slider_width + param_padding * 3 + rotary_param_diameter * 2.5f},
+            {PARAM_INPUT_GAIN, PARAMS_BOUNDARY_LEFT + veritcal_slider_width * 0.5f},
             {PARAM_WET, PARAMS_BOUNDARY_RIGHT - veritcal_slider_width * 0.5f},
         };
 
@@ -554,20 +556,100 @@ void pw_tick(void* _gui)
 
             switch (param_id)
             {
+            case PARAM_CUTOFF:
+            case PARAM_SCREAM:
+            case PARAM_RESONANCE:
+                break;
             case PARAM_INPUT_GAIN:
             {
-                /*
-                imgui_rect rect;
-                rect.x = gui_width * 0.075;
-                rect.r = gui_width * 0.115;
-                rect.y = gui_height * 0.5 - slider_radius;
-                rect.b = gui_height * 0.5 + slider_radius;
+                const float meter_width  = snapf(METER_WIDTH * param_scale, 2);
+                const float meter_height = snapf(METER_HEIGHT * param_scale, 2);
 
-                float rect_r    = rect.r;
-                float icon_r    = rect.r + 20;
-                rect.r          = icon_r;
-                uint32_t events = imgui_get_events_rect(im, &rect);
-                rect.r          = rect_r;
+                imgui_rect rect;
+
+                rect.x = roundf(param_cx - meter_width * 0.5);
+                rect.r = roundf(param_cx + meter_width * 0.5);
+                rect.y = roundf(gui_height * 0.5 - meter_height * 0.5f);
+                rect.b = roundf(gui_height * 0.5 + meter_height * 0.5f);
+
+                // Shadows
+                {
+                    // Top
+                    imgui_rect shadow_rect = rect;
+                    // Translate NW 4px
+                    shadow_rect.x -= 4;
+                    shadow_rect.y -= 4;
+                    shadow_rect.r -= 4;
+                    shadow_rect.b -= 4;
+                    // Expand 4px
+                    shadow_rect.x    -= 4;
+                    shadow_rect.y    -= 4;
+                    shadow_rect.r    += 4;
+                    shadow_rect.b    += 4;
+                    const float blur  = 12;
+
+                    float w = shadow_rect.r - shadow_rect.x;
+                    float h = shadow_rect.b - shadow_rect.y;
+
+                    // NVGcolour top_iol = nvgHexColour(0xE9EDF1E0);
+                    static const NVGcolour top_iol  = nvgHexColour(0xE9EDF1BF);
+                    static const NVGcolour top_ocol = nvgHexColour(0xE9EDF100);
+
+                    NVGpaint paint =
+                        nvgBoxGradient(nvg, shadow_rect.x, shadow_rect.y, w, h, blur, blur, top_iol, top_ocol);
+
+                    // Expand
+                    shadow_rect.x -= blur;
+                    shadow_rect.y -= blur;
+                    shadow_rect.r += blur;
+                    shadow_rect.b += blur;
+                    w              = shadow_rect.r - shadow_rect.x;
+                    h              = shadow_rect.b - shadow_rect.y;
+                    nvgBeginPath(nvg);
+                    nvgRoundedRect(nvg, shadow_rect.x, shadow_rect.y, w, h, blur);
+                    nvgFillPaint(nvg, paint);
+                    nvgFill(nvg);
+
+                    // Bottom
+                    shadow_rect = rect;
+                    // Translate NW 4px
+                    shadow_rect.x += 4;
+                    shadow_rect.y += 4;
+                    shadow_rect.r += 4;
+                    shadow_rect.b += 4;
+                    // Expand 4px
+                    shadow_rect.x -= 4;
+                    shadow_rect.y -= 4;
+                    shadow_rect.r += 4;
+                    shadow_rect.b += 4;
+
+                    w = shadow_rect.r - shadow_rect.x;
+                    h = shadow_rect.b - shadow_rect.y;
+
+                    static const NVGcolour bot_iol  = nvgHexColour(0xABB2BABF);
+                    static const NVGcolour bot_ocol = nvgHexColour(0xABB2BA00);
+
+                    paint = nvgBoxGradient(nvg, shadow_rect.x, shadow_rect.y, w, h, blur, blur, bot_iol, bot_ocol);
+
+                    // Expand
+                    shadow_rect.x -= blur;
+                    shadow_rect.y -= blur;
+                    shadow_rect.r += blur;
+                    shadow_rect.b += blur;
+                    w              = shadow_rect.r - shadow_rect.x;
+                    h              = shadow_rect.b - shadow_rect.y;
+                    nvgBeginPath(nvg);
+                    nvgRoundedRect(nvg, shadow_rect.x, shadow_rect.y, w, h, blur);
+                    nvgFillPaint(nvg, paint);
+                    nvgFill(nvg);
+                }
+
+                float       rect_r     = rect.r;
+                const float icon_width = 10;
+                float       icon_r     = rect.r + icon_width + 4;
+                rect.r                 = icon_r;
+                uint32_t events        = imgui_get_events_rect(im, &rect);
+                rect.r                 = rect_r;
 
                 double value_d = handle_param_events(gui, PARAM_INPUT_GAIN, events, rect.b - rect.y);
 
@@ -581,120 +663,168 @@ void pw_tick(void* _gui)
                 nvgFillPaint(nvg, bg_paint);
                 nvgFill(nvg);
 
-                float icon_x = rect.r + 8;
-                float icon_y = xm_lerpf(value_d, rect.b, rect.y);
-                nvgBeginPath(nvg);
-                nvgMoveTo(nvg, icon_x, icon_y);
-                nvgLineTo(nvg, icon_r, icon_y - 8);
-                nvgLineTo(nvg, icon_r, icon_y + 8);
-                nvgClosePath(nvg);
-                nvgFillColour(nvg, COLOUR_TEXT);
-                nvgFill(nvg);
+                // Value icon
+                {
+                    float icon_x = icon_r - icon_width;
+
+                    float shadow_radius = 8;
+
+                    float icon_y = xm_lerpf(value_d, rect.b, rect.y);
+
+                    static const NVGcolour icol      = {0, 0, 0, 0.3};
+                    static const NVGcolour ocol      = {0, 0, 0, 0};
+                    float                  shadow_cx = icon_r - icon_width * 0.3f;
+                    NVGpaint paint = nvgRadialGradient(nvg, shadow_cx, icon_y + 2, 0, shadow_radius, icol, ocol);
+
+                    nvgBeginPath(nvg);
+                    nvgCircle(nvg, shadow_cx, icon_y + 2, shadow_radius);
+                    nvgFillPaint(nvg, paint);
+                    nvgFill(nvg);
+
+                    nvgBeginPath(nvg);
+                    nvgMoveTo(nvg, icon_x, icon_y);
+                    nvgLineTo(nvg, icon_r, icon_y - 8);
+                    nvgLineTo(nvg, icon_r, icon_y + 8);
+                    nvgClosePath(nvg);
+                    nvgFillColour(nvg, COLOUR_GREY_2);
+                    nvgFill(nvg);
+                }
 
                 xvec2f peaks;
                 peaks.u64 = xt_atomic_load_u64(&gui->plugin->gui_input_peak_gain);
 
-                float meter_width    = rect.r - rect.x;
-                float channel_width  = meter_width * 0.25;
-                float padding        = meter_width / 6.0f;
-                float channel_height = rect.b - rect.y - 2 * padding;
+                float ch_w    = roundf(meter_width * 0.25);
+                float padding = roundf(meter_width / 6.0f);
+
+                const float ch_y    = rect.y + padding;
+                const float ch_b    = rect.b - padding;
+                const float ch_h    = ch_b - ch_y;
+                const float ch_x[2] = {
+                    roundf(rect.x + padding),
+                    roundf(rect.r - padding - ch_w),
+                };
+
+                // Background
+                nvgBeginPath(nvg);
+                for (int ch = 0; ch < 2; ch++)
+                {
+                    nvgRoundedRect(nvg, ch_x[ch], ch_y, ch_w, ch_h, 2);
+                }
+
+                static const NVGcolour ch_grad_stop0 = nvgHexColour(0x6C7483FF);
+                static const NVGcolour ch_grad_stop1 = nvgHexColour(0x7C8493FF);
+
+                const NVGpaint ch_bg_grad = nvgLinearGradient(nvg, 0, ch_y, 0, ch_b, ch_grad_stop0, ch_grad_stop1);
+                nvgFillPaint(nvg, ch_bg_grad);
+                nvgFill(nvg);
+
+                const double release_time_slow =
+                    xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / (60 * 2));
+                const double release_time_fast = xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / 30);
 
                 for (int ch = 0; ch < 2; ch++)
                 {
-                    imgui_rect ch_rect = rect;
-
-                    ch_rect.x += padding;
-                    if (ch == 1)
-                        ch_rect.x += padding + channel_width;
-
-                    ch_rect.y += padding;
-                    ch_rect.r  = ch_rect.x + channel_width;
-                    ch_rect.b  = ch_rect.y + channel_height;
-
-                    // Background
-
-                    nvgBeginPath(nvg);
-                    nvgRoundedRect(nvg, ch_rect.x, ch_rect.y, ch_rect.r - ch_rect.x, ch_rect.b - ch_rect.y, 2);
-                    static const NVGcolour ch_grad_stop0 = nvgHexColour(0x6C7483FF);
-                    static const NVGcolour ch_grad_stop1 = nvgHexColour(0x7C8493FF);
-                    nvgFillPaint(nvg, nvgLinearGradient(nvg, 0, ch_rect.y, 0, ch_rect.b, ch_grad_stop0, ch_grad_stop1));
-                    nvgFill(nvg);
-
                     // double release_time_slow = convert_compressor_time(6);
                     // double release_time_fast = convert_compressor_time(1);
-                    double release_time_slow =
-                        xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / (60 * 2));
-                    double release_time_fast = xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / 30);
                     gui->input_gain_peaks_slow[ch] =
                         detect_peak(peaks.data[ch], gui->input_gain_peaks_slow[ch], 0, release_time_slow);
                     gui->input_gain_peaks_fast[ch] =
                         detect_peak(peaks.data[ch], gui->input_gain_peaks_fast[ch], 0, release_time_fast);
+                }
 
-                    float decaying_peaks[2] = {
-                        xm_fast_gain_to_dB(gui->input_gain_peaks_slow[ch]),
-                        xm_fast_gain_to_dB(gui->input_gain_peaks_fast[ch]),
-                    };
-                    static const NVGcolour peak_colours[2] = {
-                        nvgHexColour(0x459DB5FF),
-                        nvgHexColour(0xACDEECFF),
-                    };
-                    for (int i = 0; i < 2; i++)
+                // Decaying Peak
+                nvgBeginPath(nvg);
+                bool has_peaks = false;
+                for (int ch = 0; ch < 2; ch++)
+                {
+                    float peak_dB_1 = xm_fast_gain_to_dB(gui->input_gain_peaks_slow[ch]);
+                    if (peak_dB_1 > RANGE_INPUT_GAIN_MIN)
                     {
-                        float     peak_dB = decaying_peaks[i];
-                        NVGcolour col     = peak_colours[i];
-
-                        if (peak_dB > RANGE_INPUT_GAIN_MIN)
-                        {
-                            float norm        = xm_normf(peak_dB, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                            float peak_height = norm * channel_height;
-                            nvgBeginPath(nvg);
-                            nvgRect(nvg, ch_rect.x, ch_rect.b - peak_height, ch_rect.r - ch_rect.x, peak_height);
-                            nvgFillColour(nvg, col);
-                            nvgFill(nvg);
-                        }
+                        float norm        = xm_normf(peak_dB_1, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                        float peak_height = norm * ch_h;
+                        nvgRoundedRect(nvg, ch_x[ch], ch_b - peak_height, ch_w, peak_height, 2);
+                        has_peaks = true;
                     }
-                    // Decaying Peak
-                    // float peak_dB_1 = xm_fast_gain_to_dB(gui->input_gain_peaks_slow[ch]);
-                    // if (peak_dB_1 > RANGE_INPUT_GAIN_MIN)
-                    // {
-                    //     float norm        = xm_normf(peak_dB_1, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                    //     float peak_height = norm * channel_height;
-                    //     nvgBeginPath(nvg);
-                    //     nvgRect(nvg, ch_rect.x, ch_rect.b - peak_height, ch_rect.r - ch_rect.x, peak_height);
-                    //     nvgFillColour(nvg, nvgHexColour(0x459DB5FF));
-                    //     nvgFill(nvg);
-                    // }
+                }
+                if (has_peaks)
+                {
+                    nvgFillColour(nvg, nvgHexColour(0x459DB5FF));
+                    nvgFill(nvg);
+                }
 
-                    // // Realtime Peak
-                    // float rt_peak_dB = xm_fast_gain_to_dB(peaks.data[ch]);
-                    // if (rt_peak_dB > RANGE_INPUT_GAIN_MIN)
-                    // {
-                    //     float norm        = xm_normf(rt_peak_dB, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                    //     float peak_height = norm * channel_height;
-                    //     nvgBeginPath(nvg);
-                    //     nvgRect(nvg, ch_rect.x, ch_rect.b - peak_height, ch_rect.r - ch_rect.x, peak_height);
-                    //     nvgFillColour(nvg, nvgHexColour(0xACDEECFF));
-                    //     nvgFill(nvg);
-                    // }
+                // Realtime Peak
+                float rt_peak_dB[2] = {
+                    xm_fast_gain_to_dB(peaks.data[0]),
+                    xm_fast_gain_to_dB(peaks.data[1]),
+                };
+                float rt_peak_h[2] = {gui_height, gui_height};
+                float rt_peak_y[2] = {gui_height, gui_height};
+
+                for (int ch = 0; ch < 2; ch++)
+                {
+                    float norm        = xm_normf(rt_peak_dB[ch], RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                    float peak_height = norm * ch_h;
+                    rt_peak_h[ch]     = peak_height;
+                    rt_peak_y[ch]     = ch_b - peak_height;
+                }
+                // Peak glow/shadow
+                // Shadows need to be drawn first to prevent spilling onto the realtime peak in the foreground
+                for (int ch = 0; ch < 2; ch++)
+                {
+                    if (rt_peak_dB[ch] > RANGE_INPUT_GAIN_MIN)
+                    {
+                        static const float blur = 4;
+
+                        float gx = ch_x[ch] - blur;
+                        float gy = rt_peak_y[ch] - blur;
+                        float gw = ch_w + blur * 2;
+                        float gh = rt_peak_h[ch] + blur * 2;
+
+                        static const NVGcolour icol = nvgHexColour(0x4DB9FC72);
+                        static const NVGcolour ocol = nvgHexColour(0x4DB9FC00);
+
+                        NVGpaint paint = nvgBoxGradient(
+                            nvg,
+                            gx + blur * 0.5f,
+                            gy + blur * 0.5,
+                            gw - blur,
+                            gh - blur,
+                            blur,
+                            blur,
+                            icol,
+                            ocol);
+
+                        nvgBeginPath(nvg);
+                        nvgRoundedRect(nvg, gx, gy, gw, gh, blur);
+                        nvgFillPaint(nvg, paint);
+                        nvgFill(nvg);
+                    }
+                }
+
+                // Foreground realtime peak
+                for (int ch = 0; ch < 2; ch++)
+                {
+                    if (rt_peak_dB[ch] > RANGE_INPUT_GAIN_MIN)
+                    {
+                        nvgBeginPath(nvg);
+                        nvgFillColour(nvg, nvgHexColour(0xACDEECFF));
+                        nvgRoundedRect(nvg, ch_x[ch], rt_peak_y[ch], ch_w, rt_peak_h[ch], 2);
+                        nvgFill(nvg);
+                    }
                 }
 
                 // 0dB notch
                 float zero_dB_pos = xm_normf(0, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                float zero_dB_y   = rect.b - padding - zero_dB_pos * channel_height;
+                float zero_dB_y   = rect.b - padding - zero_dB_pos * ch_h;
                 nvgBeginPath(nvg);
                 nvgMoveTo(nvg, rect.x, zero_dB_y);
                 nvgLineTo(nvg, rect.r, zero_dB_y);
                 nvgStrokePaint(nvg, bg_paint);
                 nvgStrokeWidth(nvg, 1);
                 nvgStroke(nvg);
-                */
                 break;
             }
             case PARAM_WET:
-                break;
-            case PARAM_CUTOFF:
-            case PARAM_SCREAM:
-            case PARAM_RESONANCE:
                 break;
             }
         }
