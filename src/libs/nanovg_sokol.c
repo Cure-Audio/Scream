@@ -254,6 +254,11 @@ struct SGNVGtexture
 };
 typedef struct SGNVGtexture SGNVGtexture;
 
+enum
+{
+    NVG_IMAGE_DIRTY = 1 << 31, // Should send img buffer to GPU on render pass
+};
+
 struct SGNVGblend
 {
     sg_blend_factor srcRGB;
@@ -1022,6 +1027,8 @@ static int sgnvg__renderUpdateTexture(void* uptr, int image, int x0, int y0, int
             src += srcLineInBytes;
             dst += dstLineInBytes;
         }
+
+        tex->flags |= NVG_IMAGE_DIRTY;
     }
 
     return 1;
@@ -1333,18 +1340,18 @@ static void sgnvg__renderFlush(void* uptr)
     {
         if (sg->textures[i].id != 0)
         {
-            // sgnvg__flushTexture(&sg->textures[i]);
-
             SGNVGtexture* tex = &sg->textures[i];
 
-            SGNVG_INTLOG("sgnvg__flushTexture(%p -> tex->id: %d, tex->img: 0x%0X)\n", tex, tex->id, tex->img.id);
-            sg_update_image(
-                sg->_sg,
-                tex->img,
-                &(sg_image_data){
-                    .subimage[0][0] =
-                        {tex->imgData, tex->width * tex->height * (tex->type == NVG_TEXTURE_RGBA ? 4 : 1)},
-                });
+            if (tex->flags & NVG_IMAGE_DIRTY)
+            {
+                tex->flags ^= NVG_IMAGE_DIRTY;
+                SGNVG_INTLOG("sgnvg__flushTexture(%p -> tex->id: %d, tex->img: 0x%0X)\n", tex, tex->id, tex->img.id);
+                const sg_range img_range = {
+                    tex->imgData,
+                    tex->width * tex->height * (tex->type == NVG_TEXTURE_RGBA ? 4 : 1)};
+                const sg_image_data imgdata = {.subimage[0][0] = img_range};
+                sg_update_image(sg->_sg, tex->img, &imgdata);
+            }
         }
     }
 

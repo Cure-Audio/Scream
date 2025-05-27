@@ -1282,7 +1282,7 @@ void pw_tick(void* _gui)
             frame_time_ms,
             approx_fps);
         nvgTextAlign(nvg, NVG_ALIGN_CL);
-        nvgText(nvg, 8, height_header * 0.5f + 4, text, NULL);
+        nvgText(nvg, 8, height_header * 0.5f + 4, text, text + len);
 
         // TODO: remove after release
         const char*    plugin_type_name = "";
@@ -1300,8 +1300,8 @@ void pw_tick(void* _gui)
 #elif __APPLE__
         const char* os_name = "macoS";
 #endif
-        snprintf(text, sizeof(text), "Scream %s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
-        nvgText(nvg, 8, gui_height - height_footer * 0.5f - 4, text, NULL);
+        len = snprintf(text, sizeof(text), "Scream %s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
+        nvgText(nvg, 8, gui_height - height_footer * 0.5f - 4, text, text + len);
     }
     // #endif
 
