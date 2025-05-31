@@ -46,28 +46,40 @@ float acos_approx(float inX)
     return approx;
 }
 
+// https://iquilezles.org/articles/distfunctions2d/
+float sdRing( in vec2 p, in vec2 n, in float r, float th )
+{
+    p.x = abs(p.x);
+    p = mat2x2(n.x,n.y,-n.y,n.x)*p;
+    return max( abs(length(p)-r)-th*0.5,
+                length(vec2(p.x,max(0.0,abs(r-p.y)-th*0.5)))*sign(p.x) );
+}
+
 void main() {
-    // Circle (outer)
-    float outer_radius = 1;
-    float thickness = 0.005;
-    float outer_circle = smoothstep(0, thickness, length(uv) - outer_radius);
-
-    // Circle (inner)
-    float inner_radius = 0.9;
-    float inner_circle = smoothstep(0, thickness, length(uv) - inner_radius);
-
     // Angle
     float hyp = length(uv);
     float adj = uv.x;
     float angle_norm = acos_approx(hyp > 0 ? (adj / hyp) : 0);
 
     // Fan
-    float fan_thickness = 0.02;
+    float fan_feather = 0.02;
     float fan = mod(angle_norm * NUM_FANS, 2);
-    fan = smoothstep(0.5 - fan_thickness, 0.5 + fan_thickness, abs(fan - 1));
+    fan = smoothstep(0.5 - fan_feather, 0.5 + fan_feather, abs(fan - 1));
 
-    float a = (inner_circle - outer_circle) * fan;
-    frag_color = vec4(a);
+    // Arc
+    float rad = PI * (5.0 / 6.0);
+    // vec2 cs = vec2(-0.5, 0.866025);
+    vec2 cs = vec2(cos(rad), sin(rad));
+    float ring_width = 0.08;
+    float d = sdRing(uv, cs, 1 - ring_width / 2, ring_width);
+    float ring_feather = 0.002;
+    float arc = 1 - smoothstep(-ring_feather, ring_feather, d);
+
+    float a = arc * fan;
+    vec3 col = vec3(a);
+    col *= vec3(0.7098039215686275, 0.7450980392156863, 0.7803921568627451); // apply colour
+
+    frag_color = vec4(col, a);
 }
 
 @end

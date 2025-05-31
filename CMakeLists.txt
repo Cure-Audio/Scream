@@ -197,7 +197,8 @@ add_custom_command(
 )
 add_custom_target(shader_header
     DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h
+        ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl.h
+        ${PROJECT_SOURCE_DIR}/src/shaders/knob.glsl.h
 )
 
 # ██████╗ ██╗     ██╗   ██╗ ██████╗ ██╗███╗   ██╗

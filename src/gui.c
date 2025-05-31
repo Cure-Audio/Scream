@@ -695,6 +695,8 @@ void pw_tick(void* _gui)
     }
 
     // Params
+    imgui_pt knobs_pos[3] = {0};
+    float    knob_radius  = 0;
     {
         enum
         {
@@ -738,6 +740,8 @@ void pw_tick(void* _gui)
             {PARAM_WET, PARAMS_BOUNDARY_RIGHT - veritcal_slider_width * 0.5f},
         };
 
+        knob_radius = rotary_param_diameter * 0.5f;
+
         for (int i = 0; i < ARRLEN(param_positions); i++)
         {
             const ParamID param_id = param_positions[i].param_id;
@@ -761,6 +765,9 @@ void pw_tick(void* _gui)
                 pt.x                      = param_cx;
                 pt.y                      = roundf(content_y + content_height * 0.5f);
                 const float slider_radius = rotary_param_diameter * 0.5f;
+
+                xassert(param_id < ARRLEN(knobs_pos));
+                knobs_pos[param_id] = pt;
 
                 uint32_t events  = imgui_get_events_circle(im, pt, slider_radius);
                 double   value_d = handle_param_events(gui, i, events, 300);
@@ -1371,7 +1378,7 @@ void pw_tick(void* _gui)
     // Custom shader
     {
         // clang-format off
-        static const vertex_t verts[] = {
+        vertex_t verts[] = {
             {-1.0f,  1.0f, -32767,  32767},
             { 1.0f,  1.0f,  32767,  32767},
             { 1.0f, -1.0f,  32767, -32767},
@@ -1388,8 +1395,34 @@ void pw_tick(void* _gui)
             {-1.0f, -1.0f, -32767, -32767},
         };
         _Static_assert(ARRLEN(verts) == (3 * 4), "");
+        _Static_assert(ARRLEN(verts) / 4 == ARRLEN(knobs_pos), "");
         _Static_assert(sizeof(verts) == sizeof(gui->knob_vertices), "");
         // clang-format on
+
+        xassert(knob_radius != 0);
+        for (int i = 0; i < ARRLEN(knobs_pos); i++)
+        {
+            float left   = knobs_pos[i].x - knob_radius;
+            float right  = knobs_pos[i].x + knob_radius;
+            float top    = knobs_pos[i].y - knob_radius;
+            float bottom = knobs_pos[i].y + knob_radius;
+
+            left   = xm_mapf(left, 0, gui_width, -1, 1);
+            right  = xm_mapf(right, 0, gui_width, -1, 1);
+            top    = xm_mapf(top, 0, gui_height, 1, -1);
+            bottom = xm_mapf(bottom, 0, gui_height, 1, -1);
+
+            int v_idx = i * 4;
+
+            verts[v_idx + 0].x = left;
+            verts[v_idx + 0].y = top;
+            verts[v_idx + 1].x = right;
+            verts[v_idx + 1].y = top;
+            verts[v_idx + 2].x = right;
+            verts[v_idx + 2].y = bottom;
+            verts[v_idx + 3].x = left;
+            verts[v_idx + 3].y = bottom;
+        }
 
         sg_update_buffer(gui->sg, gui->knob_vbo, &SG_RANGE(verts));
         sg_apply_pipeline(gui->sg, gui->knob_pip);
@@ -1401,7 +1434,7 @@ void pw_tick(void* _gui)
 
         xassert(sg_isvalid(gui->sg));
 
-        sg_draw(gui->sg, 0, 6, 1);
+        sg_draw(gui->sg, 0, 6 * 3, 1);
     }
 
     sg_end_pass(gui->sg);
