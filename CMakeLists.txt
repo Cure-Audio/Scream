@@ -139,7 +139,7 @@ set(PLUGIN_INCLUDE
     modules/CPLUG/src/
 
     src/libs
-    build/shaders/
+    src/shaders/
     )
 
 set(PLUGIN_LIBRARIES "")
@@ -181,16 +181,19 @@ elseif(APPLE)
     list(APPEND PLUGIN_DEFINITIONS PW_METAL)
 endif()
 
-set(COMPILE_SHADER_CMD sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/libs/nanovg_sokol.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h --slang ${SHADER_LANG})
+set(COMPILE_SHADER_CMD sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h --slang ${SHADER_LANG})
 
 ### COMPILE SHADERS ###
 # https://discourse.cmake.org/t/pre-ninja-bash-command/1418/5
 add_custom_command(
     OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/shaders/shader.h.noexist
-        ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h
+        ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl.h
+        ${PROJECT_SOURCE_DIR}/src/shaders/knob.glsl.h
     COMMAND
-        ${COMPILE_SHADER_CMD}
+        sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h --slang ${SHADER_LANG}
+    COMMAND
+        sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/shaders/knob.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/knob.glsl.h --slang ${SHADER_LANG}
 )
 add_custom_target(shader_header
     DEPENDS

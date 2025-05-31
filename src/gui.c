@@ -23,6 +23,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <knob.glsl.h>
+
+typedef struct
+{
+    float   x, y;
+    int16_t u, v;
+} vertex_t;
+
 typedef struct GUI
 {
     Plugin*     plugin;
@@ -39,6 +47,11 @@ typedef struct GUI
 
     float input_gain_peaks_slow[2];
     float input_gain_peaks_fast[2];
+
+    sg_pipeline knob_pip;
+    sg_buffer   knob_vbo;
+    sg_buffer   knob_ibo;
+    vertex_t    knob_vertices[3 * 4]; // 3 knobs
 } GUI;
 
 // Nanovg helpers
@@ -308,6 +321,54 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
     gui->scale = (float)gui->plugin->width / (float)GUI_INIT_WIDTH;
 
+    gui->knob_vbo = sg_make_buffer(
+        gui->sg,
+        &(sg_buffer_desc){
+            .type  = SG_BUFFERTYPE_VERTEXBUFFER,
+            .usage = SG_USAGE_STREAM,
+            .size  = sizeof(gui->knob_vertices),
+            .label = "knob-vertices"});
+
+    // clang-format off
+    static const uint16_t KNOB_INDICES[] = {
+        0, 1, 2,  0, 2,  3,
+        4, 5, 6,  4, 6,  7,
+        8, 9, 10, 8, 10, 11,
+    };
+    _Static_assert(ARRLEN(KNOB_INDICES) == (3 * 6), "");
+    // clang-format on
+
+    gui->knob_ibo = sg_make_buffer(
+        gui->sg,
+        &(sg_buffer_desc){
+            .type  = SG_BUFFERTYPE_INDEXBUFFER,
+            .usage = SG_USAGE_IMMUTABLE,
+            .data  = SG_RANGE(KNOB_INDICES),
+            .size  = sizeof(KNOB_INDICES),
+            .label = "knob-indices"});
+
+    sg_shader shd = sg_make_shader(gui->sg, knob_shader_desc(sg_query_backend(gui->sg)));
+    gui->knob_pip = sg_make_pipeline(
+        gui->sg,
+        &(sg_pipeline_desc){
+            .shader     = shd,
+            .index_type = SG_INDEXTYPE_UINT16,
+            .layout =
+                {.attrs =
+                     {[ATTR_knob_position].format = SG_VERTEXFORMAT_FLOAT2,
+                      [ATTR_knob_coord].format    = SG_VERTEXFORMAT_SHORT2N}},
+            .colors[0] =
+                {.write_mask = SG_COLORMASK_RGBA,
+                 .blend =
+                     {
+                         .enabled          = true,
+                         .src_factor_rgb   = SG_BLENDFACTOR_ONE,
+                         .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                         .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                         .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                     }},
+            .label = "knob-pipeline"});
+
     return gui;
 }
 
@@ -501,8 +562,6 @@ void pw_tick(void* _gui)
         swapchain.d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw);
 #endif
         sg_begin_pass(gui->sg, &(sg_pass){.action = pass_action, .swapchain = swapchain});
-
-        nvgBeginFrame(gui->nvg, gui_width, gui_height, 1.0f);
     }
 
     NVGcontext*    nvg = gui->nvg;
@@ -524,6 +583,7 @@ void pw_tick(void* _gui)
     const float content_b      = floorf(gui_height - height_footer - 16);
     const float content_height = content_b - content_y;
 
+    nvgBeginFrame(gui->nvg, gui_width, gui_height, 1.0f);
     // Background
     {
         nvgBeginPath(nvg);
@@ -1307,6 +1367,43 @@ void pw_tick(void* _gui)
 
     // End frame
     nvgEndFrame(gui->nvg);
+
+    // Custom shader
+    {
+        // clang-format off
+        static const vertex_t verts[] = {
+            {-1.0f,  1.0f, -32767,  32767},
+            { 1.0f,  1.0f,  32767,  32767},
+            { 1.0f, -1.0f,  32767, -32767},
+            {-1.0f, -1.0f, -32767, -32767},
+
+            {-1.0f,  1.0f, -32767,  32767},
+            { 1.0f,  1.0f,  32767,  32767},
+            { 1.0f, -1.0f,  32767, -32767},
+            {-1.0f, -1.0f, -32767, -32767},
+
+            {-1.0f,  1.0f, -32767,  32767},
+            { 1.0f,  1.0f,  32767,  32767},
+            { 1.0f, -1.0f,  32767, -32767},
+            {-1.0f, -1.0f, -32767, -32767},
+        };
+        _Static_assert(ARRLEN(verts) == (3 * 4), "");
+        _Static_assert(sizeof(verts) == sizeof(gui->knob_vertices), "");
+        // clang-format on
+
+        sg_update_buffer(gui->sg, gui->knob_vbo, &SG_RANGE(verts));
+        sg_apply_pipeline(gui->sg, gui->knob_pip);
+
+        sg_bindings bind       = {0};
+        bind.vertex_buffers[0] = gui->knob_vbo;
+        bind.index_buffer      = gui->knob_ibo;
+        sg_apply_bindings(gui->sg, &bind);
+
+        xassert(sg_isvalid(gui->sg));
+
+        sg_draw(gui->sg, 0, 6, 1);
+    }
+
     sg_end_pass(gui->sg);
     sg_commit(gui->sg);
 

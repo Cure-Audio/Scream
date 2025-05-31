@@ -4,3 +4,4 @@
 .ideas
 .vscode
 build
+src/shaders/*.h
