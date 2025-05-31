@@ -649,8 +649,14 @@ void pw_tick(void* _gui)
         HEIGHT_FOOTER = 20,
     };
 
-    const float height_header = HEIGHT_HEADER * dpi;
-    const float height_footer = HEIGHT_FOOTER * dpi;
+#ifdef __APPLE__
+    const float content_scale = dpi * 0.5;
+#else
+    const float content_scale = dpi;
+#endif
+
+    const float height_header = HEIGHT_HEADER * content_scale;
+    const float height_footer = HEIGHT_FOOTER * content_scale;
 
     const float content_x      = 8;
     const float content_r      = gui_width - 8;
@@ -658,7 +664,13 @@ void pw_tick(void* _gui)
     const float content_b      = floorf(gui_height - height_footer - 16);
     const float content_height = content_b - content_y;
 
+#ifdef __APPLE__
+    // required for text to render properly...
+    nvgBeginFrame(gui->nvg, gui_width, gui_height, dpi);
+#else
     nvgBeginFrame(gui->nvg, gui_width, gui_height, 1.0f);
+#endif
+
     // Background
     {
         nvgBeginPath(nvg);
@@ -671,7 +683,7 @@ void pw_tick(void* _gui)
 
     // Header
     {
-        nvgFontSize(nvg, dpi * 24);
+        nvgFontSize(nvg, content_scale * 24);
         nvgFillColour(nvg, COLOUR_BG_LIGHT);
         nvgTextAlign(nvg, NVG_ALIGN_CC);
         nvgText(nvg, gui_width * 0.5f, height_header * 0.5f + 4, "SCREAM", NULL);
@@ -1335,7 +1347,7 @@ void pw_tick(void* _gui)
         }
 
         nvgFillColour(nvg, COLOUR_TEXT);
-        nvgFontSize(nvg, 14 * dpi * param_scale);
+        nvgFontSize(nvg, 14 * content_scale * param_scale);
 
         const float value_y = content_y + 40 * param_scale;
         const float label_b = content_b - 40 * param_scale;
@@ -1415,7 +1427,7 @@ void pw_tick(void* _gui)
         double frame_time_ms = (double)cpu_numerator * 1024e-6; // correct for 1024 int 'division'
         double approx_fps    = 1000 / frame_time_ms;
 
-        nvgFontSize(nvg, 12);
+        nvgFontSize(nvg, 12 * content_scale);
         NVGcolour footer_col = COLOUR_BG_LIGHT;
         footer_col.a         = 0.5f;
         nvgFillColour(nvg, footer_col);
