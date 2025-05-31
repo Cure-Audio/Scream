@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include <knob.glsl.h>
+#include <texquad.glsl.h>
 
 typedef struct
 {
@@ -38,9 +39,6 @@ typedef struct GUI
     void*       sg;
     NVGcontext* nvg;
     int         font_id;
-    int         logo_img_id;
-    int         logo_img_width;
-    int         logo_img_height;
     float       scale;
 
     struct imgui_context imgui;
@@ -51,7 +49,17 @@ typedef struct GUI
     sg_pipeline knob_pip;
     sg_buffer   knob_vbo;
     sg_buffer   knob_ibo;
-    vertex_t    knob_vertices[3 * 4]; // 3 knobs
+
+    // TODO: fix whatever is wrong with NanoVG sokol so we can use that for drawing the logo...
+    sg_pipeline logo_pip;
+    sg_buffer   logo_vbo;
+    sg_buffer   logo_ibo;
+    sg_image    logo_img;
+    sg_sampler  logo_smp;
+
+    // int         logo_img_id;
+    int logo_img_width;
+    int logo_img_height;
 } GUI;
 
 // Nanovg helpers
@@ -292,82 +300,149 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
     gui->font_id = font_id;
 
+    gui->scale = (float)gui->plugin->width / (float)GUI_INIT_WIDTH;
+
+    // Knob shader
     {
+        gui->knob_vbo = sg_make_buffer(
+            gui->sg,
+            &(sg_buffer_desc){
+                .type  = SG_BUFFERTYPE_VERTEXBUFFER,
+                .usage = SG_USAGE_STREAM,
+                .size  = sizeof(vertex_t) * 4 * 3,
+                .label = "knob-vertices"});
+
+        // clang-format off
+        static const uint16_t KNOB_INDICES[] = {
+            0, 1, 2,  0, 2,  3,
+            4, 5, 6,  4, 6,  7,
+            8, 9, 10, 8, 10, 11,
+        };
+        _Static_assert(ARRLEN(KNOB_INDICES) == (3 * 6), "");
+        // clang-format on
+
+        gui->knob_ibo = sg_make_buffer(
+            gui->sg,
+            &(sg_buffer_desc){
+                .type  = SG_BUFFERTYPE_INDEXBUFFER,
+                .usage = SG_USAGE_IMMUTABLE,
+                .data  = SG_RANGE(KNOB_INDICES),
+                .size  = sizeof(KNOB_INDICES),
+                .label = "knob-indices"});
+
+        sg_shader shd = sg_make_shader(gui->sg, knob_shader_desc(sg_query_backend(gui->sg)));
+        gui->knob_pip = sg_make_pipeline(
+            gui->sg,
+            &(sg_pipeline_desc){
+                .shader     = shd,
+                .index_type = SG_INDEXTYPE_UINT16,
+                .layout =
+                    {.attrs =
+                         {[ATTR_knob_position].format = SG_VERTEXFORMAT_FLOAT2,
+                          [ATTR_knob_coord].format    = SG_VERTEXFORMAT_SHORT2N}},
+                .colors[0] =
+                    {.write_mask = SG_COLORMASK_RGBA,
+                     .blend =
+                         {
+                             .enabled          = true,
+                             .src_factor_rgb   = SG_BLENDFACTOR_ONE,
+                             .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                             .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                             .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                         }},
+                .label = "knob-pipeline"});
+    }
+
+    // Logo shader
+    {
+        static const uint16_t indices[] = {0, 1, 2, 0, 2, 3};
+
+        gui->logo_vbo = sg_make_buffer(
+            gui->sg,
+            &(sg_buffer_desc){
+                .type  = SG_BUFFERTYPE_VERTEXBUFFER,
+                .usage = SG_USAGE_STREAM,
+                .size  = sizeof(vertex_t) * 4,
+                .label = "logo-vertices"});
+
+        gui->logo_ibo = sg_make_buffer(
+            gui->sg,
+            &(sg_buffer_desc){.type = SG_BUFFERTYPE_INDEXBUFFER, .data = SG_RANGE(indices), .label = "logo-indices"});
+
+        sg_shader shd = sg_make_shader(gui->sg, texquad_shader_desc(sg_query_backend(gui->sg)));
+        gui->logo_pip = sg_make_pipeline(
+            gui->sg,
+            &(sg_pipeline_desc){
+                .shader     = shd,
+                .index_type = SG_INDEXTYPE_UINT16,
+                .layout =
+                    {.attrs =
+                         {[ATTR_texquad_position].format  = SG_VERTEXFORMAT_FLOAT2,
+                          [ATTR_texquad_texcoord0].format = SG_VERTEXFORMAT_SHORT2N}},
+                .colors[0] =
+                    {.write_mask = SG_COLORMASK_RGBA,
+                     .blend =
+                         {
+                             .enabled          = true,
+                             .src_factor_rgb   = SG_BLENDFACTOR_ONE,
+                             .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                             .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                             .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                         }},
+                .label = "logo-pipeline"});
+
+        // // a sampler object
+        gui->logo_smp = sg_make_sampler(
+            gui->sg,
+            &(sg_sampler_desc){
+                .min_filter = SG_FILTER_LINEAR,
+                .mag_filter = SG_FILTER_LINEAR,
+            });
+
         void*  file_data     = NULL;
         size_t file_data_len = 0;
         bool   ok            = xfiles_read(LOGO_PATH, &file_data, &file_data_len);
         xassert(ok);
         if (ok)
         {
+            // stbi_set_unpremultiply_on_load(1);
+            // stbi_convert_iphone_png_to_rgb(1);
+
             int      x = 0, y = 0, comp = 0;
             stbi_uc* img_buf = stbi_load_from_memory(file_data, file_data_len, &x, &y, &comp, 4);
             xassert(img_buf);
+            xassert(comp == 4);
             if (img_buf)
             {
                 // TODO: mip maps
                 // gui->logo_img_id = nvgCreateImageRGBA(gui->nvg, x, y, NVG_IMAGE_GENERATE_MIPMAPS, img_buf);
 
-                gui->logo_img_id     = nvgCreateImageRGBA(gui->nvg, x, y, 0, img_buf);
+                // nvgCreateImage(gui->nvg, LOGO_PATH, 0);
+
+                // gui->logo_img_id     = nvgCreateImageRGBA(gui->nvg, x, y, 0, img_buf);
+
+                // xassert(gui->logo_img_id);
+
+                gui->logo_img = sg_make_image(
+                    gui->sg,
+                    &(sg_image_desc){
+                        .width  = x,
+                        .height = y,
+                        // .num_mipmaps         = 4,
+                        .pixel_format        = SG_PIXELFORMAT_RGBA8,
+                        .data.subimage[0][0] = {
+                            .ptr  = img_buf,
+                            .size = x * y * comp,
+                        }});
+                stbi_image_free(img_buf);
+
                 gui->logo_img_width  = x;
                 gui->logo_img_height = y;
-
-                xassert(gui->logo_img_id);
-                stbi_image_free(img_buf);
             }
 
             XFILES_FREE(file_data);
         }
     }
-
-    gui->scale = (float)gui->plugin->width / (float)GUI_INIT_WIDTH;
-
-    gui->knob_vbo = sg_make_buffer(
-        gui->sg,
-        &(sg_buffer_desc){
-            .type  = SG_BUFFERTYPE_VERTEXBUFFER,
-            .usage = SG_USAGE_STREAM,
-            .size  = sizeof(gui->knob_vertices),
-            .label = "knob-vertices"});
-
-    // clang-format off
-    static const uint16_t KNOB_INDICES[] = {
-        0, 1, 2,  0, 2,  3,
-        4, 5, 6,  4, 6,  7,
-        8, 9, 10, 8, 10, 11,
-    };
-    _Static_assert(ARRLEN(KNOB_INDICES) == (3 * 6), "");
-    // clang-format on
-
-    gui->knob_ibo = sg_make_buffer(
-        gui->sg,
-        &(sg_buffer_desc){
-            .type  = SG_BUFFERTYPE_INDEXBUFFER,
-            .usage = SG_USAGE_IMMUTABLE,
-            .data  = SG_RANGE(KNOB_INDICES),
-            .size  = sizeof(KNOB_INDICES),
-            .label = "knob-indices"});
-
-    sg_shader shd = sg_make_shader(gui->sg, knob_shader_desc(sg_query_backend(gui->sg)));
-    gui->knob_pip = sg_make_pipeline(
-        gui->sg,
-        &(sg_pipeline_desc){
-            .shader     = shd,
-            .index_type = SG_INDEXTYPE_UINT16,
-            .layout =
-                {.attrs =
-                     {[ATTR_knob_position].format = SG_VERTEXFORMAT_FLOAT2,
-                      [ATTR_knob_coord].format    = SG_VERTEXFORMAT_SHORT2N}},
-            .colors[0] =
-                {.write_mask = SG_COLORMASK_RGBA,
-                 .blend =
-                     {
-                         .enabled          = true,
-                         .src_factor_rgb   = SG_BLENDFACTOR_ONE,
-                         .src_factor_alpha = SG_BLENDFACTOR_ONE,
-                         .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                         .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                     }},
-            .label = "knob-pipeline"});
 
     return gui;
 }
@@ -376,11 +451,11 @@ void pw_destroy_gui(void* _gui)
 {
     GUI* gui = _gui;
 
-    if (gui->logo_img_id)
-    {
-        nvgDeleteImage(gui->nvg, gui->logo_img_id);
-        gui->logo_img_id = 0;
-    }
+    // if (gui->logo_img_id)
+    // {
+    //     nvgDeleteImage(gui->nvg, gui->logo_img_id);
+    //     gui->logo_img_id = 0;
+    // }
 
     nvgDeleteSokol(gui->nvg);
     sg_shutdown(gui->sg);
@@ -601,19 +676,23 @@ void pw_tick(void* _gui)
         nvgTextAlign(nvg, NVG_ALIGN_CC);
         nvgText(nvg, gui_width * 0.5f, height_header * 0.5f + 4, "SCREAM", NULL);
 
+        // Sokol nanovg isn't rendering this for some reason :(
         // Logo
-        float x, y, w, h, img_scale;
+        // float x, y, w, h, img_scale;
 
-        h         = height_header - 4;
-        img_scale = h / (float)gui->logo_img_height;
-        w         = (float)gui->logo_img_width * img_scale;
+        // h         = height_header - 4;
+        // img_scale = h / (float)gui->logo_img_height;
+        // w         = (float)gui->logo_img_width * img_scale;
         // x = gui_width - 16 - w;
-        x = 16;
-        y = 4;
-        nvgBeginPath(nvg);
-        nvgRect(nvg, x, y, w, h);
-        nvgFillPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_img_id, 1));
-        nvgFill(nvg);
+        // x = 16;
+        // y = 4;
+        // nvgBeginPath(nvg);
+        // nvgRect(nvg, x, y, w, h);
+        // nvgFillPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_img_id, 1));
+        // nvgFillColour(nvg, (NVGcolour){1, 1, 1, 1});
+        // nvgRect(nvg, 0, 0, 50, 50);
+        // nvgFillPaint(nvg, nvgImagePattern(nvg, 0, 0, 50, 50, 0, gui->logo_img_id, 1));
+        // nvgFill(nvg);
 
         // Doesn't look great rendered by nanovg...
         // nvgFillColor(nvg, (NVGcolor){1, 1, 1, 1});
@@ -1375,7 +1454,7 @@ void pw_tick(void* _gui)
     // End frame
     nvgEndFrame(gui->nvg);
 
-    // Custom shader
+    // Knob shader
     {
         // clang-format off
         vertex_t verts[] = {
@@ -1396,7 +1475,6 @@ void pw_tick(void* _gui)
         };
         _Static_assert(ARRLEN(verts) == (3 * 4), "");
         _Static_assert(ARRLEN(verts) / 4 == ARRLEN(knobs_pos), "");
-        _Static_assert(sizeof(verts) == sizeof(gui->knob_vertices), "");
         // clang-format on
 
         xassert(knob_radius != 0);
@@ -1435,6 +1513,43 @@ void pw_tick(void* _gui)
         xassert(sg_isvalid(gui->sg));
 
         sg_draw(gui->sg, 0, 6 * 3, 1);
+    }
+
+    // Logo shader
+    {
+        float x, y, w, h, img_scale;
+
+        h         = height_header - 4;
+        img_scale = h / (float)gui->logo_img_height;
+        w         = (float)gui->logo_img_width * img_scale;
+        x         = gui_width - 16 - w;
+        x         = 16;
+        y         = 4;
+
+        float l = xm_mapf(x, 0, gui_width, -1, 1);
+        float r = xm_mapf(x + w, 0, gui_width, -1, 1);
+        float t = xm_mapf(y, 0, gui_height, 1, -1);
+        float b = xm_mapf(y + h, 0, gui_height, 1, -1);
+
+        // clang-format off
+        vertex_t verts[] = {
+            {l, t, 0,     32767},
+            {r, t, 32767, 32767},
+            {r, b, 32767, 0},
+            {l, b, 0,     0},
+        };
+
+        sg_update_buffer(gui->sg, gui->logo_vbo, &SG_RANGE(verts));
+        sg_apply_pipeline(gui->sg, gui->logo_pip);
+
+        sg_bindings bind       = {0};
+        bind.vertex_buffers[0] = gui->logo_vbo;
+        bind.index_buffer      = gui->logo_ibo;
+        bind.images[IMG_tex]   = gui->logo_img;
+        bind.samplers[SMP_smp] = gui->logo_smp;
+
+        sg_apply_bindings(gui->sg, &bind);
+        sg_draw(gui->sg, 0, 6, 1);
     }
 
     sg_end_pass(gui->sg);

@@ -1,4 +1,4 @@
-@vs vs
+@vs knob_vs
 in vec4 position;
 in vec2 coord;
 out vec2 uv;
@@ -9,7 +9,7 @@ void main() {
 }
 @end
 
-@fs fs
+@fs knob_fs
 
 in vec2 uv;
 out vec4 frag_color;
@@ -84,4 +84,4 @@ void main() {
 
 @end
 
-@program knob vs fs
+@program knob knob_vs knob_fs
