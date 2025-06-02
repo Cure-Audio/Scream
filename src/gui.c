@@ -532,8 +532,6 @@ void* pw_create_gui(void* _plugin, void* _pw)
         xassert(ok);
         if (ok)
         {
-            // stbi_set_unpremultiply_on_load(1);
-            // stbi_convert_iphone_png_to_rgb(1);
             stbi_set_flip_vertically_on_load(1);
 
             int      x = 0, y = 0, comp = 0;
