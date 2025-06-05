@@ -301,26 +301,38 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->nvg = nvgCreateSokol(gui->sg, NVG_ANTIALIAS | NVG_STENCIL_STROKES);
     CPLUG_LOG_ASSERT(gui->nvg);
 
-#ifndef NDEBUG
-    static const char* font_path = FONT_PATH;
-#endif
-
-    if (!xfiles_exists(font_path))
+    // Load font
     {
+        char path[1024];
+        xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_APPDATA);
+        int         len = strlen(path);
+        const char* cat = XFILES_DIR_STR "Cure Audio" XFILES_DIR_STR "Scream" XFILES_DIR_STR "Tomorrow-SemiBold.ttf";
+        snprintf(path + len, sizeof(path) - len, "%s", cat);
+
+        const char* font_paths[] = {
+            path,
 #ifdef _WIN32
-        font_path = "C:\\Windows\\Fonts\\arial.ttf";
+            "C:\\Windows\\Fonts\\arial.ttf",
 #elif defined(__APPLE__)
-        font_path = "/Library/Fonts/Arial Unicode.ttf";
+            "/Library/Fonts/Arial Unicode.ttf",
 #endif
-    }
-    int font_id = nvgCreateFont(gui->nvg, "default", font_path);
-    CPLUG_LOG_ASSERT(font_id != -1);
-    if (font_id == -1)
-    {
-        println("[CRITICAL] Failed to open font at path %s", font_path);
-    }
+        };
 
-    gui->font_id = font_id;
+        int font_id = -1;
+        int i       = 0;
+
+        do
+        {
+            font_id = nvgCreateFont(gui->nvg, "default", font_paths[i]);
+            if (font_id == -1)
+            {
+                println("[CRITICAL] Failed to open fallback font at path %s", path);
+            }
+        }
+        while (font_id == -1 && i < ARRLEN(font_paths));
+
+        gui->font_id = font_id;
+    }
 
     gui->scale = (float)gui->plugin->width / (float)GUI_INIT_WIDTH;
 
@@ -426,8 +438,16 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
         void*  file_data     = NULL;
         size_t file_data_len = 0;
-        bool   ok            = xfiles_read(LOGO_PATH, &file_data, &file_data_len);
-        xassert(ok);
+        bool   ok            = false;
+        {
+            char path[1024];
+            xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_APPDATA);
+            int         len = strlen(path);
+            const char* cat = XFILES_DIR_STR "Cure Audio" XFILES_DIR_STR "Scream" XFILES_DIR_STR "cureaudio.png";
+            snprintf(path + len, sizeof(path) - len, "%s", cat);
+            ok = xfiles_read(path, &file_data, &file_data_len);
+            xassert(ok);
+        }
         if (ok)
         {
             stbi_set_flip_vertically_on_load(1);
@@ -549,7 +569,6 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events, float dr
 
     if (events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_TOUCHPAD_BEGIN))
     {
-        println("Begin drag: %d %f", param_id, value_f);
         param_change_begin(gui->plugin, param_id);
     }
     if (events & IMGUI_EVENT_DRAG_MOVE)
@@ -561,7 +580,6 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events, float dr
         {
             value_d = value_f = next_value;
             param_change_update(gui->plugin, param_id, value_d);
-            println("Update drag: %d %f", param_id, value_f);
         }
     }
     if (events & IMGUI_EVENT_TOUCHPAD_MOVE)
@@ -585,7 +603,6 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events, float dr
     }
     if (events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
     {
-        println("End drag: %d %f", param_id, value_f);
         param_change_end(gui->plugin, param_id);
     }
     if (events & IMGUI_EVENT_MOUSE_WHEEL)

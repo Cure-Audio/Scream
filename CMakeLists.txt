@@ -2,23 +2,23 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version" FORCE)
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
-project(skibidiscream
-    VERSION 0.0.4
+project(Scream
+    VERSION 0.1.0
     DESCRIPTION ""
     HOMEPAGE_URL "https://github.com/Tremus/skibidiscream"
     LANGUAGES C)
 set(COMPANY_NAME "Cure Audio")
 
-set(PRODUCT_NAME "skibidiscream")
+set(PRODUCT_NAME "Scream")
 set(PRODUCT_COPYRIGHT ${COMPANY_NAME})
-set(PLUGIN_BUNDLE_ID "com.cureaudio.skibidiscream.plugin")
-set(APP_BUNDLE_ID "com.cureaudio.skibidiscream.app")
+set(PLUGIN_BUNDLE_ID "com.cureaudio.scream.plugin")
+set(APP_BUNDLE_ID "com.cureaudio.scream.app")
 # Full list of AU types & tags here:
 # https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/AudioUnit.html
 # The properties:
 set(MACOSX_BUNDLE_TAGS "<string>Filter</string>") # Predefined tags are: Bass, Delay, Distortion, Drums, Dynamics, Dynamics Processor, Effects, Equalizer, Filter, Format Converter, Guitar, Imaging, MIDI, Mixer, Offline Effect, Output, Panner, Pitch, Reverb, Sampler, Synthesizer, Time Effect, Vocal. But you can use others.
 set(MACOSX_BUNDLE_TYPE "aufx") # "aufx" for Effect, "augn" for Generator, "aumu" for Instrument, "aufm" for Music Effect.
-set(MACOSX_BUNDLE_SUBTYPE "Skb1") # For AU and GarageBand 10.3 compatibility, the first letter must be upper-case, the others lower-case.
+set(MACOSX_BUNDLE_SUBTYPE "Scrm") # For AU and GarageBand 10.3 compatibility, the first letter must be upper-case, the others lower-case.
 set(MACOSX_BUNDLE_MANUFACTURER "Cure") # For AU and GarageBand 10.3 compatibility, the first letter must be upper-case, the others lower-case.
 # Convert version string (1.0.0) > integer (65536)
 math(EXPR MACOSX_BUNDLE_VERSION_INT "${PROJECT_VERSION_MAJOR} << 16 | ${PROJECT_VERSION_MINOR} << 8 | ${PROJECT_VERSION_PATCH}" OUTPUT_FORMAT DECIMAL) # cool trick bro
@@ -110,21 +110,6 @@ set(PLUGIN_DEFINITIONS
     STBI_NO_LINEAR
     NVG_NO_STB
     )
-if (CMAKE_BUILD_TYPE MATCHES Debug OR CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
-    list(APPEND PLUGIN_DEFINITIONS DEBUG=1)
-
-    set(FONT_PATH_UNIX "${PROJECT_SOURCE_DIR}/assets/Tomorrow-SemiBold.ttf")
-    set(LOGO_PATH_UNIX "${PROJECT_SOURCE_DIR}/assets/cureaudio_wavelogo_white.png")
-    if (WIN32)
-        string(REPLACE "/" "\\\\" FONT_PATH_WIN ${FONT_PATH_UNIX})
-        string(REPLACE "/" "\\\\" LOGO_PATH_WIN ${LOGO_PATH_UNIX})
-        list(APPEND PLUGIN_DEFINITIONS FONT_PATH="${FONT_PATH_WIN}")
-        list(APPEND PLUGIN_DEFINITIONS LOGO_PATH="${LOGO_PATH_WIN}")
-    else()
-        list(APPEND PLUGIN_DEFINITIONS FONT_PATH="${FONT_PATH_UNIX}")
-        list(APPEND PLUGIN_DEFINITIONS LOGO_PATH="${LOGO_PATH_UNIX}")
-    endif()
-endif()
 
 set(PLUGIN_SOURCES
     src/plugin.c

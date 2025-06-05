@@ -24,8 +24,8 @@
 #define CPLUG_AUV2_VIEW_CLASS     ScreamTemplateView
 #define CPLUG_AUV2_VIEW_CLASS_STR "ScreamTemplateView"
 
-#define CPLUG_CLAP_ID          "com.cureaudio.skibidiscream"
-#define CPLUG_CLAP_DESCRIPTION "skibidiscream"
+#define CPLUG_CLAP_ID          "com.cureaudio.scream"
+#define CPLUG_CLAP_DESCRIPTION "Scream Filter"
 #define CPLUG_CLAP_FEATURES    CLAP_PLUGIN_FEATURE_FILTER
 
 #include <xhl/alloc.h>
