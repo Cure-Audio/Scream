@@ -478,16 +478,16 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         }
     }
 
-    // #ifdef CPLUG_BUILD_STANDALONE
-    //     if (p->gui)
-    //     {
-    //         extern void oscilloscope_push(float* const* buf, int buflen, int nchannels);
-    //         oscilloscope_push(output, ctx->numFrames, 2);
-    //     }
-    //     xt_atomic_store_f32(&p->gui_osc_midi, g_osc_midi);
-    //     xt_atomic_store_f32(&p->gui_osc_phase, phase);
-    //     g_osc_phase = phase;
-    // #endif
+#ifdef CPLUG_BUILD_STANDALONE
+    // if (p->gui)
+    // {
+    //     extern void oscilloscope_push(float* const* buf, int buflen, int nchannels);
+    //     oscilloscope_push(output, ctx->numFrames, 2);
+    // }
+    xt_atomic_store_f32(&p->gui_osc_midi, g_osc_midi);
+    xt_atomic_store_f32(&p->gui_osc_phase, phase);
+    g_osc_phase = phase;
+#endif
 
     p->gui_output_peak_gain = peak_output_gain;
     xt_atomic_store_u64(&p->gui_input_peak_gain, peak_input_gain.u64);
