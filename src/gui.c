@@ -853,8 +853,9 @@ void pw_tick(void* _gui)
         };
         _Static_assert(_MINIMUM_WIDTH < GUI_MIN_WIDTH, "");
 
-        const float PARAMS_BOUNDARY_RIGHT = gui_width - 32;
-        const float PARAMS_WIDTH          = PARAMS_BOUNDARY_RIGHT - PARAMS_BOUNDARY_LEFT;
+        const float param_boundary_left  = scale_x * PARAMS_BOUNDARY_LEFT;
+        const float param_boundary_right = gui_width - scale_x * PARAMS_BOUNDARY_LEFT;
+        const float PARAMS_WIDTH         = param_boundary_right - param_boundary_left;
 
         const float param_scale = xm_maxf(1, xm_minf(scale_x, scale_y));
 
@@ -872,13 +873,13 @@ void pw_tick(void* _gui)
             ParamID param_id;
             float   cx;
         } param_positions[] = {
-            {PARAM_CUTOFF, PARAMS_BOUNDARY_LEFT + veritcal_slider_width + param_padding + rotary_param_diameter * 0.5f},
+            {PARAM_CUTOFF, param_boundary_left + veritcal_slider_width + param_padding + rotary_param_diameter * 0.5f},
             {PARAM_SCREAM,
-             PARAMS_BOUNDARY_LEFT + veritcal_slider_width + param_padding * 2 + rotary_param_diameter * 1.5f},
+             param_boundary_left + veritcal_slider_width + param_padding * 2 + rotary_param_diameter * 1.5f},
             {PARAM_RESONANCE,
-             PARAMS_BOUNDARY_LEFT + veritcal_slider_width + param_padding * 3 + rotary_param_diameter * 2.5f},
-            {PARAM_INPUT_GAIN, PARAMS_BOUNDARY_LEFT + veritcal_slider_width * 0.5f},
-            {PARAM_WET, PARAMS_BOUNDARY_RIGHT - veritcal_slider_width * 0.5f},
+             param_boundary_left + veritcal_slider_width + param_padding * 3 + rotary_param_diameter * 2.5f},
+            {PARAM_INPUT_GAIN, param_boundary_left + veritcal_slider_width * 0.5f},
+            {PARAM_WET, param_boundary_right - veritcal_slider_width * 0.5f},
         };
 
         knob_radius = rotary_param_diameter * 0.5f;
@@ -1458,8 +1459,10 @@ void pw_tick(void* _gui)
         nvgFillColour(nvg, COLOUR_TEXT);
         nvgFontSize(nvg, 14 * content_scale * param_scale);
 
-        const float value_y = content_y + 40 * param_scale;
-        const float label_b = content_b - 40 * param_scale;
+        const float content_cy  = content_y + content_height * 0.5f;
+        const float text_offset = rotary_param_diameter * 0.5 + 40 * scale_y;
+        const float value_y     = content_cy - text_offset;
+        const float label_b     = content_cy + text_offset;
 
         static const char* NAMES[] = {"CUTOFF", "SCREAM", "RESONANCE", "INPUT", "WET"};
         _Static_assert(ARRLEN(NAMES) == NUM_PARAMS);
@@ -1643,12 +1646,13 @@ void pw_tick(void* _gui)
     {
         float x, y, w, h, img_scale;
 
-        h         = height_header - 4;
-        img_scale = h / (float)gui->logo_img_height;
-        w         = (float)gui->logo_img_width * img_scale;
-        x         = gui_width - 16 - w;
+        float padding = 4 * scale_y;
+        h             = height_header - padding;
+        img_scale     = h / (float)gui->logo_img_height;
+        w             = (float)gui->logo_img_width * img_scale;
+        x             = gui_width - 16 - w;
         // x         = 16;
-        y = 4;
+        y = padding;
 
         float l = xm_mapf(x, 0, gui_width, -1, 1);
         float r = xm_mapf(x + w, 0, gui_width, -1, 1);
