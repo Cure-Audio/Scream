@@ -328,6 +328,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
             {
                 println("[CRITICAL] Failed to open fallback font at path %s", path);
             }
+            i++;
         }
         while (font_id == -1 && i < ARRLEN(font_paths));
 
