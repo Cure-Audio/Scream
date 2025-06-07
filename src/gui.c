@@ -86,7 +86,7 @@ static inline void nvgStrokeColour(NVGcontext* ctx, NVGcolour col) { nvgStrokeCo
                                      ( hex        & 0xff) / 255.0f}
 // clang-format on
 
-static const NVGcolour COLOUR_TEXT = nvgHexColour(0x8D949BFF);
+static const NVGcolour COLOUR_TEXT = nvgHexColour(0x858C94FF);
 
 static const NVGcolour COLOUR_BG_LIGHT = nvgHexColour(0xC9D3DDFF);
 static const NVGcolour COLOUR_BG_DARK  = nvgHexColour(0x151B32FF);
@@ -704,8 +704,11 @@ void pw_tick(void* _gui)
     const float    content_scale            = dpi;
 #endif
 
-    const float height_header = HEIGHT_HEADER * content_scale;
-    const float height_footer = HEIGHT_FOOTER * content_scale;
+    const float scale_x = (float)gui_width / (float)GUI_INIT_WIDTH;
+    const float scale_y = (float)gui_height / (float)GUI_INIT_HEIGHT;
+
+    const float height_header = HEIGHT_HEADER * content_scale * scale_y;
+    const float height_footer = HEIGHT_FOOTER * content_scale * scale_y;
 
     const float content_x      = 8;
     const float content_r      = gui_width - 8;
@@ -732,7 +735,7 @@ void pw_tick(void* _gui)
 
     // Header
     {
-        nvgFontSize(nvg, content_scale * 24);
+        nvgFontSize(nvg, content_scale * scale_y * 24);
         nvgFillColour(nvg, COLOUR_BG_LIGHT);
         nvgTextAlign(nvg, NVG_ALIGN_CC);
         nvgText(nvg, gui_width * 0.5f, height_header * 0.5f + 4, "SCREAM", NULL);
@@ -853,11 +856,9 @@ void pw_tick(void* _gui)
         const float PARAMS_BOUNDARY_RIGHT = gui_width - 32;
         const float PARAMS_WIDTH          = PARAMS_BOUNDARY_RIGHT - PARAMS_BOUNDARY_LEFT;
 
-        const float scale_x = (float)gui_width / (float)GUI_INIT_WIDTH;
-        const float scale_y = (float)gui_height / (float)GUI_INIT_HEIGHT;
-
         const float param_scale = xm_maxf(1, xm_minf(scale_x, scale_y));
 
+        // For snapping to certain pixel boundaries
 #define snapf(val, interval) (roundf((val) / (interval)) * (interval))
 
         const float veritcal_slider_width = snapf(VERTICAL_SLIDER_WIDTH * param_scale, 2);
@@ -1048,6 +1049,7 @@ void pw_tick(void* _gui)
                 break;
             }
             case PARAM_INPUT_GAIN:
+            case PARAM_WET:
             {
                 const float meter_width  = snapf(METER_WIDTH * param_scale, 2);
                 const float meter_height = snapf(METER_HEIGHT * param_scale, 2);
@@ -1131,265 +1133,323 @@ void pw_tick(void* _gui)
                     nvgFill(nvg);
                 }
 
-                float       rect_r     = rect.r;
-                const float icon_width = 10;
-                float       icon_r     = rect.r + icon_width + 4;
-                rect.r                 = icon_r;
-                uint32_t events        = imgui_get_events_rect(im, &rect);
-                rect.r                 = rect_r;
-
-                double value_d = handle_param_events(gui, PARAM_INPUT_GAIN, events, rect.b - rect.y);
-
-                nvgBeginPath(nvg);
-                nvgRoundedRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y, 4 * param_scale);
-                nvgFillColour(nvg, nvgHexColour(0x2C2F35FF));
-
-                static const NVGcolour bg_grad_stop0 = nvgHexColour(0x2C2F35FF);
-                static const NVGcolour bg_grad_stop1 = nvgHexColour(0x585E6AFF);
-                const NVGpaint bg_paint = nvgLinearGradient(nvg, 0, rect.y, 0, rect.b, bg_grad_stop0, bg_grad_stop1);
-                nvgFillPaint(nvg, bg_paint);
-                nvgFill(nvg);
-
-                // Value icon
+                if (param_id == PARAM_INPUT_GAIN)
                 {
-                    float icon_x = icon_r - icon_width;
+                    float       rect_r     = rect.r;
+                    const float icon_width = 10;
+                    float       icon_r     = rect.r + icon_width + 4;
+                    rect.r                 = icon_r;
+                    uint32_t events        = imgui_get_events_rect(im, &rect);
+                    rect.r                 = rect_r;
 
-                    float shadow_radius = 8;
-
-                    float icon_y = xm_lerpf(value_d, rect.b, rect.y);
-
-                    static const NVGcolour icol      = {0, 0, 0, 0.3};
-                    static const NVGcolour ocol      = {0, 0, 0, 0};
-                    float                  shadow_cx = icon_r - icon_width * 0.3f;
-                    NVGpaint paint = nvgRadialGradient(nvg, shadow_cx, icon_y + 2, 0, shadow_radius, icol, ocol);
+                    double value_d = handle_param_events(gui, PARAM_INPUT_GAIN, events, rect.b - rect.y);
 
                     nvgBeginPath(nvg);
-                    nvgCircle(nvg, shadow_cx, icon_y + 2, shadow_radius);
+                    nvgRoundedRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y, 4 * param_scale);
+                    nvgFillColour(nvg, nvgHexColour(0x2C2F35FF));
+
+                    static const NVGcolour bg_grad_stop0 = nvgHexColour(0x2C2F35FF);
+                    static const NVGcolour bg_grad_stop1 = nvgHexColour(0x585E6AFF);
+                    const NVGpaint         bg_paint =
+                        nvgLinearGradient(nvg, 0, rect.y, 0, rect.b, bg_grad_stop0, bg_grad_stop1);
+                    nvgFillPaint(nvg, bg_paint);
+                    nvgFill(nvg);
+
+                    // Value icon
+                    {
+                        float icon_x = icon_r - icon_width;
+
+                        float shadow_radius = 8;
+
+                        float icon_y = xm_lerpf(value_d, rect.b, rect.y);
+
+                        static const NVGcolour icol      = {0, 0, 0, 0.3};
+                        static const NVGcolour ocol      = {0, 0, 0, 0};
+                        float                  shadow_cx = icon_r - icon_width * 0.3f;
+                        NVGpaint paint = nvgRadialGradient(nvg, shadow_cx, icon_y + 2, 0, shadow_radius, icol, ocol);
+
+                        nvgBeginPath(nvg);
+                        nvgCircle(nvg, shadow_cx, icon_y + 2, shadow_radius);
+                        nvgFillPaint(nvg, paint);
+                        nvgFill(nvg);
+
+                        nvgBeginPath(nvg);
+                        nvgMoveTo(nvg, icon_x, icon_y);
+                        nvgLineTo(nvg, icon_r, icon_y - 8);
+                        nvgLineTo(nvg, icon_r, icon_y + 8);
+                        nvgClosePath(nvg);
+                        nvgFillColour(nvg, COLOUR_GREY_2);
+                        nvgFill(nvg);
+                    }
+
+                    xvec2f peaks;
+                    peaks.u64 = xt_atomic_load_u64(&gui->plugin->gui_input_peak_gain);
+
+                    float ch_w    = roundf(meter_width * 0.25);
+                    float padding = roundf(meter_width / 6.0f);
+
+                    const float ch_y    = rect.y + padding;
+                    const float ch_b    = rect.b - padding;
+                    const float ch_h    = ch_b - ch_y;
+                    const float ch_x[2] = {
+                        roundf(rect.x + padding),
+                        roundf(rect.r - padding - ch_w),
+                    };
+
+                    // Background
+                    nvgBeginPath(nvg);
+                    for (int ch = 0; ch < 2; ch++)
+                    {
+                        nvgRoundedRect(nvg, ch_x[ch], ch_y, ch_w, ch_h, 2 * param_scale);
+                    }
+
+                    static const NVGcolour ch_grad_stop0 = nvgHexColour(0x6C7483FF);
+                    static const NVGcolour ch_grad_stop1 = nvgHexColour(0x7C8493FF);
+
+                    const NVGpaint ch_bg_grad = nvgLinearGradient(nvg, 0, ch_y, 0, ch_b, ch_grad_stop0, ch_grad_stop1);
+                    nvgFillPaint(nvg, ch_bg_grad);
+                    nvgFill(nvg);
+
+                    const double release_time_slow =
+                        xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / (60 * 2));
+                    const double release_time_fast =
+                        xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / 30);
+
+                    for (int ch = 0; ch < 2; ch++)
+                    {
+                        // double release_time_slow = convert_compressor_time(6);
+                        // double release_time_fast = convert_compressor_time(1);
+                        gui->input_gain_peaks_slow[ch] =
+                            detect_peak(peaks.data[ch], gui->input_gain_peaks_slow[ch], 0, release_time_slow);
+                        gui->input_gain_peaks_fast[ch] =
+                            detect_peak(peaks.data[ch], gui->input_gain_peaks_fast[ch], 0, release_time_fast);
+                    }
+
+                    // Decaying Peak
+                    nvgBeginPath(nvg);
+                    bool has_peaks = false;
+                    for (int ch = 0; ch < 2; ch++)
+                    {
+                        float peak_dB_1 = xm_fast_gain_to_dB(gui->input_gain_peaks_slow[ch]);
+                        if (peak_dB_1 > RANGE_INPUT_GAIN_MIN)
+                        {
+                            float norm        = xm_normf(peak_dB_1, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                            float peak_height = norm * ch_h;
+                            nvgRoundedRect(nvg, ch_x[ch], ch_b - peak_height, ch_w, peak_height, 2 * param_scale);
+                            has_peaks = true;
+                        }
+                    }
+                    if (has_peaks)
+                    {
+                        nvgFillColour(nvg, nvgHexColour(0x459DB5FF));
+                        nvgFill(nvg);
+                    }
+
+                    // Realtime Peak
+                    float rt_peak_dB[2] = {
+                        xm_fast_gain_to_dB(peaks.data[0]),
+                        xm_fast_gain_to_dB(peaks.data[1]),
+                    };
+                    float rt_peak_h[2] = {gui_height, gui_height};
+                    float rt_peak_y[2] = {gui_height, gui_height};
+
+                    for (int ch = 0; ch < 2; ch++)
+                    {
+                        float norm        = xm_normf(rt_peak_dB[ch], RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                        float peak_height = norm * ch_h;
+                        rt_peak_h[ch]     = peak_height;
+                        rt_peak_y[ch]     = ch_b - peak_height;
+                    }
+                    // Peak glow/shadow
+                    // Shadows need to be drawn first to prevent spilling onto the realtime peak in the foreground
+                    for (int ch = 0; ch < 2; ch++)
+                    {
+                        if (rt_peak_dB[ch] > RANGE_INPUT_GAIN_MIN)
+                        {
+                            const float blur = 4 * param_scale;
+
+                            float gx = ch_x[ch] - blur;
+                            float gy = rt_peak_y[ch] - blur;
+                            float gw = ch_w + blur * 2;
+                            float gh = rt_peak_h[ch] + blur * 2;
+
+                            static const NVGcolour icol = nvgHexColour(0x4DB9FC72);
+                            static const NVGcolour ocol = nvgHexColour(0x4DB9FC00);
+
+                            NVGpaint paint = nvgBoxGradient(
+                                nvg,
+                                gx + blur * 0.5f,
+                                gy + blur * 0.5,
+                                gw - blur,
+                                gh - blur,
+                                blur,
+                                blur,
+                                icol,
+                                ocol);
+
+                            nvgBeginPath(nvg);
+                            nvgRoundedRect(nvg, gx, gy, gw, gh, blur);
+                            nvgFillPaint(nvg, paint);
+                            nvgFill(nvg);
+                        }
+                    }
+
+                    // Foreground realtime peak
+                    for (int ch = 0; ch < 2; ch++)
+                    {
+                        if (rt_peak_dB[ch] > RANGE_INPUT_GAIN_MIN)
+                        {
+                            nvgBeginPath(nvg);
+                            nvgFillColour(nvg, nvgHexColour(0xACDEECFF));
+                            nvgRoundedRect(nvg, ch_x[ch], rt_peak_y[ch], ch_w, rt_peak_h[ch], 2);
+                            nvgFill(nvg);
+                        }
+                    }
+
+                    // 0dB notch
+                    float zero_dB_pos = xm_normf(0, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                    float zero_dB_y   = rect.b - padding - zero_dB_pos * ch_h;
+                    nvgBeginPath(nvg);
+                    nvgMoveTo(nvg, rect.x, zero_dB_y);
+                    nvgLineTo(nvg, rect.r, zero_dB_y);
+                    nvgStrokePaint(nvg, bg_paint);
+                    nvgStrokeWidth(nvg, 1);
+                    nvgStroke(nvg);
+                }
+                else // param_id == PARAM_WET
+                {
+                    // BG colour
+                    nvgBeginPath(nvg);
+                    nvgRoundedRect(nvg, rect.x, rect.y, meter_width, meter_height, 4 * param_scale);
+                    nvgFillColour(nvg, COLOUR_BG_LIGHT);
+                    nvgFill(nvg);
+
+                    // Inner shadow
+                    nvgBeginPath(nvg);
+                    float       shadow_y = rect.y + 2;
+                    NVGcolour   icol     = {0, 0, 0, 0};
+                    NVGcolour   ocol     = {0, 0, 0, 0.15};
+                    const float blur1    = 4; // * param_scale; // Doesn't look great scaled
+                    NVGpaint    paint    = nvgBoxGradient(
+                        nvg,
+                        rect.x + blur1 * 0.5,
+                        shadow_y + blur1 * 0.5,
+                        meter_width - blur1,
+                        meter_height - blur1,
+                        blur1,
+                        blur1,
+                        icol,
+                        ocol);
+                    nvgFillPaint(nvg, paint);
+                    nvgRoundedRect(nvg, rect.x, rect.y, meter_width, meter_height, 4 * param_scale);
+                    nvgFill(nvg);
+
+                    imgui_rect handle  = rect;
+                    handle.x          += 2; // padding
+                    handle.y          += 2;
+                    handle.r          -= 2;
+                    handle.b          -= 2;
+                    float w            = handle.r - handle.x;
+                    float drag_y       = handle.y + w * 0.5f;
+                    float drag_b       = handle.b - w * 0.5f;
+                    float drag_height  = drag_b - drag_y;
+
+                    uint32_t events  = imgui_get_events_rect(im, &rect);
+                    double   value_d = handle_param_events(gui, PARAM_WET, events, drag_height);
+
+                    // Draw BG notches
+                    enum
+                    {
+                        NOTCH_COUNT = 16
+                    };
+                    const float y_inc = (drag_height + w * 0.5f) / (float)NOTCH_COUNT;
+
+                    float notch_x = handle.x + w * 0.25;
+                    float notch_r = handle.x + w * 0.75;
+                    nvgBeginPath(nvg);
+                    for (int n = 1; n < NOTCH_COUNT - 1; n++)
+                    {
+                        float y = roundf(drag_y + n * y_inc) + 0.5f;
+                        nvgMoveTo(nvg, notch_x, y);
+                        nvgLineTo(nvg, notch_r, y);
+                    }
+                    notch_x = handle.x + w * 0.125;
+                    notch_r = handle.x + w * 0.875;
+
+                    float top_y = roundf(drag_y) + 0.5f;
+                    nvgMoveTo(nvg, notch_x, top_y);
+                    nvgLineTo(nvg, notch_r, top_y);
+                    float bot_y = roundf(drag_b) + 0.5f;
+                    nvgMoveTo(nvg, notch_x, bot_y);
+                    nvgLineTo(nvg, notch_r, bot_y);
+
+                    nvgStrokeColour(nvg, COLOUR_GREY_1);
+                    nvgStrokeWidth(nvg, 1);
+                    nvgStroke(nvg);
+
+                    // Handle drop shadow
+                    float handle_cy = xm_lerpf(value_d, drag_b, drag_y);
+                    handle.y        = handle_cy - w * 0.5f;
+
+                    const float blur2 = 4 * param_scale;
+                    nvgBeginPath(nvg);
+                    icol       = (NVGcolour){0, 0, 0, 0.3};
+                    ocol       = (NVGcolour){0, 0, 0, 0};
+                    float sh_x = handle.x + 1;
+                    float sh_y = handle.y + 3;
+
+                    paint = nvgBoxGradient(0, sh_x, sh_y, w, w, 4 * param_scale, blur2, icol, ocol);
+                    nvgFillPaint(nvg, paint);
+                    nvgRoundedRect(nvg, sh_x - blur2, sh_y - blur2, w + blur2 * 2, w + blur2 * 2, 4 * param_scale);
+                    nvgFill(nvg);
+
+                    // Handle BG
+                    nvgBeginPath(nvg);
+                    nvgRoundedRect(nvg, handle.x, handle.y, w, w, 4 * param_scale);
+                    NVGcolor stop1 = nvgHexColour(0xB5BFC8FF);
+                    NVGcolor stop2 = nvgHexColour(0xD5DFEAFF);
+                    paint = nvgLinearGradient(0, 0, handle_cy - w * 0.35, 0, handle_cy + w * 0.35, stop1, stop2);
                     nvgFillPaint(nvg, paint);
                     nvgFill(nvg);
 
+                    // Top inner shadow
+                    icol  = (NVGcolour){1, 1, 1, 0};
+                    ocol  = (NVGcolour){1, 1, 1, 0.3};
+                    paint = nvgBoxGradient(0, handle.x, handle.y + 2, w, w, 4 * param_scale, 1, icol, ocol);
                     nvgBeginPath(nvg);
-                    nvgMoveTo(nvg, icon_x, icon_y);
-                    nvgLineTo(nvg, icon_r, icon_y - 8);
-                    nvgLineTo(nvg, icon_r, icon_y + 8);
-                    nvgClosePath(nvg);
-                    nvgFillColour(nvg, COLOUR_GREY_2);
+                    nvgRoundedRect(nvg, handle.x, handle.y, w, w, 4 * param_scale);
+                    nvgFillPaint(nvg, paint);
                     nvgFill(nvg);
-                }
-
-                xvec2f peaks;
-                peaks.u64 = xt_atomic_load_u64(&gui->plugin->gui_input_peak_gain);
-
-                float ch_w    = roundf(meter_width * 0.25);
-                float padding = roundf(meter_width / 6.0f);
-
-                const float ch_y    = rect.y + padding;
-                const float ch_b    = rect.b - padding;
-                const float ch_h    = ch_b - ch_y;
-                const float ch_x[2] = {
-                    roundf(rect.x + padding),
-                    roundf(rect.r - padding - ch_w),
-                };
-
-                // Background
-                nvgBeginPath(nvg);
-                for (int ch = 0; ch < 2; ch++)
-                {
-                    nvgRoundedRect(nvg, ch_x[ch], ch_y, ch_w, ch_h, 2 * param_scale);
-                }
-
-                static const NVGcolour ch_grad_stop0 = nvgHexColour(0x6C7483FF);
-                static const NVGcolour ch_grad_stop1 = nvgHexColour(0x7C8493FF);
-
-                const NVGpaint ch_bg_grad = nvgLinearGradient(nvg, 0, ch_y, 0, ch_b, ch_grad_stop0, ch_grad_stop1);
-                nvgFillPaint(nvg, ch_bg_grad);
-                nvgFill(nvg);
-
-                const double release_time_slow =
-                    xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / (60 * 2));
-                const double release_time_fast = xm_fast_dB_to_gain((RANGE_INPUT_GAIN_MIN - RANGE_INPUT_GAIN_MAX) / 30);
-
-                for (int ch = 0; ch < 2; ch++)
-                {
-                    // double release_time_slow = convert_compressor_time(6);
-                    // double release_time_fast = convert_compressor_time(1);
-                    gui->input_gain_peaks_slow[ch] =
-                        detect_peak(peaks.data[ch], gui->input_gain_peaks_slow[ch], 0, release_time_slow);
-                    gui->input_gain_peaks_fast[ch] =
-                        detect_peak(peaks.data[ch], gui->input_gain_peaks_fast[ch], 0, release_time_fast);
-                }
-
-                // Decaying Peak
-                nvgBeginPath(nvg);
-                bool has_peaks = false;
-                for (int ch = 0; ch < 2; ch++)
-                {
-                    float peak_dB_1 = xm_fast_gain_to_dB(gui->input_gain_peaks_slow[ch]);
-                    if (peak_dB_1 > RANGE_INPUT_GAIN_MIN)
-                    {
-                        float norm        = xm_normf(peak_dB_1, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                        float peak_height = norm * ch_h;
-                        nvgRoundedRect(nvg, ch_x[ch], ch_b - peak_height, ch_w, peak_height, 2 * param_scale);
-                        has_peaks = true;
-                    }
-                }
-                if (has_peaks)
-                {
-                    nvgFillColour(nvg, nvgHexColour(0x459DB5FF));
+                    // Bottom inner shadow
+                    icol  = (NVGcolour){0, 0, 0, 0};
+                    ocol  = (NVGcolour){0, 0, 0, 0.2};
+                    paint = nvgBoxGradient(0, handle.x, handle.y - 2, w, w, 4 * param_scale, 1, icol, ocol);
+                    nvgBeginPath(nvg);
+                    nvgRoundedRect(nvg, handle.x, handle.y, w, w, 4 * param_scale);
+                    nvgFillPaint(nvg, paint);
                     nvgFill(nvg);
+
+                    // Handle notch
+                    float snapped_y = floorf(handle_cy) - 1;
+                    // float snapped_y = floorf(handle_cy) + 0.5f;
+                    nvgStrokeWidth(nvg, 2);
+                    nvgBeginPath(nvg);
+                    nvgMoveTo(nvg, notch_x, snapped_y);
+                    nvgLineTo(nvg, notch_r, snapped_y);
+                    nvgStrokeColour(nvg, nvgHexColour(0x242E56FF));
+                    nvgStroke(nvg);
+                    nvgStrokeWidth(nvg, 1);
+                    nvgBeginPath(nvg);
+                    nvgMoveTo(nvg, notch_x, snapped_y - 2);
+                    nvgLineTo(nvg, notch_r, snapped_y - 2);
+                    nvgStrokeColour(nvg, nvgHexColour(0x9199A0FF));
+                    nvgStroke(nvg);
+                    nvgBeginPath(nvg);
+                    nvgMoveTo(nvg, notch_x, snapped_y + 2);
+                    nvgLineTo(nvg, notch_r, snapped_y + 2);
+                    nvgStrokeColour(nvg, nvgHexColour(0xDCE2E9FF));
+                    nvgStroke(nvg);
                 }
-
-                // Realtime Peak
-                float rt_peak_dB[2] = {
-                    xm_fast_gain_to_dB(peaks.data[0]),
-                    xm_fast_gain_to_dB(peaks.data[1]),
-                };
-                float rt_peak_h[2] = {gui_height, gui_height};
-                float rt_peak_y[2] = {gui_height, gui_height};
-
-                for (int ch = 0; ch < 2; ch++)
-                {
-                    float norm        = xm_normf(rt_peak_dB[ch], RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                    float peak_height = norm * ch_h;
-                    rt_peak_h[ch]     = peak_height;
-                    rt_peak_y[ch]     = ch_b - peak_height;
-                }
-                // Peak glow/shadow
-                // Shadows need to be drawn first to prevent spilling onto the realtime peak in the foreground
-                for (int ch = 0; ch < 2; ch++)
-                {
-                    if (rt_peak_dB[ch] > RANGE_INPUT_GAIN_MIN)
-                    {
-                        const float blur = 4 * param_scale;
-
-                        float gx = ch_x[ch] - blur;
-                        float gy = rt_peak_y[ch] - blur;
-                        float gw = ch_w + blur * 2;
-                        float gh = rt_peak_h[ch] + blur * 2;
-
-                        static const NVGcolour icol = nvgHexColour(0x4DB9FC72);
-                        static const NVGcolour ocol = nvgHexColour(0x4DB9FC00);
-
-                        NVGpaint paint = nvgBoxGradient(
-                            nvg,
-                            gx + blur * 0.5f,
-                            gy + blur * 0.5,
-                            gw - blur,
-                            gh - blur,
-                            blur,
-                            blur,
-                            icol,
-                            ocol);
-
-                        nvgBeginPath(nvg);
-                        nvgRoundedRect(nvg, gx, gy, gw, gh, blur);
-                        nvgFillPaint(nvg, paint);
-                        nvgFill(nvg);
-                    }
-                }
-
-                // Foreground realtime peak
-                for (int ch = 0; ch < 2; ch++)
-                {
-                    if (rt_peak_dB[ch] > RANGE_INPUT_GAIN_MIN)
-                    {
-                        nvgBeginPath(nvg);
-                        nvgFillColour(nvg, nvgHexColour(0xACDEECFF));
-                        nvgRoundedRect(nvg, ch_x[ch], rt_peak_y[ch], ch_w, rt_peak_h[ch], 2);
-                        nvgFill(nvg);
-                    }
-                }
-
-                // 0dB notch
-                float zero_dB_pos = xm_normf(0, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                float zero_dB_y   = rect.b - padding - zero_dB_pos * ch_h;
-                nvgBeginPath(nvg);
-                nvgMoveTo(nvg, rect.x, zero_dB_y);
-                nvgLineTo(nvg, rect.r, zero_dB_y);
-                nvgStrokePaint(nvg, bg_paint);
-                nvgStrokeWidth(nvg, 1);
-                nvgStroke(nvg);
-                break;
-            }
-            case PARAM_WET:
-            {
-                const float meter_width  = snapf(METER_WIDTH * param_scale, 2);
-                const float meter_height = snapf(METER_HEIGHT * param_scale, 2);
-
-                imgui_rect rect;
-
-                rect.x = roundf(param_cx - meter_width * 0.5);
-                rect.r = roundf(param_cx + meter_width * 0.5);
-                rect.y = roundf(gui_height * 0.5 - meter_height * 0.5f);
-                rect.b = roundf(gui_height * 0.5 + meter_height * 0.5f);
-
-                imgui_rect slider_dimensions  = rect;
-                slider_dimensions.x          += 4; // padding
-                slider_dimensions.y          += 4;
-                slider_dimensions.r          -= 4;
-                slider_dimensions.b          -= 4;
-                float handle_width            = slider_dimensions.r - slider_dimensions.x;
-                float drag_y                  = slider_dimensions.y + handle_width * 0.5f;
-                float drag_b                  = slider_dimensions.b - handle_width * 0.5f;
-                float drag_height             = drag_b - drag_y;
-
-                uint32_t events  = imgui_get_events_rect(im, &rect);
-                double   value_d = handle_param_events(gui, PARAM_WET, events, drag_height);
-
-                // Draw BG
-                nvgBeginPath(nvg);
-                nvgRoundedRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y, 4);
-                nvgFillColour(nvg, nvgHexColour(0x2C2F35FF));
-                nvgFill(nvg);
-
-                // Draw BG notches
-                enum
-                {
-                    NOTCH_COUNT = 16
-                };
-                const float y_inc = (drag_height + handle_width * 0.5f) / (float)NOTCH_COUNT;
-
-                float notch_x = slider_dimensions.x + handle_width * 0.25;
-                float notch_r = slider_dimensions.x + handle_width * 0.75;
-                nvgBeginPath(nvg);
-                for (int n = 1; n < NOTCH_COUNT - 1; n++)
-                {
-                    float y = roundf(drag_y + n * y_inc) + 0.5f;
-                    nvgMoveTo(nvg, notch_x, y);
-                    nvgLineTo(nvg, notch_r, y);
-                }
-                notch_x = slider_dimensions.x + handle_width * 0.125;
-                notch_r = slider_dimensions.x + handle_width * 0.875;
-
-                float top_y = roundf(drag_y) + 0.5f;
-                nvgMoveTo(nvg, notch_x, top_y);
-                nvgLineTo(nvg, notch_r, top_y);
-                float bot_y = roundf(drag_b) + 0.5f;
-                nvgMoveTo(nvg, notch_x, bot_y);
-                nvgLineTo(nvg, notch_r, bot_y);
-
-                nvgStrokeColour(nvg, COLOUR_GREY_2);
-                nvgStrokeWidth(nvg, 1);
-                nvgStroke(nvg);
-
-                // Draw handle
-                float handle_cy = xm_lerpf(value_d, drag_b, drag_y);
-                nvgBeginPath(nvg);
-                nvgRoundedRect(
-                    nvg,
-                    slider_dimensions.x,
-                    handle_cy - handle_width * 0.5f,
-                    handle_width,
-                    handle_width,
-                    2);
-                nvgFillColour(nvg, COLOUR_GREY_1);
-                nvgFill(nvg);
-                // Handle notch
-                nvgBeginPath(nvg);
-                nvgMoveTo(nvg, notch_x, handle_cy);
-                nvgLineTo(nvg, notch_r, handle_cy);
-                nvgStrokeColour(nvg, nvgHexColour(0x2C2F35FF));
-                nvgStroke(nvg);
                 break;
             }
             }
@@ -1463,7 +1523,7 @@ void pw_tick(void* _gui)
 #endif
     */
 
-    // #ifndef NDEBUG
+    // Footer
     {
         uint64_t frame_time_end         = xtime_now_ns();
         uint64_t frame_time_duration_ns = frame_time_end - frame_time_start;
@@ -1486,12 +1546,12 @@ void pw_tick(void* _gui)
         int  len      = snprintf(
             text,
             sizeof(text),
-            "CPU: %.2lf%% Time: %.3lfms. Max FPS: %.lf",
+            "GUI CPU: %.2lf%% Frame Time: %.3lfms. Max FPS: %.lf",
             (cpu_amt * 100),
             frame_time_ms,
             approx_fps);
-        nvgTextAlign(nvg, NVG_ALIGN_CL);
-        nvgText(nvg, 8, height_header * 0.5f + 4, text, text + len);
+        nvgTextAlign(nvg, NVG_ALIGN_TL);
+        nvgText(nvg, 8, 8, text, text + len);
 
         // TODO: remove after release
         const char*    plugin_type_name = "";
@@ -1510,9 +1570,9 @@ void pw_tick(void* _gui)
         const char* os_name = "macoS";
 #endif
         len = snprintf(text, sizeof(text), "Scream %s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
-        nvgText(nvg, 8, gui_height - height_footer * 0.5f - 4, text, text + len);
+        nvgTextAlign(nvg, NVG_ALIGN_BL);
+        nvgText(nvg, 8, gui_height - 8, text, text + len);
     }
-    // #endif
 
     // End frame
     nvgEndFrame(gui->nvg);
