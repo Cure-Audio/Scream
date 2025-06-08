@@ -1571,7 +1571,7 @@ void pw_tick(void* _gui)
 #ifdef _WIN32
         const char* os_name = "Windows";
 #elif __APPLE__
-        const char* os_name = "macoS";
+        const char* os_name = "macOS";
 #endif
         len = snprintf(text, sizeof(text), "Scream %s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
         nvgTextAlign(nvg, NVG_ALIGN_BL);
