@@ -3,7 +3,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment ve
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
 project(Scream
-    VERSION 0.1.0
+    VERSION 0.1.1
     DESCRIPTION ""
     HOMEPAGE_URL "https://github.com/Tremus/skibidiscream"
     LANGUAGES C)
@@ -152,11 +152,11 @@ if (WIN32)
 elseif(APPLE)
     enable_language(OBJC)
     set(SHADER_LANG "metal_macos")
-    if (CMAKE_BUILD_TYPE MATCHES Release)
-        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
-        list(APPEND PLUGIN_OPTIONS -g)
-    endif()
-    
+    # if (CMAKE_BUILD_TYPE MATCHES Release)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
+    list(APPEND PLUGIN_OPTIONS -g)
+    # endif()
+
     list(APPEND PLUGIN_SOURCES src/platform_osx.m)
     list(APPEND PLUGIN_LIBRARIES
         "-framework Quartz"
