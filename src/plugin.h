@@ -2,6 +2,7 @@
 #include "common.h"
 #include <cplug.h>
 #include <xhl/thread.h>
+#include <xhl/vector.h>
 
 #include "param_smoothing.h"
 
@@ -48,7 +49,9 @@ typedef struct Plugin
     // two floats, stored as a u64
     xt_atomic_uint64_t gui_input_peak_gain;
 
-    xt_atomic_float gui_output_peak_gain;
+    xvec2f _gui_input_last_peak;
+    int    _gui_input_read_count[2];
+
     xt_atomic_float gui_osc_phase;
     xt_atomic_float gui_osc_midi;
 

@@ -212,9 +212,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
         }
     }
 
-    xvec2f peak_input_gain  = {0};
-    float  peak_output_gain = 0;
-
     CplugEvent event;
     uint32_t   frame = 0;
 
@@ -363,7 +360,38 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                                            s.values[PARAM_RESONANCE].remaining | s.values[PARAM_INPUT_GAIN].remaining |
                                            s.values[PARAM_WET].remaining;
 
-                float peak_input = 0;
+                if (p->gui)
+                {
+                    enum
+                    {
+                        PEAK_FREQUENCY_SAMPLES = 1 << 12,
+                        PEAK_FREQUENCY_MASK    = PEAK_FREQUENCY_SAMPLES - 1,
+                    };
+                    int remaining_samples = num_frames;
+                    while (remaining_samples)
+                    {
+                        float peak_input = p->_gui_input_last_peak.data[ch];
+                        int   N = xm_mini(remaining_samples, PEAK_FREQUENCY_SAMPLES - p->_gui_input_read_count[ch]);
+                        for (int i = 0; i < N; i++)
+                        {
+                            float x = fabsf(it[i]);
+                            if (x > peak_input)
+                                peak_input = x;
+                        }
+                        remaining_samples            -= N;
+                        p->_gui_input_read_count[ch] += N;
+                        if (p->_gui_input_read_count[ch] == PEAK_FREQUENCY_SAMPLES)
+                        {
+                            p->_gui_input_read_count[ch] = 0;
+                            xvec2f next                  = {.u64 = p->gui_input_peak_gain};
+                            next.data[ch]                = peak_input * in_gain;
+
+                            xt_atomic_store_u64(&p->gui_input_peak_gain, next.u64);
+
+                            p->_gui_input_last_peak.data[ch] = 0;
+                        }
+                    }
+                }
 
                 // Process
                 for (; it != end; it++)
@@ -371,9 +399,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     float x = *it;
 
                     x *= in_gain;
-
-                    if (fabsf(x) > peak_input)
-                        peak_input = fabsf(x);
 
                     // Feedforward
                     // float y = x + s.fb_yn_1 * feedback_gain;
@@ -390,9 +415,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     CPLUG_LOG_ASSERT(y == y);
                     if (y != y) // NaN protection. TODO: remove when filter algo is solid
                         y = 0;
-                    // Hard clip protection. Remove later
-                    if (fabsf(y) > peak_output_gain)
-                        peak_output_gain = fabsf(y);
 
                     // *it = xm_clampf(y, -1, 1);
                     *it = wet * y + (1 - wet) * (*it);
@@ -471,8 +493,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 ROUND_STATE_TO_ZERO(s.hp[1])
                 ROUND_STATE_TO_ZERO(s.fb_yn_1)
 
-                peak_input_gain.data[ch] = peak_input;
-
                 p->state[ch] = s;
             }
 
@@ -496,8 +516,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
     g_osc_phase = phase;
 #endif
 
-    p->gui_output_peak_gain = peak_output_gain;
-    xt_atomic_store_u64(&p->gui_input_peak_gain, peak_input_gain.u64);
     RESTORE_DENORMALS
 
     if (should_post_to_global && p->cplug_ctx->type != CPLUG_PLUGIN_IS_STANDALONE)
