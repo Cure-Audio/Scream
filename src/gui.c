@@ -60,6 +60,8 @@ typedef struct GUI
     // int         logo_img_id;
     int logo_img_width;
     int logo_img_height;
+
+    uint64_t last_frame_time;
 } GUI;
 
 // Nanovg helpers
@@ -469,6 +471,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
             XFILES_FREE(file_data);
         }
     }
+
+    gui->last_frame_time = xtime_now_ns();
 
     return gui;
 }
@@ -1525,7 +1529,12 @@ void pw_tick(void* _gui)
 
         double cpu_amt       = (double)cpu_numerator / (double)cpu_denominator;
         double frame_time_ms = (double)cpu_numerator * 1024e-6; // correct for 1024 int 'division'
-        double approx_fps    = 1000 / frame_time_ms;
+        // double approx_fps    = 1000 / frame_time_ms; // Potential FPS
+
+        // uint64_t actual
+        uint64_t diff_last_frame = frame_time_end - gui->last_frame_time;
+        gui->last_frame_time     = frame_time_end;
+        double actual_fps        = 1000.0 / ((diff_last_frame >> 10) * 1024e-6);
 
         nvgFontSize(nvg, 12 * content_scale);
         NVGcolour footer_col = COLOUR_BG_LIGHT;
@@ -1535,10 +1544,10 @@ void pw_tick(void* _gui)
         int  len      = snprintf(
             text,
             sizeof(text),
-            "GUI CPU: %.2lf%% Frame Time: %.3lfms. Max FPS: %.lf",
+            "GUI CPU: %.2lf%% Frame Time: %.3lfms. FPS: %.lf",
             (cpu_amt * 100),
             frame_time_ms,
-            approx_fps);
+            actual_fps);
         nvgTextAlign(nvg, NVG_ALIGN_TL);
         nvgText(nvg, 8, 8, text, text + len);
 
