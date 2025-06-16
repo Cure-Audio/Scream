@@ -46,7 +46,10 @@ static void smoothvalue_set_target(SmoothedValue* sv, float newValue, int steps)
         }
     }
     if (inc == 0)
+    {
         sv->current = newValue;
+        steps       = 0;
+    }
 
     sv->target    = newValue;
     sv->inc       = inc;
