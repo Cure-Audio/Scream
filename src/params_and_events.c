@@ -127,15 +127,14 @@ void param_change_update(Plugin* p, ParamID id, double value)
     e.parameter.type  = CPLUG_EVENT_PARAM_CHANGE_UPDATE;
     e.parameter.id    = id;
     e.parameter.value = value;
-    if (p->cplug_ctx->type == CPLUG_PLUGIN_IS_CLAP || p->is_ableton_vst3)
+    if (p->cplug_ctx->type == CPLUG_PLUGIN_IS_CLAP || p->cplug_ctx->type == CPLUG_PLUGIN_IS_STANDALONE ||
+        p->is_ableton_vst3)
     {
         send_to_audio_event_queue(p, e);
     }
     else
     {
         p->cplug_ctx->sendParamEvent(p->cplug_ctx, &e);
-        e.parameter.type = EVENT_SET_PARAMETER;
-        send_to_audio_event_queue(p, e);
     }
 }
 
@@ -312,15 +311,11 @@ void cplug_setParameterValue(void* _p, uint32_t paramId, double value)
     {
         // println("[main] %s %s %f", __FUNCTION__, PARAM_STR[paramId], value);
         main_set_param(p, paramId, value);
-        e.type = EVENT_SET_PARAMETER;
-        send_to_audio_event_queue(p, e);
     }
     else
     {
         // println("[audio] %s %s %f", __FUNCTION__, PARAM_STR[paramId], value);
         audio_set_param(p, paramId, value);
-        e.type = EVENT_SET_PARAMETER;
-        send_to_main_event_queue(p, e);
     }
 }
 // VST3 only

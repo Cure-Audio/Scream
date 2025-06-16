@@ -299,32 +299,15 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             // const float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
             const float expander_release = convert_compressor_time(p->sample_rate * 0.001); // 1 ms
 
-            const double smoothing_len        = 0.010; // 10ms
-            int          param_smoothing_time = xm_droundi(p->sample_rate * smoothing_len);
-            double       block_len_ms         = (double)ctx->numFrames / p->sample_rate;
-            // It's difficult to tell where param updates are coming from, and how many there are across all plugin
-            // formats
-            // Cond 1: This helps if parameter updates are highly infrequent and block sizes are long
-            const bool cond1 = block_len_ms > smoothing_len;
-
-            // WIP!
-            // // Cond 2: This helps if DAW such as FL Studio sends loads of tiny sub blocks to reduce latency
-            // const bool cond2 = ctx->numFrames < p->max_block_size;
-            // if (frame == 0 && (cond1 || cond2))
-            if (frame == 0 && cond1)
-            {
-                // println("Adjusting param smoothing time from %d > %d", param_smoothing_time, ctx->numFrames);
-                param_smoothing_time = ctx->numFrames;
-            }
-            // FL Studio shenanigans
-            // if (frame == 0 && ctx->numFrames < p->max_block_size)
-            // {
-            //     // println(
-            //     //     "Adjusting param smoothing time from %d > %d",
-            //     //     param_smoothing_time,
-            //     //     (param_smoothing_time * 4));
-            //     param_smoothing_time *= 4;
-            // }
+            // Frequency of param updates vary. In FL studio (2024), when dragging params in the GUI, FL doesn't do a
+            // great job of sending these updates frequently on the audio thread. FL sends these updates much more
+            // frequently when you are playing parameter automation. Ableton 12 however does a much better job in all
+            // cases, and does a great job with a much shorter smoothing time like 10ms.
+            // It may be possible to improve this with a little bit of DAW detection to optimise smoothing time based on
+            // the DAW.
+            const double smoothing_len = 0.030; // 30ms
+            // const double smoothing_len        = 0.020; // 20ms NOTE: sounds too steppy in FL Studio
+            int param_smoothing_time = xm_droundi(p->sample_rate * smoothing_len);
 
             for (int ch = 0; ch < 2; ch++)
             {

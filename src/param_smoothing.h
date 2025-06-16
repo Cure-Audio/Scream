@@ -33,8 +33,12 @@ static inline float smoothvalue_tick(SmoothedValue* sv)
 static void smoothvalue_set_target(SmoothedValue* sv, float newValue, int steps)
 {
     xassert(steps);
+    if (sv->target == newValue && sv->remaining)
+        return;
+
     float inc  = 0;
     float diff = newValue - sv->current;
+
     while (inc == 0 && newValue != sv->target && steps)
     {
         inc = diff / (float)steps;
