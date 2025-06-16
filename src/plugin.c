@@ -360,7 +360,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 Coeffs hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
 
                 const bool smooth_params = s.values[PARAM_CUTOFF].remaining | s.values[PARAM_SCREAM].remaining |
-                                           s.values[PARAM_RESONANCE].remaining | s.values[PARAM_INPUT_GAIN].remaining;
+                                           s.values[PARAM_RESONANCE].remaining | s.values[PARAM_INPUT_GAIN].remaining |
+                                           s.values[PARAM_WET].remaining;
 
                 float peak_input = 0;
 
