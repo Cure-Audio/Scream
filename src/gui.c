@@ -1668,7 +1668,7 @@ void pw_tick(void* _gui)
 
     sg_end_pass();
     sg_commit();
-    sg_set_global(gui->sg);
+    sg_set_global(NULL);
 
     imgui_end_frame(&gui->imgui);
 }
