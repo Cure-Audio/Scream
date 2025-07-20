@@ -47,6 +47,7 @@ typedef struct Plugin
     // Retained data for GUI
     void* gui;
     int   width, height;
+    bool  lfo_section_open;
 
     // two floats, stored as a u64
     xt_atomic_uint64_t gui_input_peak_gain;

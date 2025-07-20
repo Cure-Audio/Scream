@@ -1,0 +1,3 @@
+- fix visual stutter when resizing
+    - from corners and edges
+    - when clicking the LFO show/hide button

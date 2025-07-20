@@ -12,6 +12,27 @@ typedef struct
     int16_t u, v;
 } vertex_t;
 
+typedef struct LayoutMetrics
+{
+    int width, height;
+
+    int section_top_height;
+    int section_bottom_height;
+
+    float scale_x;
+    float scale_y;
+
+    float height_header;
+    float height_footer;
+
+    // top section
+    float content_x;
+    float content_r;
+    float content_y;
+    float content_b;
+    float content_height;
+} LayoutMetrics;
+
 typedef struct GUI
 {
     Plugin*     plugin;
@@ -25,6 +46,8 @@ typedef struct GUI
 
     struct imgui_context imgui;
 
+    LayoutMetrics layout;
+
     float input_gain_peaks_slow[2];
     float input_gain_peaks_fast[2];
 
@@ -33,15 +56,14 @@ typedef struct GUI
     sg_buffer   knob_ibo;
 
     // TODO: fix whatever is wrong with NanoVG sokol so we can use that for drawing the logo...
-    sg_pipeline logo_pip;
-    sg_buffer   logo_vbo;
-    sg_buffer   logo_ibo;
-    sg_image    logo_img;
-    sg_sampler  logo_smp;
+    sg_pipeline img_pip;
+    sg_buffer   img_vbo;
+    sg_buffer   img_ibo;
+    sg_sampler  img_smp;
 
-    // int         logo_img_id;
-    int logo_img_width;
-    int logo_img_height;
+    sg_image img_logo_id;
+    int      img_logo_width;
+    int      img_logo_height;
 
     uint64_t frame_start_time;
     uint64_t frame_end_time;

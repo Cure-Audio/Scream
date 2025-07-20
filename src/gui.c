@@ -312,37 +312,37 @@ void* pw_create_gui(void* _plugin, void* _pw)
     {
         static const uint16_t indices[] = {0, 1, 2, 0, 2, 3};
 
-        gui->logo_vbo = sg_make_buffer(&(sg_buffer_desc){
+        gui->img_vbo = sg_make_buffer(&(sg_buffer_desc){
             .usage.vertex_buffer = true,
             .usage.stream_update = true,
             .size                = sizeof(vertex_t) * 4,
             .label               = "logo-vertices"});
 
-        gui->logo_ibo = sg_make_buffer(
+        gui->img_ibo = sg_make_buffer(
             &(sg_buffer_desc){.usage.index_buffer = true, .data = SG_RANGE(indices), .label = "logo-indices"});
 
         sg_shader shd = sg_make_shader(texquad_shader_desc(sg_query_backend()));
-        gui->logo_pip = sg_make_pipeline(&(sg_pipeline_desc){
-            .shader     = shd,
-            .index_type = SG_INDEXTYPE_UINT16,
-            .layout =
+        gui->img_pip  = sg_make_pipeline(&(sg_pipeline_desc){
+             .shader     = shd,
+             .index_type = SG_INDEXTYPE_UINT16,
+             .layout =
                 {.attrs =
-                     {[ATTR_texquad_position].format  = SG_VERTEXFORMAT_FLOAT2,
-                      [ATTR_texquad_texcoord0].format = SG_VERTEXFORMAT_SHORT2N}},
-            .colors[0] =
+                      {[ATTR_texquad_position].format  = SG_VERTEXFORMAT_FLOAT2,
+                       [ATTR_texquad_texcoord0].format = SG_VERTEXFORMAT_SHORT2N}},
+             .colors[0] =
                 {.write_mask = SG_COLORMASK_RGBA,
-                 .blend =
-                     {
-                         .enabled          = true,
-                         .src_factor_rgb   = SG_BLENDFACTOR_ONE,
-                         .src_factor_alpha = SG_BLENDFACTOR_ONE,
-                         .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                         .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                  .blend =
+                      {
+                          .enabled          = true,
+                          .src_factor_rgb   = SG_BLENDFACTOR_ONE,
+                          .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                          .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                          .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                      }},
-            .label = "logo-pipeline"});
+             .label = "logo-pipeline"});
 
         // a sampler object
-        gui->logo_smp = sg_make_sampler(&(sg_sampler_desc){
+        gui->img_smp = sg_make_sampler(&(sg_sampler_desc){
             .min_filter    = SG_FILTER_LINEAR,
             .mag_filter    = SG_FILTER_LINEAR,
             .mipmap_filter = SG_FILTER_LINEAR,
@@ -375,7 +375,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
                 // gui->logo_img_id = nvgCreateImageRGBA(gui->nvg, x, y, 0, img_buf);
                 // xassert(gui->logo_img_id);
 
-                gui->logo_img = sg_make_image_with_mipmaps(&(sg_image_desc){
+                gui->img_logo_id = sg_make_image_with_mipmaps(&(sg_image_desc){
                     .width        = x,
                     .height       = y,
                     .num_mipmaps  = 5,
@@ -388,8 +388,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
                     }});
                 stbi_image_free(img_buf);
 
-                gui->logo_img_width  = x;
-                gui->logo_img_height = y;
+                gui->img_logo_width  = x;
+                gui->img_logo_height = y;
             }
 
             XFILES_FREE(file_data);
@@ -398,7 +398,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
     ted_init(&gui->texteditor);
 
-    gui->frame_end_time = xtime_now_ns();
+    gui->frame_end_time     = xtime_now_ns();
+    gui->imgui.frame.events = 1 << PW_EVENT_RESIZE;
 
     return gui;
 }
@@ -651,9 +652,47 @@ void pw_tick(void* _gui)
     // if (gui->imgui.num_duplicate_backbuffers >= MAX_DUP_BACKBUFFER_COUNT)
     //     return;
 
-    const int   gui_width  = gui->plugin->width;
-    const int   gui_height = gui->plugin->height;
-    const float dpi        = pw_get_dpi(gui->pw);
+    const float dpi = pw_get_dpi(gui->pw);
+#ifdef __APPLE__
+    const float content_scale = dpi * 0.5;
+#else
+    const float    content_scale            = dpi;
+#endif
+
+    NVGcontext*    nvg = gui->nvg;
+    imgui_context* im  = &gui->imgui;
+    LayoutMetrics* lm  = &gui->layout;
+    if (im->frame.events & (1 << PW_EVENT_RESIZE))
+    {
+        enum
+        {
+            HEIGHT_HEADER  = 32,
+            HEIGHT_FOOTER  = 20,
+            BORDER_PADDING = 8,
+        };
+
+        lm->width  = gui->plugin->width;
+        lm->height = gui->plugin->height;
+
+        int top_height = lm->height;
+        if (gui->plugin->lfo_section_open)
+            top_height /= 2;
+
+        lm->section_top_height    = top_height;
+        lm->section_bottom_height = lm->height - top_height;
+
+        lm->scale_x = (float)lm->width / (float)GUI_INIT_WIDTH;
+        lm->scale_y = (float)lm->section_top_height / (float)GUI_INIT_HEIGHT;
+
+        lm->height_header = HEIGHT_HEADER * content_scale * lm->scale_y;
+        lm->height_footer = HEIGHT_FOOTER * content_scale * lm->scale_y;
+
+        lm->content_x      = BORDER_PADDING;
+        lm->content_r      = lm->width - BORDER_PADDING;
+        lm->content_y      = floorf(lm->height_header + BORDER_PADDING);
+        lm->content_b      = floorf(lm->section_top_height - lm->height_footer - BORDER_PADDING * 2);
+        lm->content_height = lm->content_b - lm->content_y;
+    }
 
     // Begin frame
     {
@@ -662,8 +701,8 @@ void pw_tick(void* _gui)
 
         sg_swapchain swapchain;
         memset(&swapchain, 0, sizeof(swapchain));
-        swapchain.width        = gui_width;
-        swapchain.height       = gui_height;
+        swapchain.width        = lm->width;
+        swapchain.height       = lm->height;
         swapchain.sample_count = 1;
         swapchain.color_format = SG_PIXELFORMAT_BGRA8;
         swapchain.depth_format = SG_PIXELFORMAT_DEPTH_STENCIL;
@@ -680,68 +719,40 @@ void pw_tick(void* _gui)
         sg_begin_pass(&(sg_pass){.action = pass_action, .swapchain = swapchain});
     }
 
-    NVGcontext*    nvg = gui->nvg;
-    imgui_context* im  = &gui->imgui;
-
     imgui_begin_frame(im);
-
-    // Layout
-    enum
-    {
-        HEIGHT_HEADER = 32,
-        HEIGHT_FOOTER = 20,
-    };
-
-#ifdef __APPLE__
-    const float content_scale = dpi * 0.5;
-#else
-    const float    content_scale            = dpi;
-#endif
-
-    const float scale_x = (float)gui_width / (float)GUI_INIT_WIDTH;
-    const float scale_y = (float)gui_height / (float)GUI_INIT_HEIGHT;
-
-    const float height_header = HEIGHT_HEADER * content_scale * scale_y;
-    const float height_footer = HEIGHT_FOOTER * content_scale * scale_y;
-
-    const float content_x      = 8;
-    const float content_r      = gui_width - 8;
-    const float content_y      = floorf(height_header + 8);
-    const float content_b      = floorf(gui_height - height_footer - 16);
-    const float content_height = content_b - content_y;
 
 #ifdef __APPLE__
     // required for text to render properly...
-    nvgBeginFrame(gui->nvg, gui_width, gui_height, dpi);
+    nvgBeginFrame(gui->nvg, lm->width, lm->height, dpi);
 #else
-    nvgBeginFrame(gui->nvg, gui_width, gui_height, 1.0f);
+    nvgBeginFrame(gui->nvg, lm->width, lm->height, 1.0f);
 #endif
 
     // Background
     {
         nvgBeginPath(nvg);
-        nvgRect(nvg, 0, 0, gui_width, gui_height);
+        nvgRect(nvg, 0, 0, lm->width, lm->height);
         static const NVGcolour stop0 = nvgHexColour(0x151B33FF);
         static const NVGcolour stop1 = nvgHexColour(0x090E1FFF);
-        nvgFillPaint(nvg, nvgLinearGradient(nvg, 0, 0, 0, gui_height, stop0, stop1));
+        nvgFillPaint(nvg, nvgLinearGradient(nvg, 0, 0, 0, lm->height, stop0, stop1));
         nvgFill(nvg);
     }
 
     // Header
     {
-        nvgFontSize(nvg, content_scale * scale_y * 24);
+        nvgFontSize(nvg, content_scale * lm->scale_y * 24);
         nvgFillColour(nvg, COLOUR_BG_LIGHT);
         nvgTextAlign(nvg, NVG_ALIGN_CC);
-        nvgText(nvg, gui_width * 0.5f, height_header * 0.5f + 4, "SCREAM", NULL);
+        nvgText(nvg, lm->width * 0.5f, lm->height_header * 0.5f + 4, "SCREAM", NULL);
 
         // Sokol nanovg isn't rendering this for some reason :(
         // Logo
         // float x, y, w, h, img_scale;
 
         // h         = height_header - 4;
-        // img_scale = h / (float)gui->logo_img_height;
-        // w         = (float)gui->logo_img_width * img_scale;
-        // x = gui_width - 16 - w;
+        // img_scale = h / (float)gui->img_logo_height;
+        // w         = (float)gui->img_logo_width * img_scale;
+        // x = lm->width - 16 - w;
         // x = 16;
         // y = 4;
         // nvgBeginPath(nvg);
@@ -754,29 +765,30 @@ void pw_tick(void* _gui)
 
         // Doesn't look great rendered by nanovg...
         // nvgFillColor(nvg, (NVGcolor){1, 1, 1, 1});
-        // draw_cure_audio_logo_fixed_svg(nvg, (28.0f / 241.0f), gui_width - 16 - 20, 2);
+        // draw_cure_audio_logo_fixed_svg(nvg, (28.0f / 241.0f), lm->width - 16 - 20, 2);
     }
 
     // Main content background
     {
         nvgBeginPath(nvg);
-        nvgRoundedRect(nvg, 8, content_y, gui_width - 16, content_height, 8);
+        nvgRoundedRect(nvg, 8, lm->content_y, lm->width - 16, lm->content_height, 8);
         nvgFillColour(nvg, COLOUR_BG_LIGHT);
         nvgFill(nvg);
 
         // Inner shadows
         const float blur_radius = 8;
-        float       grad_x      = content_x - blur_radius * 0.5f;
-        float       grad_r      = content_r + blur_radius * 0.5f;
+        float       grad_x      = lm->content_x - blur_radius * 0.5f;
+        float       grad_r      = lm->content_r + blur_radius * 0.5f;
         float       grad_w      = grad_r - grad_x;
 
-        NVGcolour icol  = (NVGcolour){1, 1, 1, 0};
-        NVGcolour ocol  = (NVGcolour){1, 1, 1, 0.75};
-        NVGpaint  paint = nvgBoxGradient(nvg, grad_x, content_y, grad_w, content_height, 16, blur_radius, icol, ocol);
+        NVGcolour icol = (NVGcolour){1, 1, 1, 0};
+        NVGcolour ocol = (NVGcolour){1, 1, 1, 0.75};
+        NVGpaint  paint =
+            nvgBoxGradient(nvg, grad_x, lm->content_y, grad_w, lm->content_height, 16, blur_radius, icol, ocol);
 
         // Top inner shadow (light)
         nvgBeginPath(nvg);
-        nvgRoundedRectVarying(nvg, 8, content_y, gui_width - 16, blur_radius * 2, 8, 8, 0, 0);
+        nvgRoundedRectVarying(nvg, 8, lm->content_y, lm->width - 16, blur_radius * 2, 8, 8, 0, 0);
         nvgFillPaint(nvg, paint);
         nvgFill(nvg);
 
@@ -784,7 +796,7 @@ void pw_tick(void* _gui)
         paint.innerColor = (NVGcolour){0, 0, 0, 0};
         paint.outerColor = (NVGcolour){0, 0, 0, 0.75f};
         nvgBeginPath(nvg);
-        nvgRoundedRectVarying(nvg, 8, content_b - blur_radius * 2, gui_width - 16, blur_radius * 2, 0, 0, 8, 8);
+        nvgRoundedRectVarying(nvg, 8, lm->content_b - blur_radius * 2, lm->width - 16, blur_radius * 2, 0, 0, 8, 8);
         nvgFillPaint(nvg, paint);
         nvgFill(nvg);
 
@@ -793,9 +805,9 @@ void pw_tick(void* _gui)
         const float DOT_RADIUS   = DOT_DIAMETER / 2;
         const float DOT_PADDING  = 6;
 
-        const float left_dot_cx  = roundf(content_x + 8 + DOT_RADIUS);
-        const float right_dot_cx = roundf(content_r - 8 - DOT_RADIUS);
-        const float top_dot_cy   = roundf(content_y + 8 + DOT_RADIUS);
+        const float left_dot_cx  = roundf(lm->content_x + 8 + DOT_RADIUS);
+        const float right_dot_cx = roundf(lm->content_r - 8 - DOT_RADIUS);
+        const float top_dot_cy   = roundf(lm->content_y + 8 + DOT_RADIUS);
         const float dot_offset   = roundf(DOT_DIAMETER + DOT_PADDING);
 
         const xvec2f points[] = {
@@ -847,11 +859,11 @@ void pw_tick(void* _gui)
         };
         _Static_assert(_MINIMUM_WIDTH < GUI_MIN_WIDTH, "");
 
-        const float param_boundary_left  = scale_x * PARAMS_BOUNDARY_LEFT;
-        const float param_boundary_right = gui_width - scale_x * PARAMS_BOUNDARY_LEFT;
+        const float param_boundary_left  = lm->scale_x * PARAMS_BOUNDARY_LEFT;
+        const float param_boundary_right = lm->width - lm->scale_x * PARAMS_BOUNDARY_LEFT;
         const float PARAMS_WIDTH         = param_boundary_right - param_boundary_left;
 
-        const float param_scale = xm_maxf(1, xm_minf(scale_x, scale_y));
+        const float param_scale = xm_maxf(1, xm_minf(lm->scale_x, lm->scale_y));
 
         // For snapping to certain pixel boundaries
 #define snapf(val, interval) (roundf((val) / (interval)) * (interval))
@@ -900,7 +912,7 @@ void pw_tick(void* _gui)
                 };
                 imgui_pt pt;
                 pt.x                      = param_cx;
-                pt.y                      = roundf(content_y + content_height * 0.5f);
+                pt.y                      = roundf(lm->content_y + lm->content_height * 0.5f);
                 const float slider_radius = rotary_param_diameter * 0.5f;
 
                 xassert(param_id < ARRLEN(knobs_pos));
@@ -1054,8 +1066,8 @@ void pw_tick(void* _gui)
 
                 rect.x = roundf(param_cx - meter_width * 0.5);
                 rect.r = roundf(param_cx + meter_width * 0.5);
-                rect.y = roundf(gui_height * 0.5 - meter_height * 0.5f);
-                rect.b = roundf(gui_height * 0.5 + meter_height * 0.5f);
+                rect.y = roundf(lm->section_top_height * 0.5 - meter_height * 0.5f);
+                rect.b = roundf(lm->section_top_height * 0.5 + meter_height * 0.5f);
 
                 // Shadows
                 {
@@ -1246,8 +1258,8 @@ void pw_tick(void* _gui)
                         xm_fast_gain_to_dB(gui->input_gain_peaks_fast[0]),
                         xm_fast_gain_to_dB(gui->input_gain_peaks_fast[1]),
                     };
-                    float rt_peak_h[2] = {gui_height, gui_height};
-                    float rt_peak_y[2] = {gui_height, gui_height};
+                    float rt_peak_h[2] = {lm->section_top_height, lm->section_top_height};
+                    float rt_peak_y[2] = {lm->section_top_height, lm->section_top_height};
 
                     for (int ch = 0; ch < 2; ch++)
                     {
@@ -1455,8 +1467,8 @@ void pw_tick(void* _gui)
         const float param_font_size = 14 * content_scale * param_scale;
         nvgFontSize(nvg, 14 * content_scale * param_scale);
 
-        const float content_cy  = content_y + content_height * 0.5f;
-        const float text_offset = rotary_param_diameter * 0.5 + 40 * scale_y;
+        const float content_cy  = lm->content_y + lm->content_height * 0.5f;
+        const float text_offset = rotary_param_diameter * 0.5 + 40 * lm->scale_y;
         const float value_y     = content_cy - text_offset;
         const float label_b     = content_cy + text_offset;
 
@@ -1538,21 +1550,21 @@ void pw_tick(void* _gui)
         float dB = xm_fast_gain_to_dB(peak_gain);
         char  label[48];
         snprintf(label, sizeof(label), "[WARNING] Auto hardclipper: ON. %.2fdB", dB);
-        nvgText(nvg, gui_width - 20, gui_height - 20, label, NULL);
+        nvgText(nvg, lm->width - 20, gui_height - 20, label, NULL);
     }
 
 #ifdef CPLUG_BUILD_STANDALONE
     {
         Plugin* p = gui->plugin;
-        // plot_expander(nvg, gui_width, gui_height);
-        // plot_peak_detection(nvg, gui_width, gui_height);
-        // plot_peak_distortion(nvg, im, gui_width, gui_height);
-        // plot_peak_upwards_compression(nvg, im, gui_width, gui_height);
+        // plot_expander(nvg, lm->width, gui_height);
+        // plot_peak_detection(nvg, lm->width, gui_height);
+        // plot_peak_distortion(nvg, im, lm->width, gui_height);
+        // plot_peak_upwards_compression(nvg, im, lm->width, gui_height);
         float midi  = xt_atomic_load_f32(&p->gui_osc_midi);
         float phase = xt_atomic_load_f32(&p->gui_osc_phase);
-        plot_oscilloscope(nvg, gui_width - 230, 10, 220, 180, p->sample_rate, midi, phase);
+        plot_oscilloscope(nvg, lm->width - 230, 10, 220, 180, p->sample_rate, midi, phase);
 
-        imgui_rect  rect   = {gui_width - 220, 10, gui_width - 60, 25};
+        imgui_rect  rect   = {lm->width - 220, 10, lm->width - 60, 25};
         const float offset = 10 + (rect.b - rect.y);
         im_slider(nvg, im, rect, &g_output_gain_dB, -24, 0, "%.2fdB", "Output");
         // rect.y += offset;
@@ -1624,25 +1636,23 @@ void pw_tick(void* _gui)
 #endif
         len = snprintf(text, sizeof(text), "Scream %s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
         nvgTextAlign(nvg, NVG_ALIGN_BL);
-        nvgText(nvg, 8, gui_height - 8, text, text + len);
+        nvgText(nvg, 8, lm->section_top_height - 8, text, text + len);
     }
 
-    int next_gui_width  = 0;
-    int next_gui_height = 0;
+    // int next_gui_width  = 0;
+    // int next_gui_height = 0;
+    bool toggle_lfo_open = false;
     {
         imgui_rect lmao;
-        lmao.x = (gui_width / 2) - 20;
-        lmao.y = gui_height - 40;
+        lmao.x = (lm->width / 2) - 20;
+        lmao.y = lm->section_top_height - 40;
         lmao.r = lmao.x + 40;
         lmao.b = lmao.y + 40;
 
         unsigned events = imgui_get_events_rect(im, 'size', &lmao);
 
         if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
-        {
-            next_gui_width  = gui_width + 20;
-            next_gui_height = gui_height + 20;
-        }
+            toggle_lfo_open = true;
 
         nvgBeginPath(nvg);
         nvgRect(nvg, lmao.x, lmao.y, lmao.r - lmao.x, lmao.b - lmao.y);
@@ -1684,10 +1694,10 @@ void pw_tick(void* _gui)
             float top    = knobs_pos[i].y - knob_radius;
             float bottom = knobs_pos[i].y + knob_radius;
 
-            left   = xm_mapf(left, 0, gui_width, -1, 1);
-            right  = xm_mapf(right, 0, gui_width, -1, 1);
-            top    = xm_mapf(top, 0, gui_height, 1, -1);
-            bottom = xm_mapf(bottom, 0, gui_height, 1, -1);
+            left   = xm_mapf(left, 0, lm->width, -1, 1);
+            right  = xm_mapf(right, 0, lm->width, -1, 1);
+            top    = xm_mapf(top, 0, lm->height, 1, -1);
+            bottom = xm_mapf(bottom, 0, lm->height, 1, -1);
 
             int v_idx = i * 4;
 
@@ -1715,22 +1725,22 @@ void pw_tick(void* _gui)
     }
 
     // Logo shader
-    if (gui->logo_img.id)
+    if (gui->img_logo_id.id)
     {
         float x, y, w, h, img_scale;
 
-        float padding = 4 * scale_y;
-        h             = height_header - padding;
-        img_scale     = h / (float)gui->logo_img_height;
-        w             = (float)gui->logo_img_width * img_scale;
-        x             = gui_width - 16 - w;
+        float padding = 4 * lm->scale_y;
+        h             = lm->height_header - padding;
+        img_scale     = h / (float)gui->img_logo_height;
+        w             = (float)gui->img_logo_width * img_scale;
+        x             = lm->width - 16 - w;
         // x         = 16;
         y = padding;
 
-        float l = xm_mapf(x, 0, gui_width, -1, 1);
-        float r = xm_mapf(x + w, 0, gui_width, -1, 1);
-        float t = xm_mapf(y, 0, gui_height, 1, -1);
-        float b = xm_mapf(y + h, 0, gui_height, 1, -1);
+        float l = xm_mapf(x, 0, lm->width, -1, 1);
+        float r = xm_mapf(x + w, 0, lm->width, -1, 1);
+        float t = xm_mapf(y, 0, lm->height, 1, -1);
+        float b = xm_mapf(y + h, 0, lm->height, 1, -1);
 
         // clang-format off
         vertex_t verts[] = {
@@ -1740,20 +1750,20 @@ void pw_tick(void* _gui)
             {l, b, 0,     32767},
         };
 
-        sg_update_buffer(gui->logo_vbo, &SG_RANGE(verts));
-        sg_apply_pipeline(gui->logo_pip);
+        sg_update_buffer(gui->img_vbo, &SG_RANGE(verts));
+        sg_apply_pipeline(gui->img_pip);
 
         sg_bindings bind       = {0};
-        bind.vertex_buffers[0] = gui->logo_vbo;
-        bind.index_buffer      = gui->logo_ibo;
-        bind.images[IMG_texquad_tex]   = gui->logo_img;
-        bind.samplers[SMP_texquad_smp] = gui->logo_smp;
+        bind.vertex_buffers[0] = gui->img_vbo;
+        bind.index_buffer      = gui->img_ibo;
+        bind.images[IMG_texquad_tex]   = gui->img_logo_id;
+        bind.samplers[SMP_texquad_smp] = gui->img_smp;
 
         sg_apply_bindings(&bind);
         sg_draw(0, 6, 1);
     }
 
-    unsigned bg_events = imgui_get_events_rect(im, 'bg', &(imgui_rect){0,0,gui_width, gui_height});
+    unsigned bg_events = imgui_get_events_rect(im, 'bg', &(imgui_rect){0,0,lm->width, lm->height});
     if (bg_events & IMGUI_EVENT_MOUSE_ENTER)
     {
         pw_set_mouse_cursor(gui->pw, PW_CURSOR_DEFAULT);
@@ -1765,8 +1775,16 @@ void pw_tick(void* _gui)
 
     imgui_end_frame(&gui->imgui);
 
-    if (next_gui_width && next_gui_height)
+    if (toggle_lfo_open)
     {
-        gui->plugin->cplug_ctx->requestResize(gui->plugin->cplug_ctx, next_gui_width, next_gui_height);
+        gui->plugin->lfo_section_open = !gui->plugin->lfo_section_open;
+
+        int height = lm->height;
+        if (gui->plugin->lfo_section_open)
+            height *= 2;
+        else
+            height /= 2;
+
+        gui->plugin->cplug_ctx->requestResize(gui->plugin->cplug_ctx, lm->width, height);
     }
 }
