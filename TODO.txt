@@ -1,3 +1,5 @@
 - fix visual stutter when resizing
     - from corners and edges
     - when clicking the LFO show/hide button
+
+- a user reported if the input gain is crazy loud (eg. +30dB) the plugin produces silence. Investigate this
