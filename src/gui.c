@@ -618,22 +618,42 @@ void draw_lfo_section(GUI* gui)
     imgui_context* im  = &gui->imgui;
     LayoutMetrics* lm  = &gui->layout;
 
+    static const NVGcolour c_display_bg = nvgHexColour(0x090E20FF);
+    static const NVGcolour c_light_blue = nvgHexColour(0x97E6FCFF);
+
     float bot_content_height = lm->content_b - lm->top_content_bottom;
 
     const float display_y = lm->top_content_bottom + 8;
     const float display_w = (lm->content_r - lm->content_x) - 2 * 8;
     const float display_h = bot_content_height - 2 * 8;
+    const float display_b = display_y + display_h;
     nvgBeginPath(nvg);
     nvgRoundedRect(nvg, lm->content_x + 8, display_y, display_w, display_h, 6);
-    nvgFillColour(nvg, COLOUR_BG_DARK);
+    nvgFillColour(nvg, c_display_bg);
     nvgFill(nvg);
-
-    static const NVGcolour c_light_blue = nvgHexColour(0x97E6FCFF);
 
     enum
     {
-        LFO_TAB_HEIGHT = 28,
-        LFO_TAB_WIDTH  = 80,
+        LFO_TAB_HEIGHT           = 28,
+        LFO_TAB_WIDTH            = 80,
+        LFO_TAB_ICON_PADDING     = 8,
+        LFO_TAB_ICON_WIDTH       = 12, // Square icon
+        LFO_TAB_ARROWHEAD_LENGTH = 3,
+        LFO_TAB_ARROWBODY_LENGTH = 4,
+
+        GRID_BUTTON_WIDTH      = 32,
+        GRID_BUTTON_HEIGHT     = 24,
+        GRID_BUTTON_BUTTON_GAP = 8,
+        GRID_BUTTON_TEXT_GAP   = 16,
+
+        SHAPES_WIDTH = 40, // LFO shape buttons are square
+
+        CONTENT_PADDING_X = 32,
+        CONTENT_PADDING_Y = 16,
+
+        PATTERN_WIDTH                = 256,
+        PATTERN_NUMBER_LABEL_PADDING = 32,
+        PATTERN_SLIDER_WIDTH         = PATTERN_WIDTH - 2 * PATTERN_NUMBER_LABEL_PADDING,
     };
 
     imgui_rect lfo_tabs[2];
@@ -644,23 +664,310 @@ void draw_lfo_section(GUI* gui)
     lfo_tabs[1].x = gui_cx + 4;
     lfo_tabs[1].r = lfo_tabs[1].x + LFO_TAB_WIDTH;
 
-    lfo_tabs[0].y = display_y + 12;
-    lfo_tabs[1].y = display_y + 12;
+    // float top_padding = CONTENT_PADDING_Y;
+    lfo_tabs[0].y = display_y + CONTENT_PADDING_Y;
+    lfo_tabs[1].y = display_y + CONTENT_PADDING_Y;
     lfo_tabs[0].b = lfo_tabs[0].y + LFO_TAB_HEIGHT;
     lfo_tabs[1].b = lfo_tabs[1].y + LFO_TAB_HEIGHT;
+
+    const float top_text_cy = display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT * 0.5f;
+
+    static int active_lfo_idx = 0;
+
     for (int i = 0; i < ARRLEN(lfo_tabs); i++)
     {
         const imgui_rect* rect   = &lfo_tabs[i];
         const unsigned    wid    = 'tlfo' + i;
         const unsigned    events = imgui_get_events_rect(im, wid, rect);
 
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        {
+            println("TODO: LFO TAB %d", i);
+            active_lfo_idx = i;
+        }
+
+        NVGcolour  col1, col2;
+        const bool is_active = active_lfo_idx == i;
+        if (is_active)
+        {
+            col1 = c_light_blue;
+            col2 = c_display_bg;
+        }
+        else
+        {
+            col1 = c_display_bg;
+            col2 = c_light_blue;
+        }
+
         nvgBeginPath(nvg);
-        nvgRoundedRect(nvg, rect->x, rect->y, rect->r - rect->x, rect->b - rect->y, 4);
-        nvgFillColour(nvg, c_light_blue);
-        nvgFill(nvg);
+        if (is_active)
+        {
+            NVGcolour glow_col = nvgHexColour(0x459DB5FF);
+            float     width    = rect->r - rect->x;
+            float     height   = rect->b - rect->y;
+            nvgRoundedRect(nvg, rect->x, rect->y, width, height, 4);
+            nvgFillColour(nvg, col1);
+            nvgFill(nvg);
+        }
+        else
+        {
+            nvgRoundedRect(nvg, rect->x + 0.5, rect->y + 0.5, rect->r - rect->x, rect->b - rect->y, 4);
+            nvgStrokeColour(nvg, col2);
+            nvgStrokeWidth(nvg, 1.1);
+            nvgStroke(nvg);
+        }
 
         // TODO: draw text and icon
+
+        // snap half pixel
+        float icon_x = floorf(rect->x + LFO_TAB_ICON_PADDING) + 0.5f;
+        float icon_y = floorf(rect->y + LFO_TAB_ICON_PADDING) + 0.5f;
+        float icon_r = icon_x + LFO_TAB_ICON_WIDTH - 1;
+        float icon_b = icon_y + LFO_TAB_ICON_WIDTH - 1;
+
+        // nvgLineCap(nvg, NVG_ROUND); // Doesn't look great when lines are so small and thin
+        nvgLineCap(nvg, NVG_BUTT);
+        nvgStrokeWidth(nvg, 1);
+        nvgStrokeColour(nvg, col2);
+        nvgFillColour(nvg, col2);
+
+        nvgBeginPath(nvg);
+        // Top left arrow head
+        nvgMoveTo(nvg, icon_x, icon_y + LFO_TAB_ARROWHEAD_LENGTH);
+        nvgLineTo(nvg, icon_x, icon_y);
+        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWHEAD_LENGTH, icon_y);
+        // Top right
+        nvgMoveTo(nvg, icon_r - LFO_TAB_ARROWHEAD_LENGTH, icon_y);
+        nvgLineTo(nvg, icon_r, icon_y);
+        nvgLineTo(nvg, icon_r, icon_y + LFO_TAB_ARROWHEAD_LENGTH);
+        // Bottom left
+        nvgMoveTo(nvg, icon_x, icon_b - LFO_TAB_ARROWHEAD_LENGTH);
+        nvgLineTo(nvg, icon_x, icon_b);
+        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWHEAD_LENGTH, icon_b);
+        // Bottom right
+        nvgMoveTo(nvg, icon_r - LFO_TAB_ARROWHEAD_LENGTH, icon_b);
+        nvgLineTo(nvg, icon_r, icon_b);
+        nvgLineTo(nvg, icon_r, icon_b - LFO_TAB_ARROWHEAD_LENGTH);
+
+        // Arrow bodies
+        nvgMoveTo(nvg, icon_x, icon_y);
+        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWBODY_LENGTH, icon_y + LFO_TAB_ARROWBODY_LENGTH);
+        nvgMoveTo(nvg, icon_r, icon_y);
+        nvgLineTo(nvg, icon_r - LFO_TAB_ARROWBODY_LENGTH, icon_y + LFO_TAB_ARROWBODY_LENGTH);
+        nvgMoveTo(nvg, icon_x, icon_b);
+        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWBODY_LENGTH, icon_b - LFO_TAB_ARROWBODY_LENGTH);
+        nvgMoveTo(nvg, icon_r, icon_b);
+        nvgLineTo(nvg, icon_r - LFO_TAB_ARROWBODY_LENGTH, icon_b - LFO_TAB_ARROWBODY_LENGTH);
+
+        // icon/text seperator
+        nvgMoveTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_y - 2.5f);
+        nvgLineTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_b + 2.5f);
+
+        nvgStroke(nvg);
+
+        char label[]  = "LFO 1";
+        label[4]     += i;
+
+        nvgTextAlign(nvg, NVG_ALIGN_CR);
+        nvgText(nvg, rect->r - LFO_TAB_ICON_PADDING, top_text_cy, label, label + 5);
     }
+
+    const float content_x = lm->content_x + CONTENT_PADDING_X;
+    const float content_r = lm->content_r - CONTENT_PADDING_X;
+
+    // Grid labels & buttons
+    {
+        static const char   label_grid[]     = "GRID";
+        static const char   label_length[]   = "LENGTH";
+        static const size_t label_grid_len   = ARRLEN(label_grid) - 1;
+        static const size_t label_length_len = ARRLEN(label_length) - 1;
+
+        NVGglyphPosition glyphs[label_length_len];
+
+        nvgFontSize(nvg, 14);
+        nvgFillColour(nvg, COLOUR_TEXT);
+        nvgTextAlign(nvg, NVG_ALIGN_CL);
+
+        nvgTextGlyphPositions(nvg, 0, 0, label_grid, label_grid + label_grid_len, glyphs, label_length_len);
+        const float label_grid_width = glyphs[label_grid_len - 1].maxx;
+
+        nvgTextGlyphPositions(nvg, 0, 0, label_length, label_length + label_length_len, glyphs, label_length_len);
+        const float label_length_width = glyphs[label_length_len - 1].maxx;
+
+        nvgTextAlign(nvg, NVG_ALIGN_CL);
+        nvgText(nvg, content_x, top_text_cy, label_grid, label_grid + label_grid_len);
+
+        nvgTextAlign(nvg, NVG_ALIGN_CR);
+        float label_length_r = content_r - GRID_BUTTON_WIDTH * 2 - GRID_BUTTON_BUTTON_GAP - GRID_BUTTON_TEXT_GAP;
+        nvgText(nvg, label_length_r, top_text_cy, label_length, label_length + label_length_len);
+
+        nvgTextAlign(nvg, NVG_ALIGN_CL);
+
+        const float button_top    = top_text_cy - GRID_BUTTON_HEIGHT * 0.5f;
+        const float button_bottom = top_text_cy + GRID_BUTTON_HEIGHT * 0.5f;
+        enum
+        {
+            BUTTON_GRID_HALF,
+            BUTTON_GRID_DOUBLE,
+            BUTTON_LENGTH_HALF,
+            BUTTON_LENGTH_DOUBLE,
+            BUTTON_COUNT,
+        };
+        imgui_rect buttons[BUTTON_COUNT];
+
+        buttons[BUTTON_GRID_HALF].x     = content_x + label_grid_width + GRID_BUTTON_TEXT_GAP;
+        buttons[BUTTON_GRID_DOUBLE].x   = buttons[BUTTON_GRID_HALF].x + GRID_BUTTON_WIDTH + GRID_BUTTON_BUTTON_GAP;
+        buttons[BUTTON_LENGTH_HALF].x   = content_r - 2 * GRID_BUTTON_WIDTH - GRID_BUTTON_BUTTON_GAP;
+        buttons[BUTTON_LENGTH_DOUBLE].x = content_r - GRID_BUTTON_WIDTH;
+
+        static const char* btn_labels[] = {"÷2", "×2"};
+
+        for (int i = 0; i < BUTTON_COUNT; i++)
+        {
+            imgui_rect* rect = buttons + i;
+
+            rect->y = button_top;
+            rect->r = rect->x + GRID_BUTTON_WIDTH;
+            rect->b = button_bottom;
+
+            unsigned wid    = 'gbtn' + i;
+            unsigned events = imgui_get_events_rect(im, wid, rect);
+
+            if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+            {
+                println("CLICKED BUTTON: %d", i);
+            }
+
+            float btn_y   = rect->y;
+            float text_cy = top_text_cy;
+            float btn_cx  = 0.5f * (rect->r + rect->x);
+
+            if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
+            {
+                btn_y   += 1;
+                text_cy += 1;
+            }
+            nvgBeginPath(nvg);
+            nvgRoundedRect(nvg, rect->x, btn_y, rect->r - rect->x, rect->b - rect->y, 2);
+            nvgFillColour(nvg, COLOUR_GREY_3);
+            nvgFill(nvg);
+
+            nvgFillColour(nvg, COLOUR_GREY_1);
+            int txt_idx = i & 1;
+            nvgTextAlign(nvg, NVG_ALIGN_CC);
+            nvgText(nvg, btn_cx, text_cy, btn_labels[txt_idx], NULL);
+        }
+    }
+
+    enum ShapeButtonType
+    {
+        SHAPE_FLAT,
+        SHAPE_LINEAR_ASC,
+        SHAPE_LINEAR_DESC,
+        SHAPE_CONVEX_ASC,
+        SHAPE_CONCAVE_DESC,
+        SHAPE_CONCAVE_ASC,
+        SHAPE_CONVEX_DESC,
+        SHAPE_TRIANGLE_UP,
+        SHAPE_TRIANGLE_DOWN,
+        SHAPE_COUNT,
+    };
+
+    float shape_x       = content_x;
+    float shape_y       = display_b - CONTENT_PADDING_Y - SHAPES_WIDTH;
+    float shape_inner_y = shape_y + 8;
+    float shape_inner_b = shape_y + SHAPES_WIDTH - 8;
+    float shape_inner_x = shape_x + 8;
+    float shape_inner_r = shape_x + SHAPES_WIDTH - 8;
+
+    nvgBeginPath(nvg);
+    for (int i = 0; i < SHAPE_COUNT; i++)
+    {
+        imgui_rect rect = {shape_x, shape_y, shape_x + SHAPES_WIDTH, shape_y + SHAPES_WIDTH};
+
+        unsigned wid    = 'lshp' + i;
+        unsigned events = imgui_get_events_rect(im, wid, &rect);
+
+        // nvgBeginPath(nvg);
+        // nvgFillColour(nvg, COLOUR_BG_LIGHT);
+        // nvgRect(nvg, shape_x, shape_y, SHAPES_WIDTH, SHAPES_WIDTH);
+        // nvgFill(nvg);
+
+        const enum ShapeButtonType type = i;
+        switch (type)
+        {
+        case SHAPE_FLAT:
+        {
+            float cy = floorf(shape_y + SHAPES_WIDTH * 0.5f) + 0.5f;
+            nvgMoveTo(nvg, shape_inner_x, cy);
+            nvgLineTo(nvg, shape_inner_r, cy);
+            break;
+        }
+        case SHAPE_LINEAR_ASC:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
+            nvgLineTo(nvg, shape_inner_r, shape_inner_y);
+            break;
+        case SHAPE_LINEAR_DESC:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
+            nvgLineTo(nvg, shape_inner_r, shape_inner_b);
+            break;
+        case SHAPE_CONCAVE_ASC:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
+            nvgQuadTo(nvg, shape_inner_r, shape_inner_b, shape_inner_r, shape_inner_y);
+            break;
+        case SHAPE_CONVEX_ASC:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
+            nvgQuadTo(nvg, shape_inner_x, shape_inner_y, shape_inner_r, shape_inner_y);
+            break;
+        case SHAPE_CONCAVE_DESC:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
+            nvgQuadTo(nvg, shape_inner_x, shape_inner_b, shape_inner_r, shape_inner_b);
+            break;
+        case SHAPE_CONVEX_DESC:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
+            nvgQuadTo(nvg, shape_inner_r, shape_inner_y, shape_inner_r, shape_inner_b);
+            break;
+        case SHAPE_TRIANGLE_UP:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
+            nvgLineTo(nvg, shape_x + SHAPES_WIDTH * 0.5f, shape_inner_y);
+            nvgLineTo(nvg, shape_inner_r, shape_inner_b);
+            break;
+        case SHAPE_TRIANGLE_DOWN:
+            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
+            nvgLineTo(nvg, shape_x + SHAPES_WIDTH * 0.5f, shape_inner_b);
+            nvgLineTo(nvg, shape_inner_r, shape_inner_y);
+            break;
+        case SHAPE_COUNT:
+            break;
+        }
+
+        shape_x       += SHAPES_WIDTH;
+        shape_inner_x += SHAPES_WIDTH;
+        shape_inner_r += SHAPES_WIDTH;
+    }
+    nvgStrokeColour(nvg, nvgHexColour(0xffffffff));
+    nvgStrokeWidth(nvg, 1.2f);
+    nvgStroke(nvg);
+
+    float pattern_r  = content_r;
+    float pattern_x  = xm_maxf(pattern_r - PATTERN_WIDTH, shape_x);
+    float pattern_cx = 0.5f * (pattern_x + pattern_r);
+    float pattern_cy = shape_y + SHAPES_WIDTH * 0.5f;
+    nvgTextAlign(nvg, NVG_ALIGN_BC);
+    nvgFillColour(nvg, COLOUR_TEXT);
+    nvgText(nvg, pattern_cx, display_b - CONTENT_PADDING_Y, "PATTERN", NULL);
+
+    nvgTextAlign(nvg, NVG_ALIGN_CL);
+    nvgText(nvg, pattern_x, pattern_cy, "1", NULL);
+    nvgTextAlign(nvg, NVG_ALIGN_CR);
+    nvgText(nvg, pattern_r, pattern_cy, "8", NULL);
+    nvgBeginPath(nvg);
+
+    float pattern_line_y = floorf(pattern_cy) + 0.5f;
+    nvgMoveTo(nvg, pattern_x + PATTERN_NUMBER_LABEL_PADDING, pattern_line_y);
+    nvgLineTo(nvg, pattern_r - PATTERN_NUMBER_LABEL_PADDING, pattern_line_y);
+    nvgStrokeColour(nvg, COLOUR_TEXT);
+    nvgStroke(nvg);
 }
 
 void pw_tick(void* _gui)
@@ -760,7 +1067,7 @@ void pw_tick(void* _gui)
 
         float content_height = lm->content_b - lm->content_y;
         if (lfo_open)
-            lm->top_content_height = content_height * 0.5f;
+            lm->top_content_height = floorf(content_height * 0.5f);
         else
             lm->top_content_height = content_height;
         lm->top_content_bottom = lm->content_y + lm->top_content_height;

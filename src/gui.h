@@ -98,13 +98,14 @@ static inline void nvgStrokeColour(NVGcontext* ctx, NVGcolour col) { nvgStrokeCo
                                      ( hex        & 0xff) / 255.0f}
 // clang-format on
 
-static const NVGcolour COLOUR_TEXT = nvgHexColour(0x858C94FF);
+static const NVGcolour COLOUR_TEXT = nvgHexColour(0x828A91FF);
 
 static const NVGcolour COLOUR_BG_LIGHT = nvgHexColour(0xC9D3DDFF);
 static const NVGcolour COLOUR_BG_DARK  = nvgHexColour(0x151B32FF);
 
 static const NVGcolour COLOUR_GREY_1 = nvgHexColour(0xB5BEC7FF);
 static const NVGcolour COLOUR_GREY_2 = nvgHexColour(0x636A78FF);
+static const NVGcolour COLOUR_GREY_3 = nvgHexColour(0x353940FF);
 
 // For snapping to certain pixel boundaries
 #define snapf(val, interval) (roundf((val) / (interval)) * (interval))
