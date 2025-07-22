@@ -398,7 +398,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
     ted_init(&gui->texteditor);
 
-    gui->frame_end_time     = xtime_now_ns();
+    gui->gui_create_time = gui->frame_end_time = xtime_now_ns();
+
     gui->imgui.frame.events = 1 << PW_EVENT_RESIZE;
 
     return gui;
@@ -457,6 +458,8 @@ bool pw_event(const PWEvent* event)
         gui->plugin->width  = event->resize.width;
         gui->plugin->height = event->resize.height;
         gui->scale          = (float)event->resize.width / (float)GUI_INIT_WIDTH;
+
+        gui->last_resize_time = xtime_now_ns();
     }
     imgui_send_event(&gui->imgui, event);
 
@@ -2051,6 +2054,18 @@ void pw_tick(void* _gui)
         len = snprintf(text, sizeof(text), "Scream %s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
         nvgTextAlign(nvg, NVG_ALIGN_BL);
         nvgText(nvg, 8, lm->height - 8, text, text + len);
+
+        // Show window dimensions w/h
+        uint64_t time_since_creation_ns = gui->frame_start_time - gui->gui_create_time;
+        uint64_t time_since_resize_ns   = gui->frame_start_time - gui->last_resize_time;
+        uint64_t threshold_1sec         = 1000000000;
+        uint64_t threshold_1_2sec       = 1200000000;
+        if (time_since_resize_ns < threshold_1sec && time_since_creation_ns > threshold_1_2sec)
+        {
+            len = snprintf(text, sizeof(text), "%dx%d", lm->width, lm->height);
+            nvgTextAlign(nvg, NVG_ALIGN_BR);
+            nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
+        }
     }
 
     bool toggle_lfo_open = false;
