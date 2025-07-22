@@ -67,13 +67,21 @@ void pw_get_info(struct PWGetInfo* info)
     }
     else if (info->type == PW_INFO_CONSTRAIN_SIZE)
     {
+        GUI* gui = info->constrain_size.gui;
+
         uint32_t width  = info->constrain_size.width;
         uint32_t height = info->constrain_size.height;
 
+        uint32_t min_height = GUI_MIN_HEIGHT;
+        if (gui->plugin->lfo_section_open)
+        {
+            min_height += gui->layout.top_content_height;
+        }
+
         if (width < GUI_MIN_WIDTH)
             width = GUI_MIN_WIDTH;
-        if (height < GUI_MIN_HEIGHT)
-            height = GUI_MIN_HEIGHT;
+        if (height < min_height)
+            height = min_height;
 
         info->constrain_size.width  = width;
         info->constrain_size.height = height;
