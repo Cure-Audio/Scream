@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <nanovg.h>
+#include <nanovg2.h>
 #include <sokol_gfx.h>
 
 // struct sg_image;

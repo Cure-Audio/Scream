@@ -1,7 +1,7 @@
 #pragma once
 #include "imgui.h"
 #include "plugin.h"
-#include <nanovg.h>
+#include <nanovg2.h>
 #include <sokol_gfx.h>
 
 #include "libs/texteditor.h"

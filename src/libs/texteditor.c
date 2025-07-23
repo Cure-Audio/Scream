@@ -1,6 +1,5 @@
 #include "texteditor.h"
 #include "../gui.h"
-#include <nanovg.h>
 #include <stdbool.h>
 #include <utf8.h>
 #include <xhl/array.h>

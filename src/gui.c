@@ -16,7 +16,7 @@
 #include <xhl/vector.h>
 
 #include <cplug_extensions/window.h>
-#include <nanovg.h>
+#include <nanovg2.h>
 #include <nanovg_sokol.h>
 #include <stb_image.h>
 
@@ -1280,11 +1280,12 @@ void pw_tick(void* _gui)
 
     imgui_begin_frame(im);
 
+    nvgBeginFrame(nvg);
 #ifdef __APPLE__
     // required for text to render properly...
-    nvgBeginFrame(gui->nvg, lm->width, lm->height, dpi);
+    nvgBeginDraw(gui->nvg, lm->width, lm->height, dpi);
 #else
-    nvgBeginFrame(gui->nvg, lm->width, lm->height, 1.0f);
+    nvgBeginDraw(gui->nvg, lm->width, lm->height, 1.0f);
 #endif
 
     // Background
@@ -2185,6 +2186,7 @@ void pw_tick(void* _gui)
     }
 
     // End frame
+    nvgEndDraw(nvg);
     nvgEndFrame(gui->nvg);
 
     // Knob shader

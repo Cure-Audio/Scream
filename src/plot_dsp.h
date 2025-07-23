@@ -7,7 +7,7 @@
 #include "dsp.h"
 #include "imgui.h"
 #include <math.h>
-#include <nanovg.h>
+#include <nanovg2.h>
 #include <stdio.h>
 #include <string.h>
 

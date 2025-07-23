@@ -406,6 +406,12 @@ struct SGNVGcontext
     int             cuniforms;
     int             nuniforms;
 
+    int draw_start_ncalls;
+    int draw_start_npaths;
+    int draw_start_nverts;
+    int draw_start_nindexes;
+    int draw_start_nuniforms;
+
     // state
     int            pipelineCacheIndex;
     sg_blend_state blend;
@@ -843,11 +849,11 @@ sgnvg__preparePipelineUniforms(SGNVGcontext* sg, SGNVGpipelineType pipelineType,
 #define NANOVG_SG_TOSTRING_(X) #X
 #define NANOVG_SG_TOSTRING(X)  NANOVG_SG_TOSTRING_(X)
 
-static int sgnvg__renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
+static int nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
 
-static int sgnvg__renderCreate(void* uptr)
+static int nvg_impl_renderCreate(void* uptr)
 {
-    SGNVG_EXTLOG("sgnvg__renderCreate(uptr: %p)\n", uptr);
+    SGNVG_EXTLOG("nvg_impl_renderCreate(uptr: %p)\n", uptr);
     SGNVGcontext* sg    = (SGNVGcontext*)uptr;
     int           align = 4;
 
@@ -883,15 +889,15 @@ static int sgnvg__renderCreate(void* uptr)
 
     // Some platforms does not allow to have samples to unset textures.
     // Create empty one which is bound when there's no texture specified.
-    sg->dummyTex = sgnvg__renderCreateTexture(sg, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
+    sg->dummyTex = nvg_impl_renderCreateTexture(sg, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
 
     return 1;
 }
 
-static int sgnvg__renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data)
+static int nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data)
 {
     SGNVG_EXTLOG(
-        "sgnvg__renderCreateTexture(uptr: %p, type: %d, w: %d, h: %d, imageFlags: %d, data: %p)\n",
+        "nvg_impl_renderCreateTexture(uptr: %p, type: %d, w: %d, h: %d, imageFlags: %d, data: %p)\n",
         uptr,
         type,
         w,
@@ -968,17 +974,17 @@ static int sgnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
     return tex->id;
 }
 
-static int sgnvg__renderDeleteTexture(void* uptr, int image)
+static int nvg_impl_renderDeleteTexture(void* uptr, int image)
 {
-    SGNVG_EXTLOG("sgnvg__renderDeleteTexture(uptr: %p, image: %d)\n", uptr, image);
+    SGNVG_EXTLOG("nvg_impl_renderDeleteTexture(uptr: %p, image: %d)\n", uptr, image);
     SGNVGcontext* sg = (SGNVGcontext*)uptr;
     return sgnvg__deleteTexture(sg, image);
 }
 
-static int sgnvg__renderUpdateTexture(void* uptr, int image, int x0, int y0, int w, int h, const unsigned char* data)
+static int nvg_impl_renderUpdateTexture(void* uptr, int image, int x0, int y0, int w, int h, const unsigned char* data)
 {
     SGNVG_EXTLOG(
-        "sgnvg__renderUpdateTexture(uptr: %p, image: %d, x0: %d, y0: %d, w: %d, h: %d, data: %p)\n",
+        "nvg_impl_renderUpdateTexture(uptr: %p, image: %d, x0: %d, y0: %d, w: %d, h: %d, data: %p)\n",
         uptr,
         image,
         x0,
@@ -1020,9 +1026,9 @@ static int sgnvg__renderUpdateTexture(void* uptr, int image, int x0, int y0, int
     return 1;
 }
 
-static int sgnvg__renderGetTextureSize(void* uptr, int image, int* w, int* h)
+static int nvg_impl_renderGetTextureSize(void* uptr, int image, int* w, int* h)
 {
-    SGNVG_EXTLOG("sgnvg__renderGetTextureSize(uptr: %p, image: %d, w: %d, h: %d)\n", uptr, image, *w, *h);
+    SGNVG_EXTLOG("nvg_impl_renderGetTextureSize(uptr: %p, image: %d, w: %d, h: %d)\n", uptr, image, *w, *h);
     SGNVGcontext* sg  = (SGNVGcontext*)uptr;
     SGNVGtexture* tex = sgnvg__findTexture(sg, image);
     if (tex == NULL)
@@ -1156,10 +1162,10 @@ static int sgnvg__convertPaint(
     return 1;
 }
 
-static void sgnvg__renderViewport(void* uptr, float width, float height, float devicePixelRatio)
+static void nvg_impl_beginDraw(void* uptr, float width, float height, float devicePixelRatio)
 {
     SGNVG_EXTLOG(
-        "sgnvg__renderViewport(uptr: %p, width: %f, height: %f, devicePixelRatio: %f)\n",
+        "nvg_impl_beginDraw(uptr: %p, width: %f, height: %f, devicePixelRatio: %f)\n",
         uptr,
         width,
         height,
@@ -1168,6 +1174,12 @@ static void sgnvg__renderViewport(void* uptr, float width, float height, float d
     SGNVGcontext* sg     = (SGNVGcontext*)uptr;
     sg->view.viewSize[0] = width;
     sg->view.viewSize[1] = height;
+
+    sg->draw_start_ncalls    = sg->ncalls;
+    sg->draw_start_npaths    = sg->npaths;
+    sg->draw_start_nverts    = sg->nverts;
+    sg->draw_start_nindexes  = sg->nindexes;
+    sg->draw_start_nuniforms = sg->nuniforms;
 }
 
 static void sgnvg__fill(SGNVGcontext* sg, SGNVGcall* call)
@@ -1255,9 +1267,9 @@ static void sgnvg__triangles(SGNVGcontext* sg, SGNVGcall* call)
     sg_draw(call->triangleOffset, call->triangleCount, 1);
 }
 
-static void sgnvg__renderCancel(void* uptr)
+static void nvg_impl_renderCancel(void* uptr)
 {
-    SGNVG_EXTLOG("sgnvg__renderCancel(uptr: %p)\n", uptr);
+    SGNVG_EXTLOG("nvg_impl_renderCancel(uptr: %p)\n", uptr);
     SGNVGcontext* sg = (SGNVGcontext*)uptr;
     sg->nverts       = 0;
     sg->npaths       = 0;
@@ -1316,9 +1328,9 @@ static SGNVGblend sgnvg__blendCompositeOperation(NVGcompositeOperationState op)
     return blend;
 }
 
-static void sgnvg__renderFlush(void* uptr)
+static void nvg_impl_renderFlush(void* uptr)
 {
-    SGNVG_EXTLOG("sgnvg__renderFlush(uptr: %p)\n", uptr);
+    SGNVG_EXTLOG("nvg_impl_renderFlush(uptr: %p)\n", uptr);
     SGNVGcontext* sg = (SGNVGcontext*)uptr;
     int           i;
 
@@ -1340,7 +1352,8 @@ static void sgnvg__renderFlush(void* uptr)
         }
     }
 
-    if (sg->ncalls > 0 && sg->nverts && sg->nindexes)
+    if (sg->ncalls > sg->draw_start_ncalls && sg->nverts > sg->draw_start_nverts &&
+        sg->nindexes > sg->draw_start_nindexes)
     {
         if (sg->cverts_gpu < sg->nverts) // resize GPU vertex buffer
         {
@@ -1357,7 +1370,9 @@ static void sgnvg__renderFlush(void* uptr)
                 });
         }
         // upload vertex data
-        sg_update_buffer(sg->vertBuf, &(sg_range){sg->verts, sg->nverts * sizeof(*sg->verts)});
+        SGNVGattribute* verts_begin = sg->verts + sg->draw_start_nverts;
+        int             num_verts   = sg->nverts - sg->draw_start_nverts;
+        sg_update_buffer(sg->vertBuf, &(sg_range){verts_begin, num_verts * sizeof(*sg->verts)});
 
         if (sg->cindexes_gpu < sg->nindexes) // resize GPU index buffer
         {
@@ -1374,9 +1389,11 @@ static void sgnvg__renderFlush(void* uptr)
                 });
         }
         // upload index data
-        sg_update_buffer(sg->indexBuf, &(sg_range){sg->indexes, sg->nindexes * sizeof(*sg->indexes)});
+        const uint32_t* indexes_begin = sg->indexes + sg->draw_start_nindexes;
+        int             num_indexes   = sg->nindexes - sg->draw_start_nindexes;
+        sg_update_buffer(sg->indexBuf, &(sg_range){indexes_begin, num_indexes * sizeof(*sg->indexes)});
 
-        for (i = 0; i < sg->ncalls; i++)
+        for (i = sg->draw_start_ncalls; i < sg->ncalls; i++)
         {
             SGNVGcall* call            = &sg->calls[i];
             sg->blend.src_factor_rgb   = call->blendFunc.srcRGB;
@@ -1393,11 +1410,12 @@ static void sgnvg__renderFlush(void* uptr)
             else if (call->type == SGNVG_TRIANGLES)
                 sgnvg__triangles(sg, call);
         }
-
-        // sg_uninit_pipeline(sg->pipeline);
-        // sgnvg__initPipeline(sg, &(sg_stencil_state){0}, SG_COLORMASK_RGBA, SG_CULLMODE_NONE);
     }
+}
 
+void nvg_impl_endFrame(void* uptr)
+{
+    SGNVGcontext* sg = (SGNVGcontext*)uptr;
     // Reset calls
     sg->nverts    = 0;
     sg->nindexes  = 0;
@@ -1575,7 +1593,7 @@ static void sgnvg__generateTriangleStripIndexes(uint32_t* indexes, int offset, i
     }
 }
 
-static void sgnvg__renderFill(
+static void nvg_impl_renderFill(
     void*                      uptr,
     NVGpaint*                  paint,
     NVGcompositeOperationState compositeOperation,
@@ -1586,7 +1604,8 @@ static void sgnvg__renderFill(
     int                        npaths)
 {
     SGNVG_EXTLOG(
-        "sgnvg__renderFill(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, bounds: "
+        "nvg_impl_renderFill(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, "
+        "bounds: "
         "%f, paths: %p, npaths: %d)\n",
         uptr,
         paint,
@@ -1708,7 +1727,7 @@ error:
         sg->ncalls--;
 }
 
-static void sgnvg__renderStroke(
+static void nvg_impl_renderStroke(
     void*                      uptr,
     NVGpaint*                  paint,
     NVGcompositeOperationState compositeOperation,
@@ -1719,7 +1738,7 @@ static void sgnvg__renderStroke(
     int                        npaths)
 {
     SGNVG_EXTLOG(
-        "sgnvg__renderStroke(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, "
+        "nvg_impl_renderStroke(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, "
         "strokeWidth: %f, paths: %p, npaths: %d)\n",
         uptr,
         paint,
@@ -1823,7 +1842,7 @@ error:
         sg->ncalls--;
 }
 
-static void sgnvg__renderTriangles(
+static void nvg_impl_renderTriangles(
     void*                      uptr,
     NVGpaint*                  paint,
     NVGcompositeOperationState compositeOperation,
@@ -1833,7 +1852,7 @@ static void sgnvg__renderTriangles(
     float                      fringe)
 {
     SGNVG_EXTLOG(
-        "sgnvg__renderTriangles(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, verts: %p, "
+        "nvg_impl_renderTriangles(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, verts: %p, "
         "nverts: %d, fringe: %f)\n",
         uptr,
         paint,
@@ -1888,9 +1907,9 @@ error:
         sg->ncalls--;
 }
 
-static void sgnvg__renderDelete(void* uptr)
+static void nvg_impl_renderDelete(void* uptr)
 {
-    SGNVG_EXTLOG("sgnvg__renderDelete(uptr: %p)\n", uptr);
+    SGNVG_EXTLOG("nvg_impl_renderDelete(uptr: %p)\n", uptr);
     SGNVGcontext* sg = (SGNVGcontext*)uptr;
     int           i;
     if (sg == NULL)
@@ -1919,7 +1938,7 @@ static void sgnvg__renderDelete(void* uptr)
         sg_uninit_buffer(sg->indexBuf);
     sg_dealloc_buffer(sg->indexBuf);
 
-    sgnvg__renderDeleteTexture(sg, sg->dummyTex);
+    nvg_impl_renderDeleteTexture(sg, sg->dummyTex);
     for (i = 0; i < sg->ntextures; i++)
     {
         if (sg->textures[i].img.id != 0 && (sg->textures[i].flags & NVG_IMAGE_NODELETE) == 0)
@@ -1965,20 +1984,8 @@ NVGcontext* nvgCreateSokol(int flags)
     memset(sg, 0, sizeof(SGNVGcontext));
 
     memset(&params, 0, sizeof(params));
-    params.renderCreate         = sgnvg__renderCreate;
-    params.renderCreateTexture  = sgnvg__renderCreateTexture;
-    params.renderDeleteTexture  = sgnvg__renderDeleteTexture;
-    params.renderUpdateTexture  = sgnvg__renderUpdateTexture;
-    params.renderGetTextureSize = sgnvg__renderGetTextureSize;
-    params.renderViewport       = sgnvg__renderViewport;
-    params.renderCancel         = sgnvg__renderCancel;
-    params.renderFlush          = sgnvg__renderFlush;
-    params.renderFill           = sgnvg__renderFill;
-    params.renderStroke         = sgnvg__renderStroke;
-    params.renderTriangles      = sgnvg__renderTriangles;
-    params.renderDelete         = sgnvg__renderDelete;
-    params.userPtr              = sg;
-    params.edgeAntiAlias        = flags & NVG_ANTIALIAS ? 1 : 0;
+    params.userPtr       = sg;
+    params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
 
     sg->flags = flags;
 
