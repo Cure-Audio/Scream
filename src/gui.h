@@ -40,6 +40,8 @@ typedef struct LayoutMetrics
 
 typedef struct GUI
 {
+    LinkedArena* arena;
+
     Plugin*     plugin;
     void*       pw;
     void*       sg;

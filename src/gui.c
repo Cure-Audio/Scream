@@ -203,10 +203,14 @@ void* pw_create_gui(void* _plugin, void* _pw)
 {
     CPLUG_LOG_ASSERT(_plugin);
     CPLUG_LOG_ASSERT(_pw);
+
+    LinkedArena* arena = linked_arena_create(1024 * 64);
+    GUI*         gui   = linked_arena_alloc(arena, sizeof(*gui));
+    gui->arena         = arena;
+    gui->pw            = _pw;
+
     Plugin* p   = _plugin;
-    GUI*    gui = MY_CALLOC(1, sizeof(*gui));
     gui->plugin = p;
-    gui->pw     = _pw;
     p->gui      = gui;
 
     sg_environment env;
@@ -430,7 +434,6 @@ void pw_destroy_gui(void* _gui)
     sg_shutdown(gui->sg);
 
     gui->plugin->gui = NULL;
-    MY_FREE(gui);
 
 #ifdef CPLUG_BUILD_STANDALONE
     if (buffer_audio)
@@ -451,6 +454,8 @@ void pw_destroy_gui(void* _gui)
 #endif // CPLUG_BUILD_STANDALONE
 
     // TODO: save last used width & height to settings file
+
+    linked_arena_destroy(gui->arena);
 }
 
 bool pw_event(const PWEvent* event)
@@ -625,23 +630,7 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events, float dr
 
 void draw_lfo_section(GUI* gui)
 {
-    NVGcontext*    nvg = gui->nvg;
-    imgui_context* im  = &gui->imgui;
-    LayoutMetrics* lm  = &gui->layout;
-
-    static const NVGcolour c_display_bg = nvgHexColour(0x090E20FF);
-    static const NVGcolour c_light_blue = nvgHexColour(0x97E6FCFF);
-
-    float bot_content_height = lm->content_b - lm->top_content_bottom;
-
-    const float display_y = lm->top_content_bottom + 8;
-    const float display_w = (lm->content_r - lm->content_x) - 2 * 8;
-    const float display_h = bot_content_height - 2 * 8;
-    const float display_b = display_y + display_h;
-    nvgBeginPath(nvg);
-    nvgRoundedRect(nvg, lm->content_x + 8, display_y, display_w, display_h, 6);
-    nvgFillColour(nvg, c_display_bg);
-    nvgFill(nvg);
+    LINKED_ARENA_LEAK_DETECT_BEGIN(gui->arena);
 
     enum
     {
@@ -671,136 +660,158 @@ void draw_lfo_section(GUI* gui)
         DISPLAY_PADDING_BOTTOM = 32,
     };
 
-    imgui_rect lfo_tabs[2];
-    float      gui_cx = lm->width / 2;
+    NVGcontext*    nvg = gui->nvg;
+    imgui_context* im  = &gui->imgui;
+    LayoutMetrics* lm  = &gui->layout;
 
-    lfo_tabs[0].r = gui_cx - 4;
-    lfo_tabs[0].x = lfo_tabs[0].r - LFO_TAB_WIDTH;
-    lfo_tabs[1].x = gui_cx + 4;
-    lfo_tabs[1].r = lfo_tabs[1].x + LFO_TAB_WIDTH;
+    static const NVGcolour c_display_bg = nvgHexColour(0x090E20FF);
+    static const NVGcolour c_light_blue = nvgHexColour(0x97E6FCFF);
 
-    // float top_padding = CONTENT_PADDING_Y;
-    lfo_tabs[0].y = display_y + CONTENT_PADDING_Y;
-    lfo_tabs[1].y = display_y + CONTENT_PADDING_Y;
-    lfo_tabs[0].b = lfo_tabs[0].y + LFO_TAB_HEIGHT;
-    lfo_tabs[1].b = lfo_tabs[1].y + LFO_TAB_HEIGHT;
+    float bot_content_height = lm->content_b - lm->top_content_bottom;
 
+    const float display_y   = lm->top_content_bottom + 8;
+    const float display_w   = (lm->content_r - lm->content_x) - 2 * 8;
+    const float display_h   = bot_content_height - 2 * 8;
+    const float display_b   = display_y + display_h;
     const float top_text_cy = display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT * 0.5f;
 
-    static int active_lfo_idx = 0;
+    nvgBeginPath(nvg);
+    nvgRoundedRect(nvg, lm->content_x + 8, display_y, display_w, display_h, 6);
+    nvgFillColour(nvg, c_display_bg);
+    nvgFill(nvg);
 
-    for (int i = 0; i < ARRLEN(lfo_tabs); i++)
+    // LFO tabs
     {
-        const imgui_rect* rect   = &lfo_tabs[i];
-        const unsigned    wid    = 'tlfo' + i;
-        const unsigned    events = imgui_get_events_rect(im, wid, rect);
+        imgui_rect lfo_tabs[2];
+        float      gui_cx = lm->width / 2;
 
-        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
-        {
-            println("TODO: LFO TAB %d", i);
-            active_lfo_idx = i;
-        }
+        lfo_tabs[0].r = gui_cx - 4;
+        lfo_tabs[0].x = lfo_tabs[0].r - LFO_TAB_WIDTH;
+        lfo_tabs[1].x = gui_cx + 4;
+        lfo_tabs[1].r = lfo_tabs[1].x + LFO_TAB_WIDTH;
 
-        NVGcolour  col1, col2;
-        const bool is_active = active_lfo_idx == i;
-        if (is_active)
-        {
-            col1 = c_light_blue;
-            col2 = c_display_bg;
-        }
-        else
-        {
-            col1 = c_display_bg;
-            col2 = c_light_blue;
-        }
+        // float top_padding = CONTENT_PADDING_Y;
+        lfo_tabs[0].y = display_y + CONTENT_PADDING_Y;
+        lfo_tabs[1].y = display_y + CONTENT_PADDING_Y;
+        lfo_tabs[0].b = lfo_tabs[0].y + LFO_TAB_HEIGHT;
+        lfo_tabs[1].b = lfo_tabs[1].y + LFO_TAB_HEIGHT;
 
-        if (is_active)
-        {
-            NVGcolour glow_icol = nvgHexColour(0x459DB5FF);
-            NVGcolour glow_ocol = glow_icol;
-            glow_ocol.a         = 0;
-            float width         = rect->r - rect->x;
-            float height        = rect->b - rect->y;
-            float glow_radius   = 12;
-            // glow
-            float gx = rect->x - glow_radius;
-            float gy = rect->y - glow_radius;
-            float gw = width + 2 * glow_radius;
-            float gh = height + 2 * glow_radius;
-            nvgBeginPath(nvg);
-            nvgRect(nvg, gx, gy, gw, gh);
-            NVGpaint paint = nvgBoxGradient(nvg, rect->x, rect->y, width, height, 4, glow_radius, glow_icol, glow_ocol);
-            nvgFillPaint(nvg, paint);
-            nvgFill(nvg);
+        static int active_lfo_idx = 0;
 
-            // tab
-            nvgBeginPath(nvg);
-            nvgRoundedRect(nvg, rect->x, rect->y, width, height, 4);
-            nvgFillColour(nvg, col1);
-            nvgFill(nvg);
-        }
-        else
+        for (int i = 0; i < ARRLEN(lfo_tabs); i++)
         {
-            nvgBeginPath(nvg);
-            nvgRoundedRect(nvg, rect->x + 0.5, rect->y + 0.5, rect->r - rect->x, rect->b - rect->y, 4);
+            const imgui_rect* rect   = &lfo_tabs[i];
+            const unsigned    wid    = 'tlfo' + i;
+            const unsigned    events = imgui_get_events_rect(im, wid, rect);
+
+            if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+            {
+                println("TODO: LFO TAB %d", i);
+                active_lfo_idx = i;
+            }
+
+            NVGcolour  col1, col2;
+            const bool is_active = active_lfo_idx == i;
+            if (is_active)
+            {
+                col1 = c_light_blue;
+                col2 = c_display_bg;
+            }
+            else
+            {
+                col1 = c_display_bg;
+                col2 = c_light_blue;
+            }
+
+            if (is_active)
+            {
+                NVGcolour glow_icol = nvgHexColour(0x459DB5FF);
+                NVGcolour glow_ocol = glow_icol;
+                glow_ocol.a         = 0;
+                float width         = rect->r - rect->x;
+                float height        = rect->b - rect->y;
+                float glow_radius   = 12;
+                // glow
+                float gx = rect->x - glow_radius;
+                float gy = rect->y - glow_radius;
+                float gw = width + 2 * glow_radius;
+                float gh = height + 2 * glow_radius;
+                nvgBeginPath(nvg);
+                nvgRect(nvg, gx, gy, gw, gh);
+                NVGpaint paint =
+                    nvgBoxGradient(nvg, rect->x, rect->y, width, height, 4, glow_radius, glow_icol, glow_ocol);
+                nvgFillPaint(nvg, paint);
+                nvgFill(nvg);
+
+                // tab
+                nvgBeginPath(nvg);
+                nvgRoundedRect(nvg, rect->x, rect->y, width, height, 4);
+                nvgFillColour(nvg, col1);
+                nvgFill(nvg);
+            }
+            else
+            {
+                nvgBeginPath(nvg);
+                nvgRoundedRect(nvg, rect->x + 0.5, rect->y + 0.5, rect->r - rect->x, rect->b - rect->y, 4);
+                nvgStrokeColour(nvg, col2);
+                nvgStrokeWidth(nvg, 1.1);
+                nvgStroke(nvg);
+            }
+
+            // TODO: draw text and icon
+
+            // snap half pixel
+            float icon_x = floorf(rect->x + LFO_TAB_ICON_PADDING) + 0.5f;
+            float icon_y = floorf(rect->y + LFO_TAB_ICON_PADDING) + 0.5f;
+            float icon_r = icon_x + LFO_TAB_ICON_WIDTH - 1;
+            float icon_b = icon_y + LFO_TAB_ICON_WIDTH - 1;
+
+            // nvgLineCap(nvg, NVG_ROUND); // Doesn't look great when lines are so small and thin
+            nvgLineCap(nvg, NVG_BUTT);
+            nvgStrokeWidth(nvg, 1);
             nvgStrokeColour(nvg, col2);
-            nvgStrokeWidth(nvg, 1.1);
+            nvgFillColour(nvg, col2);
+
+            nvgBeginPath(nvg);
+            // Top left arrow head
+            nvgMoveTo(nvg, icon_x, icon_y + LFO_TAB_ARROWHEAD_LENGTH);
+            nvgLineTo(nvg, icon_x, icon_y);
+            nvgLineTo(nvg, icon_x + LFO_TAB_ARROWHEAD_LENGTH, icon_y);
+            // Top right
+            nvgMoveTo(nvg, icon_r - LFO_TAB_ARROWHEAD_LENGTH, icon_y);
+            nvgLineTo(nvg, icon_r, icon_y);
+            nvgLineTo(nvg, icon_r, icon_y + LFO_TAB_ARROWHEAD_LENGTH);
+            // Bottom left
+            nvgMoveTo(nvg, icon_x, icon_b - LFO_TAB_ARROWHEAD_LENGTH);
+            nvgLineTo(nvg, icon_x, icon_b);
+            nvgLineTo(nvg, icon_x + LFO_TAB_ARROWHEAD_LENGTH, icon_b);
+            // Bottom right
+            nvgMoveTo(nvg, icon_r - LFO_TAB_ARROWHEAD_LENGTH, icon_b);
+            nvgLineTo(nvg, icon_r, icon_b);
+            nvgLineTo(nvg, icon_r, icon_b - LFO_TAB_ARROWHEAD_LENGTH);
+
+            // Arrow bodies
+            nvgMoveTo(nvg, icon_x, icon_y);
+            nvgLineTo(nvg, icon_x + LFO_TAB_ARROWBODY_LENGTH, icon_y + LFO_TAB_ARROWBODY_LENGTH);
+            nvgMoveTo(nvg, icon_r, icon_y);
+            nvgLineTo(nvg, icon_r - LFO_TAB_ARROWBODY_LENGTH, icon_y + LFO_TAB_ARROWBODY_LENGTH);
+            nvgMoveTo(nvg, icon_x, icon_b);
+            nvgLineTo(nvg, icon_x + LFO_TAB_ARROWBODY_LENGTH, icon_b - LFO_TAB_ARROWBODY_LENGTH);
+            nvgMoveTo(nvg, icon_r, icon_b);
+            nvgLineTo(nvg, icon_r - LFO_TAB_ARROWBODY_LENGTH, icon_b - LFO_TAB_ARROWBODY_LENGTH);
+
+            // icon/text seperator
+            nvgMoveTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_y - 2.5f);
+            nvgLineTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_b + 2.5f);
+
             nvgStroke(nvg);
+
+            char label[]  = "LFO 1";
+            label[4]     += i;
+
+            nvgTextAlign(nvg, NVG_ALIGN_CR);
+            nvgText(nvg, rect->r - LFO_TAB_ICON_PADDING, top_text_cy, label, label + 5);
         }
-
-        // TODO: draw text and icon
-
-        // snap half pixel
-        float icon_x = floorf(rect->x + LFO_TAB_ICON_PADDING) + 0.5f;
-        float icon_y = floorf(rect->y + LFO_TAB_ICON_PADDING) + 0.5f;
-        float icon_r = icon_x + LFO_TAB_ICON_WIDTH - 1;
-        float icon_b = icon_y + LFO_TAB_ICON_WIDTH - 1;
-
-        // nvgLineCap(nvg, NVG_ROUND); // Doesn't look great when lines are so small and thin
-        nvgLineCap(nvg, NVG_BUTT);
-        nvgStrokeWidth(nvg, 1);
-        nvgStrokeColour(nvg, col2);
-        nvgFillColour(nvg, col2);
-
-        nvgBeginPath(nvg);
-        // Top left arrow head
-        nvgMoveTo(nvg, icon_x, icon_y + LFO_TAB_ARROWHEAD_LENGTH);
-        nvgLineTo(nvg, icon_x, icon_y);
-        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWHEAD_LENGTH, icon_y);
-        // Top right
-        nvgMoveTo(nvg, icon_r - LFO_TAB_ARROWHEAD_LENGTH, icon_y);
-        nvgLineTo(nvg, icon_r, icon_y);
-        nvgLineTo(nvg, icon_r, icon_y + LFO_TAB_ARROWHEAD_LENGTH);
-        // Bottom left
-        nvgMoveTo(nvg, icon_x, icon_b - LFO_TAB_ARROWHEAD_LENGTH);
-        nvgLineTo(nvg, icon_x, icon_b);
-        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWHEAD_LENGTH, icon_b);
-        // Bottom right
-        nvgMoveTo(nvg, icon_r - LFO_TAB_ARROWHEAD_LENGTH, icon_b);
-        nvgLineTo(nvg, icon_r, icon_b);
-        nvgLineTo(nvg, icon_r, icon_b - LFO_TAB_ARROWHEAD_LENGTH);
-
-        // Arrow bodies
-        nvgMoveTo(nvg, icon_x, icon_y);
-        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWBODY_LENGTH, icon_y + LFO_TAB_ARROWBODY_LENGTH);
-        nvgMoveTo(nvg, icon_r, icon_y);
-        nvgLineTo(nvg, icon_r - LFO_TAB_ARROWBODY_LENGTH, icon_y + LFO_TAB_ARROWBODY_LENGTH);
-        nvgMoveTo(nvg, icon_x, icon_b);
-        nvgLineTo(nvg, icon_x + LFO_TAB_ARROWBODY_LENGTH, icon_b - LFO_TAB_ARROWBODY_LENGTH);
-        nvgMoveTo(nvg, icon_r, icon_b);
-        nvgLineTo(nvg, icon_r - LFO_TAB_ARROWBODY_LENGTH, icon_b - LFO_TAB_ARROWBODY_LENGTH);
-
-        // icon/text seperator
-        nvgMoveTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_y - 2.5f);
-        nvgLineTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_b + 2.5f);
-
-        nvgStroke(nvg);
-
-        char label[]  = "LFO 1";
-        label[4]     += i;
-
-        nvgTextAlign(nvg, NVG_ALIGN_CR);
-        nvgText(nvg, rect->r - LFO_TAB_ICON_PADDING, top_text_cy, label, label + 5);
     }
 
     const float content_x = lm->content_x + CONTENT_PADDING_X;
@@ -1037,14 +1048,68 @@ void draw_lfo_section(GUI* gui)
     float grid_x = lm->content_x + CONTENT_PADDING_X + 8;
     float grid_r = lm->content_r - CONTENT_PADDING_X - 8;
 
-    NVGcolour c_grid_1 = nvgHexColour(0x7E8795FF);
-    NVGcolour c_grid_2 = nvgHexColour(0x292D32FF);
+    {
+        NVGcolour c_grid_1 = nvgHexColour(0x7E8795FF);
+        NVGcolour c_grid_2 = nvgHexColour(0x292D32FF);
 
-    nvgBeginPath(nvg);
-    nvgRect(nvg, grid_x + 0.5f, grid_y + 0.5f, grid_r - grid_x - 1, grid_b - grid_y - 1);
-    nvgStrokeWidth(nvg, 1);
-    nvgStrokeColour(nvg, c_grid_1);
-    nvgStroke(nvg);
+        nvgBeginPath(nvg);
+        nvgRect(nvg, grid_x + 0.5f, grid_y + 0.5f, grid_r - grid_x - 1, grid_b - grid_y - 1);
+        nvgStrokeWidth(nvg, 1);
+        nvgStrokeColour(nvg, c_grid_1);
+        nvgStroke(nvg);
+    }
+
+    // LFO lines
+    {
+        static float skew_amt = 0.5f;
+        imgui_rect   rect     = {grid_x, grid_y, grid_r, grid_b};
+        unsigned     events   = imgui_get_events_rect(im, 'grid', &rect);
+
+        if (events & IMGUI_EVENT_DRAG_MOVE)
+        {
+            imgui_drag_value(im, &skew_amt, 0, 1, 250, IMGUI_DRAG_VERTICAL);
+        }
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        {
+            if (im->left_click_counter == 2)
+                skew_amt = 0;
+        }
+
+        const int N = grid_r - grid_x;
+
+        xvec2f* points = linked_arena_alloc(gui->arena, N * sizeof(*points));
+
+        points[0].x = grid_x;
+        points[0].y = grid_b;
+        for (int i = 1; i < N - 1; i++)
+        {
+            float rel_y = (float)i / (float)N;
+
+            float skew_y = skewf(rel_y, skew_amt); // asc
+            // float skew_y = 1 - skewf(1 - rel_y, skew_amt); // desc
+            xassert(skew_y == skew_y);
+
+            points[i].x = grid_x + i;
+            points[i].y = xm_lerpf(skew_y, grid_b, grid_y);
+        }
+        points[N - 1].x = grid_r;
+        points[N - 1].y = grid_y;
+
+        const xvec2f* it  = points;
+        const xvec2f* end = points + N;
+        nvgBeginPath(nvg);
+        nvgMoveTo(nvg, it->x, it->y);
+        while (++it != end)
+            nvgLineTo(nvg, it->x, it->y);
+        nvgLineTo(nvg, grid_r, grid_y);
+
+        nvgStrokeColour(nvg, c_light_blue);
+        nvgStrokeWidth(nvg, 2);
+        nvgStroke(nvg);
+
+        linked_arena_release(gui->arena, points);
+    }
+    LINKED_ARENA_LEAK_DETECT_END(gui->arena);
 }
 
 void pw_tick(void* _gui)
@@ -1052,6 +1117,9 @@ void pw_tick(void* _gui)
     GUI* gui = _gui;
     CPLUG_LOG_ASSERT(gui->plugin);
     CPLUG_LOG_ASSERT(gui->nvg);
+
+    LINKED_ARENA_LEAK_DETECT_BEGIN(gui->arena);
+
     if (!gui || !gui->plugin)
         return;
 
@@ -2246,4 +2314,6 @@ void pw_tick(void* _gui)
 
         gui->plugin->cplug_ctx->requestResize(gui->plugin->cplug_ctx, lm->width, next_height);
     }
+
+    LINKED_ARENA_LEAK_DETECT_END(gui->arena);
 }

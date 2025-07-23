@@ -8,6 +8,20 @@ static float sinarctan2(float x) { return xm_clampf(x, -1, 1) / sqrtf(x * x + 1)
 static float softsine(float x) { return x / (fabsf(x) + 1); }
 static float softsine2(float x) { return xm_clampf(x, -1, 1) / (fabsf(x) + 1); }
 
+// v - value between 0-1
+// a - skew amount between 0-1 where lower values push x closer to 0 and vice versa
+static inline float skewf(float v, float a)
+{
+    // va/(1-a-x+va)
+    if (a <= 0)
+        return 0;
+    else if (a >= 1.0f)
+        return 1.0f;
+
+    float va = v * a;
+    return va / (1.0f - a - v + 2 * va);
+}
+
 // SvfLinearTrapOptimised2
 // https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
 typedef union Coeffs
