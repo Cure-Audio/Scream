@@ -326,63 +326,6 @@ void nvgDeleteInternal(NVGcontext* ctx)
     free(ctx);
 }
 
-void nvgBeginFrame(NVGcontext* ctx)
-{
-    /*	printf("Tris: draws:%d  fill:%d  stroke:%d  text:%d  TOT:%d\n",
-                    ctx->drawCallCount, ctx->fillTriCount, ctx->strokeTriCount, ctx->textTriCount,
-                    ctx->fillTriCount+ctx->strokeTriCount+ctx->textTriCount);*/
-
-    ctx->nstates = 0;
-    nvgReset(ctx);
-
-    ctx->drawCallCount  = 0;
-    ctx->fillTriCount   = 0;
-    ctx->strokeTriCount = 0;
-    ctx->textTriCount   = 0;
-}
-
-void nvgCancelFrame(NVGcontext* ctx) { nvg_impl_renderCancel(ctx->params.userPtr); }
-
-void nvgEndFrame(NVGcontext* ctx)
-{
-    if (ctx->fontImageIdx != 0)
-    {
-        int fontImage                      = ctx->fontImages[ctx->fontImageIdx];
-        ctx->fontImages[ctx->fontImageIdx] = 0;
-        int i, j, iw, ih;
-        // delete images that smaller than current one
-        if (fontImage == 0)
-            return;
-        nvgImageSize(ctx, fontImage, &iw, &ih);
-        for (i = j = 0; i < ctx->fontImageIdx; i++)
-        {
-            if (ctx->fontImages[i] != 0)
-            {
-                int nw, nh;
-                int image          = ctx->fontImages[i];
-                ctx->fontImages[i] = 0;
-                nvgImageSize(ctx, image, &nw, &nh);
-                if (nw < iw || nh < ih)
-                    nvgDeleteImage(ctx, image);
-                else
-                    ctx->fontImages[j++] = image;
-            }
-        }
-        // make current font image to first
-        ctx->fontImages[j] = ctx->fontImages[0];
-        ctx->fontImages[0] = fontImage;
-        ctx->fontImageIdx  = 0;
-    }
-    nvg_impl_endFrame(ctx->params.userPtr);
-}
-
-void nvgBeginDraw(NVGcontext* ctx, float windowWidth, float windowHeight, float devicePixelRatio)
-{
-    nvg__setDevicePixelRatio(ctx, devicePixelRatio);
-    nvg_impl_beginDraw(ctx->params.userPtr, windowWidth, windowHeight, devicePixelRatio);
-}
-void nvgEndDraw(NVGcontext* ctx) { nvg_impl_renderFlush(ctx->params.userPtr); }
-
 NVGcolor nvgRGB(unsigned char r, unsigned char g, unsigned char b) { return nvgRGBA(r, g, b, 255); }
 
 NVGcolor nvgRGBf(float r, float g, float b) { return nvgRGBAf(r, g, b, 1.0f); }

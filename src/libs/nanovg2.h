@@ -196,11 +196,6 @@ int  nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageF
 int  nvg_impl_renderDeleteTexture(void* uptr, int image);
 int  nvg_impl_renderUpdateTexture(void* uptr, int image, int x, int y, int w, int h, const unsigned char* data);
 int  nvg_impl_renderGetTextureSize(void* uptr, int image, int* w, int* h);
-void nvg_impl_beginDraw(void* uptr, float width, float height, float devicePixelRatio);
-void nvg_impl_renderCancel(void* uptr);
-void nvg_impl_renderFlush(void* uptr);
-void nvg_impl_endFrame(void* uptr);
-void nvg_impl_endFrame(void* uptr);
 void nvg_impl_renderFill(
     void*                      uptr,
     NVGpaint*                  paint,

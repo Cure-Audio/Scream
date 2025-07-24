@@ -112,7 +112,6 @@ set(PLUGIN_SOURCES
 
     src/libs/linked_arena.c
     src/libs/texteditor.c
-    src/libs/nanovg2.c
     src/libs/nanovg_sokol.c
     )
 
