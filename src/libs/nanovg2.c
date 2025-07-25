@@ -261,7 +261,7 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
 
     nvg__setDevicePixelRatio(ctx, 1.0f);
 
-    if (nvg_impl_renderCreate(ctx->params.userPtr) == 0)
+    if (_nvgRenderCreate(ctx) == 0)
         goto error;
 
     // Init font rendering
@@ -279,13 +279,7 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
         goto error;
 
     // Create font texture
-    ctx->fontImages[0] = nvg_impl_renderCreateTexture(
-        ctx->params.userPtr,
-        NVG_TEXTURE_ALPHA,
-        fontParams.width,
-        fontParams.height,
-        0,
-        NULL);
+    ctx->fontImages[0] = _nvgRenderCreateTexture(ctx, NVG_TEXTURE_ALPHA, fontParams.width, fontParams.height, 0, NULL);
     if (ctx->fontImages[0] == 0)
         goto error;
     ctx->fontImageIdx = 0;
@@ -321,7 +315,7 @@ void nvgDeleteInternal(NVGcontext* ctx)
         }
     }
 
-    nvg_impl_renderDelete(ctx->params.userPtr);
+    _nvgRenderDelete(ctx);
 
     free(ctx);
 }
@@ -525,7 +519,7 @@ float nvgDegToRad(float deg) { return deg / 180.0f * NVG_PI; }
 
 float nvgRadToDeg(float rad) { return rad / NVG_PI * 180.0f; }
 
-static void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
+void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
 {
     memset(p, 0, sizeof(*p));
     nvgTransformIdentity(p->xform);
@@ -694,22 +688,19 @@ int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int 
 
 int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsigned char* data)
 {
-    return nvg_impl_renderCreateTexture(ctx->params.userPtr, NVG_TEXTURE_RGBA, w, h, imageFlags, data);
+    return _nvgRenderCreateTexture(ctx, NVG_TEXTURE_RGBA, w, h, imageFlags, data);
 }
 
 void nvgUpdateImage(NVGcontext* ctx, int image, const unsigned char* data)
 {
     int w, h;
-    nvg_impl_renderGetTextureSize(ctx->params.userPtr, image, &w, &h);
-    nvg_impl_renderUpdateTexture(ctx->params.userPtr, image, 0, 0, w, h, data);
+    _nvgRenderGetTextureSize(ctx, image, &w, &h);
+    _nvgRenderUpdateTexture(ctx, image, 0, 0, w, h, data);
 }
 
-void nvgImageSize(NVGcontext* ctx, int image, int* w, int* h)
-{
-    nvg_impl_renderGetTextureSize(ctx->params.userPtr, image, w, h);
-}
+void nvgImageSize(NVGcontext* ctx, int image, int* w, int* h) { _nvgRenderGetTextureSize(ctx, image, w, h); }
 
-void nvgDeleteImage(NVGcontext* ctx, int image) { nvg_impl_renderDeleteTexture(ctx->params.userPtr, image); }
+void nvgDeleteImage(NVGcontext* ctx, int image) { _nvgRenderDeleteTexture(ctx, image); }
 
 NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float ey, NVGcolor icol, NVGcolor ocol)
 {
@@ -2374,8 +2365,8 @@ void nvgFill(NVGcontext* ctx)
     fillPaint.innerColor.a *= state->alpha;
     fillPaint.outerColor.a *= state->alpha;
 
-    nvg_impl_renderFill(
-        ctx->params.userPtr,
+    _nvgRenderFill(
+        ctx,
         &fillPaint,
         state->compositeOperation,
         &state->scissor,
@@ -2430,8 +2421,8 @@ void nvgStroke(NVGcontext* ctx)
     else
         nvg__expandStroke(ctx, strokeWidth * 0.5f, 0.0f, state->lineCap, state->lineJoin, state->miterLimit);
 
-    nvg_impl_renderStroke(
-        ctx->params.userPtr,
+    _nvgRenderStroke(
+        ctx,
         &strokePaint,
         state->compositeOperation,
         &state->scissor,
@@ -2568,7 +2559,7 @@ static void nvg__flushTextTexture(NVGcontext* ctx)
             int                  y    = dirty[1];
             int                  w    = dirty[2] - dirty[0];
             int                  h    = dirty[3] - dirty[1];
-            nvg_impl_renderUpdateTexture(ctx->params.userPtr, fontImage, x, y, w, h, data);
+            _nvgRenderUpdateTexture(ctx, fontImage, x, y, w, h, data);
         }
     }
 }
@@ -2591,8 +2582,7 @@ static int nvg__allocTextAtlas(NVGcontext* ctx)
             iw *= 2;
         if (iw > NVG_MAX_FONTIMAGE_SIZE || ih > NVG_MAX_FONTIMAGE_SIZE)
             iw = ih = NVG_MAX_FONTIMAGE_SIZE;
-        ctx->fontImages[ctx->fontImageIdx + 1] =
-            nvg_impl_renderCreateTexture(ctx->params.userPtr, NVG_TEXTURE_ALPHA, iw, ih, 0, NULL);
+        ctx->fontImages[ctx->fontImageIdx + 1] = _nvgRenderCreateTexture(ctx, NVG_TEXTURE_ALPHA, iw, ih, 0, NULL);
     }
     ++ctx->fontImageIdx;
     fonsResetAtlas(ctx->fs, iw, ih);
@@ -2611,14 +2601,7 @@ static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
     paint.innerColor.a *= state->alpha;
     paint.outerColor.a *= state->alpha;
 
-    nvg_impl_renderTriangles(
-        ctx->params.userPtr,
-        &paint,
-        state->compositeOperation,
-        &state->scissor,
-        verts,
-        nverts,
-        ctx->fringeWidth);
+    _nvgRenderTriangles(ctx, &paint, state->compositeOperation, &state->scissor, verts, nverts, ctx->fringeWidth);
 
     ctx->drawCallCount++;
     ctx->textTriCount += nverts / 3;

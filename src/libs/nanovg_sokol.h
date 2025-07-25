@@ -213,20 +213,20 @@ typedef struct SGNVGdrawNVG
     struct SGNVGcall* calls;
 } SGNVGdrawNVG;
 
-typedef void (*SGNVGcustomDrawFunc)(void* data);
+typedef void (*SGNVGcustomFunc)(void* uptr);
 
-typedef struct SGNVGdrawCustom
+typedef struct SGNVGcustom
 {
-    void*               data;
-    SGNVGcustomDrawFunc func;
-} SGNVGdrawCustom;
+    void*           uptr;
+    SGNVGcustomFunc func;
+} SGNVGcustom;
 
 enum SGNVGcommandType
 {
     SGNVG_CMD_BEGIN_PASS,
     SGNVG_CMD_END_PASS,
     SGNVG_CMD_DRAW_NVG,
-    SGNVG_CMD_DRAW_CUSTOM,
+    SGNVG_CMD_CUSTOM,
 };
 
 typedef struct SGNVGcommand
@@ -236,9 +236,9 @@ typedef struct SGNVGcommand
     {
         void* data;
 
-        SGNVGbeginPass*  beginPass;
-        SGNVGdrawNVG*    drawNVG;
-        SGNVGdrawCustom* custom;
+        SGNVGbeginPass* beginPass;
+        SGNVGdrawNVG*   drawNVG;
+        SGNVGcustom*    custom;
     } payload;
 
     struct SGNVGcommand* next;
@@ -289,6 +289,7 @@ typedef struct SGNVGcontext
 void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass*, int width, int height);
 void snvg_command_end_pass(NVGcontext* ctx);
 void snvg_command_draw_nvg(NVGcontext* ctx);
+void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func);
 
 #ifdef __cplusplus
 }

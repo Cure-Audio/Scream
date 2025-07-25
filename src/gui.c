@@ -1226,23 +1226,6 @@ void pw_tick(void* _gui)
         lm->width  = gui->plugin->width;
         lm->height = gui->plugin->height;
 
-        gui->swapchain = (sg_swapchain){
-            .width        = gui->layout.width,
-            .height       = gui->layout.height,
-            .sample_count = 1,
-            .color_format = SG_PIXELFORMAT_BGRA8,
-            .depth_format = SG_PIXELFORMAT_DEPTH_STENCIL,
-
-#if __APPLE__
-            .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
-            .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
-#endif
-#if _WIN32
-            .d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw),
-            .d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw),
-#endif
-        };
-
         int init_height = GUI_INIT_HEIGHT;
         int top_height  = lm->height;
         if (gui->plugin->lfo_section_open)
@@ -1305,6 +1288,23 @@ void pw_tick(void* _gui)
             lm->knobs_pos[i].y = roundf(lm->content_y + lm->top_content_height * 0.5f);
         }
     }
+
+    // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
+    // New calls to get this pointer must be issued every frame
+    gui->swapchain = (sg_swapchain)
+    {
+        .width = gui->layout.width, .height = gui->layout.height, .sample_count = 1,
+        .color_format = SG_PIXELFORMAT_BGRA8, .depth_format = SG_PIXELFORMAT_DEPTH_STENCIL,
+
+#if __APPLE__
+        .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
+        .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
+#endif
+#if _WIN32
+        .d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw),
+        .d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw),
+#endif
+    };
 
     snvg_command_begin_pass(
         nvg,

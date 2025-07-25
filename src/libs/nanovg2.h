@@ -191,39 +191,6 @@ typedef struct NVGpath
     int           convex;
 } NVGpath;
 
-int  nvg_impl_renderCreate(void* uptr);
-int  nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
-int  nvg_impl_renderDeleteTexture(void* uptr, int image);
-int  nvg_impl_renderUpdateTexture(void* uptr, int image, int x, int y, int w, int h, const unsigned char* data);
-int  nvg_impl_renderGetTextureSize(void* uptr, int image, int* w, int* h);
-void nvg_impl_renderFill(
-    void*                      uptr,
-    NVGpaint*                  paint,
-    NVGcompositeOperationState compositeOperation,
-    NVGscissor*                scissor,
-    float                      fringe,
-    const float*               bounds,
-    const NVGpath*             paths,
-    int                        npaths);
-void nvg_impl_renderStroke(
-    void*                      uptr,
-    NVGpaint*                  paint,
-    NVGcompositeOperationState compositeOperation,
-    NVGscissor*                scissor,
-    float                      fringe,
-    float                      strokeWidth,
-    const NVGpath*             paths,
-    int                        npaths);
-void nvg_impl_renderTriangles(
-    void*                      uptr,
-    NVGpaint*                  paint,
-    NVGcompositeOperationState compositeOperation,
-    NVGscissor*                scissor,
-    const NVGvertex*           verts,
-    int                        nverts,
-    float                      fringe);
-void nvg_impl_renderDelete(void* uptr);
-
 typedef struct NVGparams
 {
     void* userPtr;
@@ -814,6 +781,41 @@ int nvgTextBreakLines(
     float       breakRowWidth,
     NVGtextRow* rows,
     int         maxRows);
+
+// Backend functions. These should be considered 'private' and it's not recommended to call them directly (unless you
+// know what you're doing)
+int  _nvgRenderCreate(NVGcontext* ctx);
+int  _nvgRenderCreateTexture(NVGcontext* ctx, int type, int w, int h, int imageFlags, const unsigned char* data);
+int  _nvgRenderDeleteTexture(NVGcontext* ctx, int image);
+int  _nvgRenderUpdateTexture(NVGcontext* ctx, int image, int x, int y, int w, int h, const unsigned char* data);
+int  _nvgRenderGetTextureSize(NVGcontext* ctx, int image, int* w, int* h);
+void _nvgRenderFill(
+    NVGcontext*                ctx,
+    NVGpaint*                  paint,
+    NVGcompositeOperationState compositeOperation,
+    NVGscissor*                scissor,
+    float                      fringe,
+    const float*               bounds,
+    const NVGpath*             paths,
+    int                        npaths);
+void _nvgRenderStroke(
+    NVGcontext*                ctx,
+    NVGpaint*                  paint,
+    NVGcompositeOperationState compositeOperation,
+    NVGscissor*                scissor,
+    float                      fringe,
+    float                      strokeWidth,
+    const NVGpath*             paths,
+    int                        npaths);
+void _nvgRenderTriangles(
+    NVGcontext*                ctx,
+    NVGpaint*                  paint,
+    NVGcompositeOperationState compositeOperation,
+    NVGscissor*                scissor,
+    const NVGvertex*           verts,
+    int                        nverts,
+    float                      fringe);
+void _nvgRenderDelete(NVGcontext* ctx);
 
 #ifdef _MSC_VER
 #pragma warning(pop)

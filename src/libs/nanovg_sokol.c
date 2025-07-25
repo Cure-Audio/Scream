@@ -657,12 +657,10 @@ static void sgnvg__preparePipelineUniforms(
     });
 }
 
-static int nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
-
-static int nvg_impl_renderCreate(void* uptr)
+int _nvgRenderCreate(NVGcontext* ctx)
 {
-    SGNVG_EXTLOG("nvg_impl_renderCreate(uptr: %p)", uptr);
-    SGNVGcontext* sg    = (SGNVGcontext*)uptr;
+    SGNVG_EXTLOG("_nvgRenderCreate(ctx: %p)", ctx);
+    SGNVGcontext* sg    = (SGNVGcontext*)ctx->params.userPtr;
     int           align = 4;
 
     // if(sg->flags & NVG_ANTIALIAS)
@@ -697,22 +695,22 @@ static int nvg_impl_renderCreate(void* uptr)
 
     // Some platforms does not allow to have samples to unset textures.
     // Create empty one which is bound when there's no texture specified.
-    sg->dummyTex = nvg_impl_renderCreateTexture(sg, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
+    sg->dummyTex = _nvgRenderCreateTexture(ctx, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
 
     return 1;
 }
 
-static int nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data)
+int _nvgRenderCreateTexture(NVGcontext* ctx, int type, int w, int h, int imageFlags, const unsigned char* data)
 {
     SGNVG_EXTLOG(
-        "nvg_impl_renderCreateTexture(uptr: %p, type: %d, w: %d, h: %d, imageFlags: %d, data: %p)",
-        uptr,
+        "_nvgRenderCreateTexture(ctx: %p, type: %d, w: %d, h: %d, imageFlags: %d, data: %p)",
+        ctx,
         type,
         w,
         h,
         imageFlags,
         data);
-    SGNVGcontext* sg  = (SGNVGcontext*)uptr;
+    SGNVGcontext* sg  = (SGNVGcontext*)ctx->params.userPtr;
     SGNVGtexture* tex = sgnvg__allocTexture(sg);
 
     if (tex == NULL)
@@ -782,25 +780,25 @@ static int nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int 
     return tex->id;
 }
 
-static int nvg_impl_renderDeleteTexture(void* uptr, int image)
+int _nvgRenderDeleteTexture(NVGcontext* ctx, int image)
 {
-    SGNVG_EXTLOG("nvg_impl_renderDeleteTexture(uptr: %p, image: %d)", uptr, image);
-    SGNVGcontext* sg = (SGNVGcontext*)uptr;
+    SGNVG_EXTLOG("_nvgRenderDeleteTexture(ctx: %p, image: %d)", ctx, image);
+    SGNVGcontext* sg = (SGNVGcontext*)ctx->params.userPtr;
     return sgnvg__deleteTexture(sg, image);
 }
 
-static int nvg_impl_renderUpdateTexture(void* uptr, int image, int x0, int y0, int w, int h, const unsigned char* data)
+int _nvgRenderUpdateTexture(NVGcontext* ctx, int image, int x0, int y0, int w, int h, const unsigned char* data)
 {
     SGNVG_EXTLOG(
-        "nvg_impl_renderUpdateTexture(uptr: %p, image: %d, x0: %d, y0: %d, w: %d, h: %d, data: %p)",
-        uptr,
+        "_nvgRenderUpdateTexture(ctx: %p, image: %d, x0: %d, y0: %d, w: %d, h: %d, data: %p)",
+        ctx,
         image,
         x0,
         y0,
         w,
         h,
         data);
-    SGNVGcontext* sg  = (SGNVGcontext*)uptr;
+    SGNVGcontext* sg  = (SGNVGcontext*)ctx->params.userPtr;
     SGNVGtexture* tex = sgnvg__findTexture(sg, image);
 
     if (tex == NULL)
@@ -834,10 +832,10 @@ static int nvg_impl_renderUpdateTexture(void* uptr, int image, int x0, int y0, i
     return 1;
 }
 
-static int nvg_impl_renderGetTextureSize(void* uptr, int image, int* w, int* h)
+int _nvgRenderGetTextureSize(NVGcontext* ctx, int image, int* w, int* h)
 {
-    SGNVG_EXTLOG("nvg_impl_renderGetTextureSize(uptr: %p, image: %d, w: %d, h: %d)", uptr, image, *w, *h);
-    SGNVGcontext* sg  = (SGNVGcontext*)uptr;
+    SGNVG_EXTLOG("_nvgRenderGetTextureSize(ctx: %p, image: %d, w: %d, h: %d)", ctx, image, *w, *h);
+    SGNVGcontext* sg  = (SGNVGcontext*)ctx->params.userPtr;
     SGNVGtexture* tex = sgnvg__findTexture(sg, image);
     if (tex == NULL)
         return 0;
@@ -1217,7 +1215,8 @@ void nvgEndFrame(NVGcontext* ctx)
     // upload index data
     sg_update_buffer(sg->indexBuf, &(sg_range){sg->indexes, sg->nindexes * sizeof(*sg->indexes)});
 
-    SGNVGcommand* cmd = sg->first_command;
+    int           ncommands = 0;
+    SGNVGcommand* cmd       = sg->first_command;
     while (cmd != NULL)
     {
         switch (cmd->type)
@@ -1262,15 +1261,16 @@ void nvgEndFrame(NVGcontext* ctx)
             }
             break;
         }
-        case SGNVG_CMD_DRAW_CUSTOM:
+        case SGNVG_CMD_CUSTOM:
         {
-            SGNVGdrawCustom* custom = cmd->payload.custom;
-            custom->func(custom->data);
+            SGNVGcustom* custom = cmd->payload.custom;
+            custom->func(custom->uptr);
             break;
         }
         }
 
         cmd = cmd->next;
+        ncommands++;
     }
 }
 
@@ -1410,8 +1410,8 @@ static void sgnvg__generateTriangleStripIndexes(uint32_t* indexes, int offset, i
     }
 }
 
-static void nvg_impl_renderFill(
-    void*                      uptr,
+void _nvgRenderFill(
+    NVGcontext*                ctx,
     NVGpaint*                  paint,
     NVGcompositeOperationState compositeOperation,
     NVGscissor*                scissor,
@@ -1421,10 +1421,10 @@ static void nvg_impl_renderFill(
     int                        npaths)
 {
     SGNVG_EXTLOG(
-        "nvg_impl_renderFill(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, "
+        "_nvgRenderFill(ctx: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, "
         "bounds: "
         "%f, paths: %p, npaths: %d)",
-        uptr,
+        ctx,
         paint,
         compositeOperation.srcRGB,
         compositeOperation.dstRGB,
@@ -1435,11 +1435,16 @@ static void nvg_impl_renderFill(
         *bounds,
         paths,
         npaths);
-    SGNVGcontext*      sg   = (SGNVGcontext*)uptr;
+    SGNVGcontext*      sg   = (SGNVGcontext*)ctx->params.userPtr;
     SGNVGcall*         call = NULL;
     SGNVGattribute*    quad = NULL;
     SGNVGfragUniforms* frag = NULL;
     int                i, maxverts, offset, maxindexes, ioffset;
+
+    // Looks like you forgot to call snvg_command_draw_nvg() before issuing nvgFill()/nvgStroke()/nvgText() commands!
+    SGNVG_ASSERT(sg->current_nvg_draw != NULL); // TODO: remove?
+    if (sg->current_nvg_draw == NULL)
+        snvg_command_draw_nvg(ctx);
 
     call = linked_arena_alloc(sg->frame_arena, sizeof(*call));
 
@@ -1543,8 +1548,8 @@ error:
     //     sg->ncalls--;
 }
 
-static void nvg_impl_renderStroke(
-    void*                      uptr,
+void _nvgRenderStroke(
+    NVGcontext*                ctx,
     NVGpaint*                  paint,
     NVGcompositeOperationState compositeOperation,
     NVGscissor*                scissor,
@@ -1554,9 +1559,9 @@ static void nvg_impl_renderStroke(
     int                        npaths)
 {
     SGNVG_EXTLOG(
-        "nvg_impl_renderStroke(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, "
+        "_nvgRenderStroke(ctx: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, fringe: %f, "
         "strokeWidth: %f, paths: %p, npaths: %d)",
-        uptr,
+        ctx,
         paint,
         compositeOperation.dstAlpha,
         compositeOperation.dstRGB,
@@ -1567,10 +1572,15 @@ static void nvg_impl_renderStroke(
         strokeWidth,
         paths,
         npaths);
-    SGNVGcontext*      sg    = (SGNVGcontext*)uptr;
+    SGNVGcontext*      sg    = (SGNVGcontext*)ctx->params.userPtr;
     SGNVGcall*         call  = NULL;
     SGNVGfragUniforms* frags = NULL;
     int                i, maxverts, offset, maxindexes, ioffset;
+
+    // Looks like you forgot to call snvg_command_draw_nvg() before issuing nvgFill()/nvgStroke()/nvgText() commands!
+    SGNVG_ASSERT(sg->current_nvg_draw != NULL); // TODO: remove?
+    if (sg->current_nvg_draw == NULL)
+        snvg_command_draw_nvg(ctx);
 
     call = linked_arena_alloc_clear(sg->frame_arena, sizeof(*call));
 
@@ -1646,8 +1656,8 @@ error:
     //     sg->ncalls--;
 }
 
-static void nvg_impl_renderTriangles(
-    void*                      uptr,
+void _nvgRenderTriangles(
+    NVGcontext*                ctx,
     NVGpaint*                  paint,
     NVGcompositeOperationState compositeOperation,
     NVGscissor*                scissor,
@@ -1656,9 +1666,9 @@ static void nvg_impl_renderTriangles(
     float                      fringe)
 {
     SGNVG_EXTLOG(
-        "nvg_impl_renderTriangles(uptr: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, verts: %p, "
+        "_nvgRenderTriangles(ctx: %p, paint: %p, compositeOperation: (%d, %d, %d, %d), scissor: %p, verts: %p, "
         "nverts: %d, fringe: %f)",
-        uptr,
+        ctx,
         paint,
         compositeOperation.srcRGB,
         compositeOperation.dstRGB,
@@ -1668,9 +1678,14 @@ static void nvg_impl_renderTriangles(
         verts,
         nverts,
         fringe);
-    SGNVGcontext*      sg   = (SGNVGcontext*)uptr;
+    SGNVGcontext*      sg   = (SGNVGcontext*)ctx->params.userPtr;
     SGNVGcall*         call = NULL;
     SGNVGfragUniforms* frag = NULL;
+
+    // Looks like you forgot to call snvg_command_draw_nvg() before issuing nvgFill()/nvgStroke()/nvgText() commands!
+    SGNVG_ASSERT(sg->current_nvg_draw != NULL); // TODO: remove?
+    if (sg->current_nvg_draw == NULL)
+        snvg_command_draw_nvg(ctx);
 
     call = linked_arena_alloc_clear(sg->frame_arena, sizeof(*call));
 
@@ -1710,10 +1725,10 @@ static void nvg_impl_renderTriangles(
     return;
 }
 
-static void nvg_impl_renderDelete(void* uptr)
+void _nvgRenderDelete(NVGcontext* ctx)
 {
-    SGNVG_EXTLOG("nvg_impl_renderDelete(uptr: %p)", uptr);
-    SGNVGcontext* sg = (SGNVGcontext*)uptr;
+    SGNVG_EXTLOG("_nvgRenderDelete(ctx: %p)", ctx);
+    SGNVGcontext* sg = (SGNVGcontext*)ctx->params.userPtr;
     int           i;
     if (sg == NULL)
         return;
@@ -1741,7 +1756,7 @@ static void nvg_impl_renderDelete(void* uptr)
         sg_uninit_buffer(sg->indexBuf);
     sg_dealloc_buffer(sg->indexBuf);
 
-    nvg_impl_renderDeleteTexture(sg, sg->dummyTex);
+    _nvgRenderDeleteTexture(ctx, sg->dummyTex);
     for (i = 0; i < sg->ntextures; i++)
     {
         if (sg->textures[i].img.id != 0 && (sg->textures[i].flags & NVG_IMAGE_NODELETE) == 0)
@@ -1878,4 +1893,24 @@ void snvg_command_draw_nvg(NVGcontext* ctx)
     cmd->payload.drawNVG = draws;
 
     sg->current_nvg_draw = draws;
+}
+
+void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func)
+{
+    SGNVGcontext* sg = ctx->params.userPtr;
+
+    // Clear cached call points
+    // This will help us to enforce users are correctly calling snvg_command_draw_nvg() before issuing
+    // nvgFill/Stroke/Text commands
+    sg->current_call     = NULL;
+    sg->current_nvg_draw = NULL;
+
+    SGNVGcommand* cmd    = sgnvg__allocCommand(sg);
+    SGNVGcustom*  custom = linked_arena_alloc_clear(sg->frame_arena, sizeof(*custom));
+
+    cmd->type           = SGNVG_CMD_DRAW_NVG;
+    cmd->payload.custom = custom;
+
+    custom->uptr = uptr;
+    custom->func = func;
 }
