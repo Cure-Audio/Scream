@@ -620,15 +620,25 @@ static sg_pipeline sgnvg__getPipelineFromCache(SGNVGcontext* sg, enum SGNVGpipel
     return pipeline;
 }
 
-static SGNVGfragUniforms* nvg__fragUniformPtr(SGNVGcontext* gl, int i);
-
-static void sgnvg__setUniforms(SGNVGcontext* sg, int uniformOffset, int image)
+static void sgnvg__preparePipelineUniforms(
+    SGNVGcontext*          sg,
+    SGNVGfragUniforms*     uniforms,
+    int                    image,
+    enum SGNVGpipelineType pipelineType)
 {
-    SGNVG_INTLOG("sgnvg__setUniforms(sg: %p, uniformOffset: %d, image: %d)", sg, uniformOffset, image);
-    SGNVGtexture*      tex  = NULL;
-    SGNVGfragUniforms* frag = nvg__fragUniformPtr(sg, uniformOffset);
+    SGNVG_INTLOG(
+        "sgnvg__preparePipelineUniforms(sg: %p, pipelineType: %d, uniformOffset: %d, image: %d)",
+        sg,
+        pipelineType,
+        uniformOffset,
+        image);
+    sg_pipeline   pip = sgnvg__getPipelineFromCache(sg, pipelineType);
+    SGNVGtexture* tex = NULL;
+
+    sg_apply_pipeline(pip);
+
     sg_apply_uniforms(UB_nanovg_viewSize, &(sg_range){&sg->view, sizeof(sg->view)});
-    sg_apply_uniforms(UB_nanovg_frag, &(sg_range){frag, sizeof(*frag)});
+    sg_apply_uniforms(UB_nanovg_frag, &(sg_range){uniforms, sizeof(*uniforms)});
 
     if (image != 0)
     {
@@ -645,20 +655,6 @@ static void sgnvg__setUniforms(SGNVGcontext* sg, int uniformOffset, int image)
         .images[IMG_nanovg_tex]   = tex ? tex->img : (sg_image){0},
         .samplers[SMP_nanovg_smp] = tex ? tex->smp : (sg_sampler){0},
     });
-}
-
-static void
-sgnvg__preparePipelineUniforms(SGNVGcontext* sg, enum SGNVGpipelineType pipelineType, int uniformOffset, int image)
-{
-    SGNVG_INTLOG(
-        "sgnvg__preparePipelineUniforms(sg: %p, pipelineType: %d, uniformOffset: %d, image: %d)",
-        sg,
-        pipelineType,
-        uniformOffset,
-        image);
-    sg_pipeline pip = sgnvg__getPipelineFromCache(sg, pipelineType);
-    sg_apply_pipeline(pip);
-    sgnvg__setUniforms(sg, uniformOffset, image);
 }
 
 static int nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
@@ -982,19 +978,19 @@ static void sgnvg__fill(SGNVGcontext* sg, SGNVGcall* call)
     SGNVGpath* paths = &sg->paths[call->pathOffset];
     int        i, npaths = call->pathCount;
 
-    sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_FILL_STENCIL, call->uniformOffset, 0);
+    sgnvg__preparePipelineUniforms(sg, call->uniforms_1, 0, SGNVG_PIP_FILL_STENCIL);
     for (i = 0; i < npaths; i++)
         sg_draw(paths[i].fillOffset, paths[i].fillCount, 1);
 
     // if (sg->flags & NVG_ANTIALIAS) {
-    sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_FILL_ANTIALIAS, call->uniformOffset + sg->fragSize, call->image);
+    sgnvg__preparePipelineUniforms(sg, call->uniforms_2, call->image, SGNVG_PIP_FILL_ANTIALIAS);
     // Draw fringes
     for (i = 0; i < npaths; i++)
         sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
     // }
 
     // Draw fill
-    sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_FILL_DRAW, call->uniformOffset + sg->fragSize, call->image);
+    sgnvg__preparePipelineUniforms(sg, call->uniforms_2, call->image, SGNVG_PIP_FILL_DRAW);
     sg_draw(call->triangleOffset, call->triangleCount, 1);
 }
 
@@ -1004,7 +1000,7 @@ static void sgnvg__convexFill(SGNVGcontext* sg, SGNVGcall* call)
     SGNVGpath* paths = &sg->paths[call->pathOffset];
     int        i, npaths = call->pathCount;
 
-    sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_BASE, call->uniformOffset, call->image);
+    sgnvg__preparePipelineUniforms(sg, call->uniforms_1, call->image, SGNVG_PIP_BASE);
     for (i = 0; i < npaths; i++)
     {
         sg_draw(paths[i].fillOffset, paths[i].fillCount, 1);
@@ -1024,30 +1020,24 @@ static void sgnvg__stroke(SGNVGcontext* sg, SGNVGcall* call)
 
     if (sg->flags & NVG_STENCIL_STROKES)
     {
-        sgnvg__preparePipelineUniforms(
-            sg,
-            SGNVG_PIP_STROKE_STENCIL_DRAW,
-            call->uniformOffset + sg->fragSize,
-            call->image);
+        sgnvg__preparePipelineUniforms(sg, call->uniforms_2, call->image, SGNVG_PIP_STROKE_STENCIL_DRAW);
+
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
 
         // Draw anti-aliased pixels.
-        sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_STROKE_STENCIL_ANTIALIAS, call->uniformOffset, call->image);
+        sgnvg__preparePipelineUniforms(sg, call->uniforms_1, call->image, SGNVG_PIP_STROKE_STENCIL_ANTIALIAS);
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
 
         // Clear stencil buffer.
-        sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_STROKE_STENCIL_CLEAR, call->uniformOffset, 0);
+        sgnvg__preparePipelineUniforms(sg, call->uniforms_1, 0, SGNVG_PIP_STROKE_STENCIL_CLEAR);
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
-
-        //		sgnvg__convertPaint(sg, nvg__fragUniformPtr(sg, call->uniformOffset + sg->fragSize), paint,
-        // scissor, strokeWidth, fringe, 1.0f - 0.5f/255.0f);
     }
     else
     {
-        sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_BASE, call->uniformOffset, call->image);
+        sgnvg__preparePipelineUniforms(sg, call->uniforms_1, call->image, SGNVG_PIP_BASE);
         // Draw Strokes
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
@@ -1057,7 +1047,7 @@ static void sgnvg__stroke(SGNVGcontext* sg, SGNVGcall* call)
 static void sgnvg__triangles(SGNVGcontext* sg, SGNVGcall* call)
 {
     SGNVG_INTLOG("sgnvg__triangles(sg: %p, call: %p)", sg, call);
-    sgnvg__preparePipelineUniforms(sg, SGNVG_PIP_BASE, call->uniformOffset, call->image);
+    sgnvg__preparePipelineUniforms(sg, call->uniforms_1, call->image, SGNVG_PIP_BASE);
     sg_draw(call->triangleOffset, call->triangleCount, 1);
 }
 
@@ -1132,8 +1122,9 @@ void nvgBeginFrame(NVGcontext* ctx, float devicePixelRatio)
     sg->nindexes     = 0;
     sg->npaths       = 0;
     sg->ncalls       = 0;
-    sg->nuniforms    = 0;
     sg->npasses      = 0;
+
+    linked_arena_clear(sg->frame_arena);
 
     nvg__setDevicePixelRatio(ctx, devicePixelRatio);
 }
@@ -1145,7 +1136,6 @@ void nvgCancelFrame(NVGcontext* ctx)
     sg->nverts       = 0;
     sg->npaths       = 0;
     sg->ncalls       = 0;
-    sg->nuniforms    = 0;
 }
 
 void nvgEndFrame(NVGcontext* ctx)
@@ -1409,31 +1399,6 @@ static int sgnvg__allocIndexes(SGNVGcontext* sg, int n)
     return ret;
 }
 
-static int sgnvg__allocFragUniforms(SGNVGcontext* sg, int n)
-{
-    SGNVG_INTLOG("sgnvg__allocFragUniforms(sg: %p, n: %d)", sg, n);
-    int ret = 0, structSize = sg->fragSize;
-    if (sg->nuniforms + n > sg->cuniforms)
-    {
-        unsigned char* uniforms;
-        int            cuniforms = sgnvg__maxi(sg->nuniforms + n, 128) + sg->cuniforms / 2; // 1.5x Overallocate
-        uniforms                 = (unsigned char*)SGNVG_REALLOC(sg->uniforms, structSize * cuniforms);
-        if (uniforms == NULL)
-            return -1;
-        sg->uniforms  = uniforms;
-        sg->cuniforms = cuniforms;
-    }
-    ret            = sg->nuniforms * structSize;
-    sg->nuniforms += n;
-    return ret;
-}
-
-static SGNVGfragUniforms* nvg__fragUniformPtr(SGNVGcontext* gl, int i)
-{
-    SGNVG_INTLOG("nvg__fragUniformPtr(gl: %p, i: %d)", gl, i);
-    return (SGNVGfragUniforms*)&gl->uniforms[i];
-}
-
 static void sgnvg__vset(SGNVGattribute* vtx, float x, float y, float u, float v)
 {
     SGNVG_INTLOG("sgnvg__vset(vtx: %p, x: %f, y: %f, u: %f, v: %f)", vtx, x, y, u, v);
@@ -1505,8 +1470,8 @@ static void nvg_impl_renderFill(
         npaths);
     SGNVGcontext*      sg   = (SGNVGcontext*)uptr;
     SGNVGcall*         call = sgnvg__allocCall(sg);
-    SGNVGattribute*    quad;
-    SGNVGfragUniforms* frag;
+    SGNVGattribute*    quad = NULL;
+    SGNVGfragUniforms* frag = NULL;
     int                i, maxverts, offset, maxindexes, ioffset;
 
     if (call == NULL)
@@ -1576,31 +1541,28 @@ static void nvg_impl_renderFill(
         sgnvg__vset(&quad[2], bounds[0], bounds[3], 0.5f, 1.0f);
         sgnvg__vset(&quad[3], bounds[0], bounds[1], 0.5f, 1.0f);
         sgnvg__generateTriangleStripIndexes(&sg->indexes[ioffset], offset, 4);
-        call->uniformOffset = sgnvg__allocFragUniforms(sg, 2);
-        if (call->uniformOffset == -1)
+
+        frag = linked_arena_alloc_clear(sg->frame_arena, 2 * sizeof(*frag));
+        if (frag == NULL)
             goto error;
+
+        call->uniforms_1 = frag;
+        call->uniforms_2 = frag + 1;
+
         // Simple shader for stencil
-        frag = nvg__fragUniformPtr(sg, call->uniformOffset);
-        memset(frag, 0, sizeof(*frag));
-        frag->strokeThr = -1.0f;
-        frag->type      = NSVG_SHADER_SIMPLE;
+        call->uniforms_1->strokeThr = -1.0f;
+        call->uniforms_1->type      = NSVG_SHADER_SIMPLE;
         // Fill shader
-        sgnvg__convertPaint(
-            sg,
-            nvg__fragUniformPtr(sg, call->uniformOffset + sg->fragSize),
-            paint,
-            scissor,
-            fringe,
-            fringe,
-            -1.0f);
+        sgnvg__convertPaint(sg, call->uniforms_2, paint, scissor, fringe, fringe, -1.0f);
     }
     else
     {
-        call->uniformOffset = sgnvg__allocFragUniforms(sg, 1);
-        if (call->uniformOffset == -1)
+        frag = linked_arena_alloc_clear(sg->frame_arena, sizeof(*frag));
+        if (frag == NULL)
             goto error;
+        call->uniforms_1 = frag;
         // Fill shader
-        sgnvg__convertPaint(sg, nvg__fragUniformPtr(sg, call->uniformOffset), paint, scissor, fringe, fringe, -1.0f);
+        sgnvg__convertPaint(sg, frag, paint, scissor, fringe, fringe, -1.0f);
     }
 
     return;
@@ -1636,9 +1598,10 @@ static void nvg_impl_renderStroke(
         strokeWidth,
         paths,
         npaths);
-    SGNVGcontext* sg   = (SGNVGcontext*)uptr;
-    SGNVGcall*    call = sgnvg__allocCall(sg);
-    int           i, maxverts, offset, maxindexes, ioffset;
+    SGNVGcontext*      sg    = (SGNVGcontext*)uptr;
+    SGNVGcall*         call  = sgnvg__allocCall(sg);
+    SGNVGfragUniforms* frags = NULL;
+    int                i, maxverts, offset, maxindexes, ioffset;
 
     if (call == NULL)
         return;
@@ -1681,41 +1644,25 @@ static void nvg_impl_renderStroke(
     if (sg->flags & NVG_STENCIL_STROKES)
     {
         // Fill shader
-        call->uniformOffset = sgnvg__allocFragUniforms(sg, 2);
-        if (call->uniformOffset == -1)
+        frags = linked_arena_alloc_clear(sg->frame_arena, 2 * sizeof(*frags));
+
+        if (frags == NULL)
             goto error;
 
-        sgnvg__convertPaint(
-            sg,
-            nvg__fragUniformPtr(sg, call->uniformOffset),
-            paint,
-            scissor,
-            strokeWidth,
-            fringe,
-            -1.0f);
-        sgnvg__convertPaint(
-            sg,
-            nvg__fragUniformPtr(sg, call->uniformOffset + sg->fragSize),
-            paint,
-            scissor,
-            strokeWidth,
-            fringe,
-            1.0f - 0.5f / 255.0f);
+        call->uniforms_1 = frags;
+        call->uniforms_2 = frags + 1;
+
+        sgnvg__convertPaint(sg, call->uniforms_1, paint, scissor, strokeWidth, fringe, -1.0f);
+        sgnvg__convertPaint(sg, call->uniforms_2, paint, scissor, strokeWidth, fringe, 1.0f - 0.5f / 255.0f);
     }
     else
     {
         // Fill shader
-        call->uniformOffset = sgnvg__allocFragUniforms(sg, 1);
-        if (call->uniformOffset == -1)
+        frags = linked_arena_alloc_clear(sg->frame_arena, sizeof(*frags));
+        if (frags == NULL)
             goto error;
-        sgnvg__convertPaint(
-            sg,
-            nvg__fragUniformPtr(sg, call->uniformOffset),
-            paint,
-            scissor,
-            strokeWidth,
-            fringe,
-            -1.0f);
+        call->uniforms_1 = frags;
+        sgnvg__convertPaint(sg, call->uniforms_1, paint, scissor, strokeWidth, fringe, -1.0f);
     }
 
     return;
@@ -1751,7 +1698,7 @@ static void nvg_impl_renderTriangles(
         fringe);
     SGNVGcontext*      sg   = (SGNVGcontext*)uptr;
     SGNVGcall*         call = sgnvg__allocCall(sg);
-    SGNVGfragUniforms* frag;
+    SGNVGfragUniforms* frag = NULL;
 
     if (call == NULL)
         return;
@@ -1776,10 +1723,10 @@ static void nvg_impl_renderTriangles(
         sg->indexes[ioffset + i] = offset + i;
 
     // Fill shader
-    call->uniformOffset = sgnvg__allocFragUniforms(sg, 1);
-    if (call->uniformOffset == -1)
+    frag = linked_arena_alloc_clear(sg->frame_arena, sizeof(*frag));
+    if (frag == NULL)
         goto error;
-    frag = nvg__fragUniformPtr(sg, call->uniformOffset);
+    call->uniforms_1 = frag;
     sgnvg__convertPaint(sg, frag, paint, scissor, 1.0f, fringe, -1.0f);
     frag->type = NSVG_SHADER_IMG;
 
@@ -1850,13 +1797,14 @@ static void nvg_impl_renderDelete(void* uptr)
     {
         SGNVG_FREE(sg->indexes);
     }
-    if (sg->uniforms)
-    {
-        SGNVG_FREE(sg->uniforms);
-    }
     if (sg->passes)
     {
         SGNVG_FREE(sg->passes);
+    }
+
+    if (sg->frame_arena)
+    {
+        linked_arena_destroy(sg->frame_arena);
     }
 
     SGNVG_FREE(sg);
@@ -1877,6 +1825,8 @@ NVGcontext* nvgCreateSokol(int flags)
     params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
 
     sg->flags = flags;
+
+    sg->frame_arena = linked_arena_create(1024 * 256);
 
     ctx = nvgCreateInternal(&params);
     if (ctx == NULL)

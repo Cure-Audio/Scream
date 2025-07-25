@@ -1,5 +1,6 @@
 #include "linked_arena.h"
 
+#include <string.h>
 #include <xhl/alloc.h>
 
 static inline uint64_t linked_arena_align(uint64_t value, uint64_t alignment)
@@ -70,6 +71,13 @@ void* linked_arena_alloc(LinkedArena* arena, size_t size)
         }
     }
 
+    return ptr;
+}
+
+void* linked_arena_alloc_clear(LinkedArena* arena, size_t size)
+{
+    void* ptr = linked_arena_alloc(arena, size);
+    memset(ptr, 0, size);
     return ptr;
 }
 

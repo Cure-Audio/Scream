@@ -32,7 +32,7 @@ extern "C" {
 #include <nanovg2.h>
 #include <sokol_gfx.h>
 
-// struct sg_image;
+#include "linked_arena.h"
 
 // Create flags
 
@@ -101,18 +101,6 @@ enum SGNVGcallType
     SGNVG_STROKE,
     SGNVG_TRIANGLES,
 };
-
-typedef struct SGNVGcall
-{
-    int        type;
-    int        image;
-    int        pathOffset;
-    int        pathCount;
-    int        triangleOffset;
-    int        triangleCount;
-    int        uniformOffset;
-    SGNVGblend blendFunc;
-} SGNVGcall;
 
 typedef struct SGNVGpath
 {
@@ -195,6 +183,21 @@ typedef struct SGNVGpipelineCache
     uint16_t              currentUse; // incremented on each overwrite
 } SGNVGpipelineCache;
 
+typedef struct SGNVGcall
+{
+    int        type;
+    int        image;
+    int        pathOffset;
+    int        pathCount;
+    int        triangleOffset;
+    int        triangleCount;
+    int        uniformOffset;
+    SGNVGblend blendFunc;
+
+    SGNVGfragUniforms* uniforms_1;
+    SGNVGfragUniforms* uniforms_2;
+} SGNVGcall;
+
 typedef struct SGNVGPass
 {
     sg_pass pass;
@@ -233,13 +236,12 @@ typedef struct SGNVGcontext
     int             cindexes;
     int             nindexes;
     int             cindexes_gpu;
-    unsigned char*  uniforms;
-    int             cuniforms;
-    int             nuniforms;
 
     SGNVGPass* passes;
     int        cpasses;
     int        npasses;
+
+    LinkedArena* frame_arena;
 
     // state
     int            pipelineCacheIndex;
