@@ -185,27 +185,33 @@ typedef struct SGNVGpipelineCache
 
 typedef struct SGNVGcall
 {
-    int        type;
-    int        image;
-    int        pathOffset;
-    int        pathCount;
-    int        triangleOffset;
-    int        triangleCount;
-    int        uniformOffset;
+    int type;
+    int image;
+    int triangleOffset;
+    int triangleCount;
+
     SGNVGblend blendFunc;
 
-    SGNVGfragUniforms* uniforms_1;
-    SGNVGfragUniforms* uniforms_2;
+    int        num_paths;
+    SGNVGpath* paths;
+
+    // depending on SGNVGcall.type and NVG_STENCIL_STROKES, this may be 2 consecutive uniforms
+    SGNVGfragUniforms* uniforms;
+
+    struct SGNVGcall* next;
 } SGNVGcall;
 
-typedef struct SGNVGPass
+typedef struct SGNVGpass
 {
     sg_pass pass;
 
     int width, height;
 
-    int draw_start_ncalls;
-} SGNVGPass;
+    int num_calls;
+
+    struct SGNVGcall* calls;
+    struct SGNVGpass* next;
+} SGNVGpass;
 
 typedef struct SGNVGcontext
 {
@@ -222,12 +228,6 @@ typedef struct SGNVGcontext
     int                flags;
 
     // Per frame buffers
-    SGNVGcall*      calls;
-    int             ccalls;
-    int             ncalls;
-    SGNVGpath*      paths;
-    int             cpaths;
-    int             npaths;
     SGNVGattribute* verts;
     int             cverts;
     int             nverts;
@@ -237,11 +237,15 @@ typedef struct SGNVGcontext
     int             nindexes;
     int             cindexes_gpu;
 
-    SGNVGPass* passes;
-    int        cpasses;
-    int        npasses;
-
+    // Feel free to allocate anything you want with this at any time in a frame after nvgBeginFrame() is called
+    // Note all allocations are dropped when nvgBeginFrame() is called
+    // It is also unadvised to release anything you allocate with this.
+    // If these rules/guidelines are okay with you, go ahead
     LinkedArena* frame_arena;
+
+    SGNVGcall* current_call; // linked list current position
+    SGNVGpass* current_pass; // linked list current position
+    SGNVGpass* first_pass;   // linked list start
 
     // state
     int            pipelineCacheIndex;
@@ -251,8 +255,6 @@ typedef struct SGNVGcontext
 } SGNVGcontext;
 
 void snvg_new_pass(NVGcontext* ctx, const sg_pass*, int width, int height);
-
-void snvg_process_draws(NVGcontext* ctx, int start_idx, int end_idx, int width, int height);
 
 #ifdef __cplusplus
 }

@@ -336,9 +336,6 @@ void nvgDebugDumpPathCache(NVGcontext* ctx);
 // devicePixelRatio to: frameBufferWidth / windowWidth.
 void nvgBeginFrame(NVGcontext* ctx, float devicePixelRatio);
 
-// Cancels drawing the current frame.
-void nvgCancelFrame(NVGcontext* ctx);
-
 // Ends drawing flushing remaining render state.
 void nvgEndFrame(NVGcontext* ctx);
 

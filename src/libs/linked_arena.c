@@ -47,7 +47,7 @@ void* linked_arena_alloc(LinkedArena* arena, size_t size)
     xassert(size > 0);
     void* ptr = NULL;
 
-    size = linked_arena_align(size, 32);
+    size = linked_arena_align(size, 16);
 
     while (ptr == NULL)
     {
