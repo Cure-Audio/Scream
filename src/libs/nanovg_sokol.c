@@ -235,192 +235,6 @@ void main(void) {
 #define SGNVG_ASSERT(cond) assert((cond))
 #endif
 
-enum SGNVGshaderType
-{
-    NSVG_SHADER_FILLGRAD,
-    NSVG_SHADER_FILLIMG,
-    NSVG_SHADER_SIMPLE,
-    NSVG_SHADER_IMG
-};
-
-struct SGNVGtexture
-{
-    int        id;
-    sg_image   img;
-    sg_sampler smp;
-    int        width, height;
-    int        type;
-    int        flags;
-    uint8_t*   imgData;
-};
-typedef struct SGNVGtexture SGNVGtexture;
-
-struct SGNVGblend
-{
-    sg_blend_factor srcRGB;
-    sg_blend_factor dstRGB;
-    sg_blend_factor srcAlpha;
-    sg_blend_factor dstAlpha;
-};
-typedef struct SGNVGblend SGNVGblend;
-
-enum SGNVGcallType
-{
-    SGNVG_NONE = 0,
-    SGNVG_FILL,
-    SGNVG_CONVEXFILL,
-    SGNVG_STROKE,
-    SGNVG_TRIANGLES,
-};
-
-struct SGNVGcall
-{
-    int        type;
-    int        image;
-    int        pathOffset;
-    int        pathCount;
-    int        triangleOffset;
-    int        triangleCount;
-    int        uniformOffset;
-    SGNVGblend blendFunc;
-};
-typedef struct SGNVGcall SGNVGcall;
-
-struct SGNVGpath
-{
-    int fillOffset;
-    int fillCount;
-    int strokeOffset;
-    int strokeCount;
-};
-typedef struct SGNVGpath SGNVGpath;
-
-struct SGNVGattribute
-{
-    float vertex[2];
-    float tcoord[2];
-};
-typedef struct SGNVGattribute SGNVGattribute;
-
-struct SGNVGvertUniforms
-{
-    float viewSize[4];
-};
-typedef struct SGNVGvertUniforms SGNVGvertUniforms;
-
-struct SGNVGfragUniforms
-{
-#define NANOVG_SG_UNIFORMARRAY_SIZE 11
-    union
-    {
-        struct
-        {
-            float           scissorMat[12]; // matrices are actually 3 vec4s
-            float           paintMat[12];
-            struct NVGcolor innerCol;
-            struct NVGcolor outerCol;
-            float           scissorExt[2];
-            float           scissorScale[2];
-            float           extent[2];
-            float           radius;
-            float           feather;
-            float           strokeMult;
-            float           strokeThr;
-            float           texType;
-            float           type;
-        };
-        float uniformArray[NANOVG_SG_UNIFORMARRAY_SIZE][4];
-    };
-};
-typedef struct SGNVGfragUniforms SGNVGfragUniforms;
-
-// LRU cache; keep its size relatively small, as items are accessed via a linear search
-#define NANOVG_SG_PIPELINE_CACHE_SIZE 32
-
-struct SGNVGpipelineCacheKey
-{
-    uint16_t blend;   // cached as `src_factor_rgb | (dst_factor_rgb << 4) | (src_factor_alpha << 8) | (dst_factor_alpha
-                      // << 12)`
-    uint16_t lastUse; // updated on each read
-};
-typedef struct SGNVGpipelineCacheKey SGNVGpipelineCacheKey;
-
-enum SGNVGpipelineType
-{
-    // used by sgnvg__convexFill, sgnvg__stroke, sgnvg__triangles
-    SGNVG_PIP_BASE = 0,
-
-    // used by sgnvg__fill
-    SGNVG_PIP_FILL_STENCIL,
-    SGNVG_PIP_FILL_ANTIALIAS, // only used if sg->flags & NVG_ANTIALIAS
-    SGNVG_PIP_FILL_DRAW,
-
-    // used by sgnvg__stroke
-    SGNVG_PIP_STROKE_STENCIL_DRAW,      // only used if sg->flags & NVG_STENCIL_STROKES
-    SGNVG_PIP_STROKE_STENCIL_ANTIALIAS, // only used if sg->flags & NVG_STENCIL_STROKES
-    SGNVG_PIP_STROKE_STENCIL_CLEAR,     // only used if sg->flags & NVG_STENCIL_STROKES
-
-    SGNVG_PIP_NUM_
-};
-typedef enum SGNVGpipelineType SGNVGpipelineType;
-
-struct SGNVGpipelineCache
-{
-    // keys are stored as a separate array for search performance
-    SGNVGpipelineCacheKey keys[NANOVG_SG_PIPELINE_CACHE_SIZE];
-    sg_pipeline           pipelines[NANOVG_SG_PIPELINE_CACHE_SIZE][SGNVG_PIP_NUM_];
-    uint8_t               pipelinesActive[NANOVG_SG_PIPELINE_CACHE_SIZE];
-    uint16_t              currentUse; // incremented on each overwrite
-};
-typedef struct SGNVGpipelineCache SGNVGpipelineCache;
-
-struct SGNVGcontext
-{
-    sg_shader          shader;
-    SGNVGtexture*      textures;
-    SGNVGvertUniforms  view;
-    int                ntextures;
-    int                ctextures;
-    int                textureId;
-    sg_buffer          vertBuf;
-    sg_buffer          indexBuf;
-    SGNVGpipelineCache pipelineCache;
-    int                fragSize;
-    int                flags;
-
-    // Per frame buffers
-    SGNVGcall*      calls;
-    int             ccalls;
-    int             ncalls;
-    SGNVGpath*      paths;
-    int             cpaths;
-    int             npaths;
-    SGNVGattribute* verts;
-    int             cverts;
-    int             nverts;
-    int             cverts_gpu;
-    uint32_t*       indexes;
-    int             cindexes;
-    int             nindexes;
-    int             cindexes_gpu;
-    unsigned char*  uniforms;
-    int             cuniforms;
-    int             nuniforms;
-
-    int draw_start_ncalls;
-    int draw_start_npaths;
-    int draw_start_nverts;
-    int draw_start_nindexes;
-    int draw_start_nuniforms;
-
-    // state
-    int            pipelineCacheIndex;
-    sg_blend_state blend;
-
-    int dummyTex;
-};
-typedef struct SGNVGcontext SGNVGcontext;
-
 static int sgnvg__maxi(int a, int b) { return a > b ? a : b; }
 
 #ifdef SOKOL_GLES2
@@ -572,7 +386,7 @@ static void sgnvg__initPipeline(
         });
 }
 
-static bool sgnvg__pipelineTypeIsInUse(SGNVGcontext* sg, SGNVGpipelineType type)
+static bool sgnvg__pipelineTypeIsInUse(SGNVGcontext* sg, enum SGNVGpipelineType type)
 {
     SGNVG_INTLOG("sgnvg__pipelineTypeIsInUse(sg: %p, type: %d)", sg, type);
     switch (type)
@@ -635,7 +449,7 @@ static int sgnvg__getIndexFromCache(SGNVGcontext* sg, uint16_t blendNumber)
     return maxAgeIndex;
 }
 
-static sg_pipeline sgnvg__getPipelineFromCache(SGNVGcontext* sg, SGNVGpipelineType type)
+static sg_pipeline sgnvg__getPipelineFromCache(SGNVGcontext* sg, enum SGNVGpipelineType type)
 {
     SGNVG_INTLOG("sgnvg__getPipelineFromCache(sg: %p, type: %d)", sg, type);
     SGNVG_ASSERT(sgnvg__pipelineTypeIsInUse(sg, type));
@@ -834,7 +648,7 @@ static void sgnvg__setUniforms(SGNVGcontext* sg, int uniformOffset, int image)
 }
 
 static void
-sgnvg__preparePipelineUniforms(SGNVGcontext* sg, SGNVGpipelineType pipelineType, int uniformOffset, int image)
+sgnvg__preparePipelineUniforms(SGNVGcontext* sg, enum SGNVGpipelineType pipelineType, int uniformOffset, int image)
 {
     SGNVG_INTLOG(
         "sgnvg__preparePipelineUniforms(sg: %p, pipelineType: %d, uniformOffset: %d, image: %d)",
@@ -846,9 +660,6 @@ sgnvg__preparePipelineUniforms(SGNVGcontext* sg, SGNVGpipelineType pipelineType,
     sg_apply_pipeline(pip);
     sgnvg__setUniforms(sg, uniformOffset, image);
 }
-
-#define NANOVG_SG_TOSTRING_(X) #X
-#define NANOVG_SG_TOSTRING(X)  NANOVG_SG_TOSTRING_(X)
 
 static int nvg_impl_renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
 
@@ -864,10 +675,10 @@ static int nvg_impl_renderCreate(void* uptr)
     // sg->shader = sg_make_shader(nanovg_sg_shader_desc(sg_query_backend()));
     for (int i = 0; i < NANOVG_SG_PIPELINE_CACHE_SIZE; i++)
     {
-        for (uint32_t t = 0; t < SGNVG_PIP_NUM_; t++)
+        for (enum SGNVGpipelineType t = 0; t < SGNVG_PIP_NUM_; t++)
         {
             // only allocate pipelines if correct flags are set
-            if (!sgnvg__pipelineTypeIsInUse(sg, (SGNVGpipelineType)t))
+            if (!sgnvg__pipelineTypeIsInUse(sg, t))
                 continue;
             sg->pipelineCache.pipelines[i][t] = sg_alloc_pipeline();
         }
@@ -1301,7 +1112,7 @@ static SGNVGblend sgnvg__blendCompositeOperation(NVGcompositeOperationState op)
     return blend;
 }
 
-void nvgBeginFrame(NVGcontext* ctx)
+void nvgBeginFrame(NVGcontext* ctx, float devicePixelRatio)
 {
     /*	printf("Tris: draws:%d  fill:%d  stroke:%d  text:%d  TOT:%d",
                     ctx->drawCallCount, ctx->fillTriCount, ctx->strokeTriCount, ctx->textTriCount,
@@ -1322,12 +1133,9 @@ void nvgBeginFrame(NVGcontext* ctx)
     sg->npaths       = 0;
     sg->ncalls       = 0;
     sg->nuniforms    = 0;
+    sg->npasses      = 0;
 
-    sg->draw_start_ncalls    = 0;
-    sg->draw_start_npaths    = 0;
-    sg->draw_start_nverts    = 0;
-    sg->draw_start_nindexes  = 0;
-    sg->draw_start_nuniforms = 0;
+    nvg__setDevicePixelRatio(ctx, devicePixelRatio);
 }
 
 void nvgCancelFrame(NVGcontext* ctx)
@@ -1342,6 +1150,8 @@ void nvgCancelFrame(NVGcontext* ctx)
 
 void nvgEndFrame(NVGcontext* ctx)
 {
+    SGNVG_EXTLOG("nvgEndFrame(ctx: %p)", ctx);
+
     if (ctx->fontImageIdx != 0)
     {
         int fontImage                      = ctx->fontImages[ctx->fontImageIdx];
@@ -1370,35 +1180,10 @@ void nvgEndFrame(NVGcontext* ctx)
         ctx->fontImages[0] = fontImage;
         ctx->fontImageIdx  = 0;
     }
-}
 
-void nvgBeginDraw(NVGcontext* ctx, float width, float height, float devicePixelRatio)
-{
-    SGNVG_EXTLOG(
-        "nvgBeginDraw(ctx: %p, width: %f, height: %f, devicePixelRatio: %f)",
-        ctx,
-        width,
-        height,
-        devicePixelRatio);
-
-    nvg__setDevicePixelRatio(ctx, devicePixelRatio);
-
-    SGNVGcontext* sg     = (SGNVGcontext*)ctx->params.userPtr;
-    sg->view.viewSize[0] = width;
-    sg->view.viewSize[1] = height;
-
-    sg->draw_start_ncalls    = sg->ncalls;
-    sg->draw_start_npaths    = sg->npaths;
-    sg->draw_start_nverts    = sg->nverts;
-    sg->draw_start_nindexes  = sg->nindexes;
-    sg->draw_start_nuniforms = sg->nuniforms;
-}
-void nvgEndDraw(NVGcontext* ctx)
-{
-    SGNVG_EXTLOG("nvgEndDraw(ctx: %p)", ctx);
     SGNVGcontext* sg = (SGNVGcontext*)ctx->params.userPtr;
 
-    int i;
+    int i, pass_idx;
 
     for (i = 0; i < sg->ntextures; i++)
     {
@@ -1418,64 +1203,90 @@ void nvgEndDraw(NVGcontext* ctx)
         }
     }
 
-    if (sg->ncalls > sg->draw_start_ncalls && sg->nverts > sg->draw_start_nverts &&
-        sg->nindexes > sg->draw_start_nindexes)
+    if (!(sg->ncalls > 0 && sg->nverts > 0 && sg->nindexes > 0))
+        return;
+
+    if (sg->cverts_gpu < sg->nverts) // resize GPU vertex buffer
     {
-        if (sg->cverts_gpu < sg->nverts) // resize GPU vertex buffer
-        {
-            if (sg->cverts_gpu) // delete old buffer if necessary
-                sg_uninit_buffer(sg->vertBuf);
-            sg->cverts_gpu = sg->cverts;
-            sg_init_buffer(
-                sg->vertBuf,
-                &(sg_buffer_desc){
-                    .size                = sg->cverts_gpu * sizeof(*sg->verts),
-                    .usage.vertex_buffer = true,
-                    .usage.stream_update = true,
-                    .label               = "nanovg.vertBuf",
-                });
-        }
-        // upload vertex data
-        SGNVGattribute* verts_begin = sg->verts + sg->draw_start_nverts;
-        int             num_verts   = sg->nverts - sg->draw_start_nverts;
-        sg_update_buffer(sg->vertBuf, &(sg_range){verts_begin, num_verts * sizeof(*sg->verts)});
+        if (sg->cverts_gpu) // delete old buffer if necessary
+            sg_uninit_buffer(sg->vertBuf);
+        sg->cverts_gpu = sg->cverts;
+        sg_init_buffer(
+            sg->vertBuf,
+            &(sg_buffer_desc){
+                .size                = sg->cverts_gpu * sizeof(*sg->verts),
+                .usage.vertex_buffer = true,
+                .usage.stream_update = true,
+                .label               = "nanovg.vertBuf",
+            });
+    }
+    // upload vertex data
+    sg_update_buffer(sg->vertBuf, &(sg_range){sg->verts, sg->nverts * sizeof(*sg->verts)});
 
-        if (sg->cindexes_gpu < sg->nindexes) // resize GPU index buffer
-        {
-            if (sg->cindexes_gpu) // delete old buffer if necessary
-                sg_uninit_buffer(sg->indexBuf);
-            sg->cindexes_gpu = sg->cindexes;
-            sg_init_buffer(
-                sg->indexBuf,
-                &(sg_buffer_desc){
-                    .size                = sg->cindexes_gpu * sizeof(*sg->indexes),
-                    .usage.index_buffer  = true,
-                    .usage.stream_update = true,
-                    .label               = "nanovg.indexBuf",
-                });
-        }
-        // upload index data
-        const uint32_t* indexes_begin = sg->indexes + sg->draw_start_nindexes;
-        int             num_indexes   = sg->nindexes - sg->draw_start_nindexes;
-        sg_update_buffer(sg->indexBuf, &(sg_range){indexes_begin, num_indexes * sizeof(*sg->indexes)});
+    if (sg->cindexes_gpu < sg->nindexes) // resize GPU index buffer
+    {
+        if (sg->cindexes_gpu) // delete old buffer if necessary
+            sg_uninit_buffer(sg->indexBuf);
+        sg->cindexes_gpu = sg->cindexes;
+        sg_init_buffer(
+            sg->indexBuf,
+            &(sg_buffer_desc){
+                .size                = sg->cindexes_gpu * sizeof(*sg->indexes),
+                .usage.index_buffer  = true,
+                .usage.stream_update = true,
+                .label               = "nanovg.indexBuf",
+            });
+    }
+    // upload index data
+    sg_update_buffer(sg->indexBuf, &(sg_range){sg->indexes, sg->nindexes * sizeof(*sg->indexes)});
 
-        for (i = sg->draw_start_ncalls; i < sg->ncalls; i++)
+    for (pass_idx = 0; pass_idx < sg->npasses; pass_idx++)
+    {
+        SGNVGPass* pass = sg->passes + pass_idx;
+
+        int start_ncalls = pass->draw_start_ncalls;
+        int end_ncalls;
+        if (pass_idx + 1 < sg->npasses)
         {
-            SGNVGcall* call            = &sg->calls[i];
-            sg->blend.src_factor_rgb   = call->blendFunc.srcRGB;
-            sg->blend.dst_factor_rgb   = call->blendFunc.dstRGB;
-            sg->blend.src_factor_alpha = call->blendFunc.srcAlpha;
-            sg->blend.dst_factor_alpha = call->blendFunc.dstAlpha;
-            sg->pipelineCacheIndex     = sgnvg__getIndexFromCache(sg, sgnvg__getCombinedBlendNumber(sg->blend));
-            if (call->type == SGNVG_FILL)
-                sgnvg__fill(sg, call);
-            else if (call->type == SGNVG_CONVEXFILL)
-                sgnvg__convexFill(sg, call);
-            else if (call->type == SGNVG_STROKE)
-                sgnvg__stroke(sg, call);
-            else if (call->type == SGNVG_TRIANGLES)
-                sgnvg__triangles(sg, call);
+            end_ncalls = (pass + 1)->draw_start_ncalls;
         }
+        else
+        {
+            end_ncalls = sg->ncalls;
+        }
+
+        sg_begin_pass(&pass->pass);
+
+        snvg_process_draws(ctx, start_ncalls, end_ncalls, pass->width, pass->height);
+
+        sg_end_pass();
+    }
+}
+
+void snvg_process_draws(NVGcontext* ctx, int start_idx, int end_idx, int width, int height)
+{
+    SGNVGcontext* sg = (SGNVGcontext*)ctx->params.userPtr;
+    int           i;
+
+    sg->view.viewSize[0] = width;
+    sg->view.viewSize[1] = height;
+
+    for (i = start_idx; i < end_idx; i++)
+    {
+        SGNVGcall* call            = &sg->calls[i];
+        sg->blend.src_factor_rgb   = call->blendFunc.srcRGB;
+        sg->blend.dst_factor_rgb   = call->blendFunc.dstRGB;
+        sg->blend.src_factor_alpha = call->blendFunc.srcAlpha;
+        sg->blend.dst_factor_alpha = call->blendFunc.dstAlpha;
+        sg->pipelineCacheIndex     = sgnvg__getIndexFromCache(sg, sgnvg__getCombinedBlendNumber(sg->blend));
+        if (call->type == SGNVG_FILL)
+            sgnvg__fill(sg, call);
+        else if (call->type == SGNVG_CONVEXFILL)
+            sgnvg__convexFill(sg, call);
+        else if (call->type == SGNVG_STROKE)
+            sgnvg__stroke(sg, call);
+        else if (call->type == SGNVG_TRIANGLES)
+            sgnvg__triangles(sg, call);
     }
 }
 
@@ -1501,6 +1312,25 @@ static int sgnvg__maxIndexCount(const NVGpath* paths, int npaths)
         count += sgnvg__maxi(paths[i].nstroke - 2, 0) * 3; // triangle strip
     }
     return count;
+}
+
+static SGNVGPass* sgnvg__allocPass(SGNVGcontext* sg)
+{
+    SGNVG_INTLOG("sgnvg__allocCall(sg: %p)", sg);
+    SGNVGPass* ret = NULL;
+    if (sg->npasses + 1 > sg->cpasses)
+    {
+        SGNVGPass* passes;
+        int        cpasses = sgnvg__maxi(sg->npasses + 1, 16) + sg->cpasses / 2; // 1.5x Overallocate
+        passes             = (SGNVGPass*)SGNVG_REALLOC(sg->passes, sizeof(*ret) * cpasses);
+        if (passes == NULL)
+            return NULL;
+        sg->passes  = passes;
+        sg->cpasses = cpasses;
+    }
+    ret = &sg->passes[sg->npasses++];
+    memset(ret, 0, sizeof(*ret));
+    return ret;
 }
 
 static SGNVGcall* sgnvg__allocCall(SGNVGcontext* sg)
@@ -1974,10 +1804,10 @@ static void nvg_impl_renderDelete(void* uptr)
 
     for (i = 0; i < NANOVG_SG_PIPELINE_CACHE_SIZE; i++)
     {
-        for (uint32_t t = 0; t < SGNVG_PIP_NUM_; t++)
+        for (enum SGNVGpipelineType t = 0; t < SGNVG_PIP_NUM_; t++)
         {
             // only uninitialize if correct flags are set
-            if (!sgnvg__pipelineTypeIsInUse(sg, (SGNVGpipelineType)t))
+            if (!sgnvg__pipelineTypeIsInUse(sg, t))
                 continue;
             if (sg->pipelineCache.pipelinesActive[i] & (1 << t))
                 sg_uninit_pipeline(sg->pipelineCache.pipelines[i][t]);
@@ -2023,6 +1853,10 @@ static void nvg_impl_renderDelete(void* uptr)
     if (sg->uniforms)
     {
         SGNVG_FREE(sg->uniforms);
+    }
+    if (sg->passes)
+    {
+        SGNVG_FREE(sg->passes);
     }
 
     SGNVG_FREE(sg);
@@ -2099,4 +1933,15 @@ sg_image nvsgImageHandleSokol(NVGcontext* ctx, int image)
     SGNVGcontext* sg  = (SGNVGcontext*)nvgInternalParams(ctx)->userPtr;
     SGNVGtexture* tex = sgnvg__findTexture(sg, image);
     return tex->img;
+}
+
+void snvg_new_pass(NVGcontext* ctx, const sg_pass* p, int width, int height)
+{
+    SGNVGcontext* sg   = ctx->params.userPtr;
+    SGNVGPass*    pass = sgnvg__allocPass(sg);
+    pass->pass         = *p;
+    pass->width        = width;
+    pass->height       = height;
+
+    pass->draw_start_ncalls = sg->ncalls;
 }

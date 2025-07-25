@@ -38,6 +38,15 @@ typedef struct LayoutMetrics
     float    knob_radius;
 } LayoutMetrics;
 
+typedef struct RenderTarget
+{
+    // sg_image       img_colour;
+    // sg_image       img_depth;
+    sg_attachments attachment;
+    int            width;
+    int            height;
+} RenderTarget;
+
 typedef struct GUI
 {
     LinkedArena* arena;
@@ -58,6 +67,8 @@ typedef struct GUI
     float input_gain_peaks_slow[2];
     float input_gain_peaks_fast[2];
 
+    sg_swapchain swapchain;
+
     sg_pipeline knob_pip;
     sg_buffer   knob_vbo;
     sg_buffer   knob_ibo;
@@ -77,6 +88,8 @@ typedef struct GUI
 
     uint64_t gui_create_time;
     uint64_t last_resize_time;
+
+    RenderTarget render_target_test;
 } GUI;
 
 // Nanovg helpers

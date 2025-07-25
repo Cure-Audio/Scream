@@ -334,16 +334,13 @@ void nvgDebugDumpPathCache(NVGcontext* ctx);
 // For example, GLFW returns two dimension for an opened window: window size and
 // frame buffer size. In that case you would set windowWidth/Height to the window size
 // devicePixelRatio to: frameBufferWidth / windowWidth.
-void nvgBeginFrame(NVGcontext* ctx);
+void nvgBeginFrame(NVGcontext* ctx, float devicePixelRatio);
 
 // Cancels drawing the current frame.
 void nvgCancelFrame(NVGcontext* ctx);
 
 // Ends drawing flushing remaining render state.
 void nvgEndFrame(NVGcontext* ctx);
-
-void nvgBeginDraw(NVGcontext* ctx, float windowWidth, float windowHeight, float devicePixelRatio);
-void nvgEndDraw(NVGcontext* ctx);
 
 //
 // Composite operation

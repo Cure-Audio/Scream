@@ -57,37 +57,6 @@ void* my_sg_allocator_alloc(size_t size, void* user_data)
 }
 void my_sg_allocator_free(void* ptr, void* user_data) { MY_FREE(ptr); }
 
-void pw_get_info(struct PWGetInfo* info)
-{
-    if (info->type == PW_INFO_INIT_SIZE)
-    {
-        Plugin* p              = info->init_size.plugin;
-        info->init_size.width  = p->width;
-        info->init_size.height = p->height;
-    }
-    else if (info->type == PW_INFO_CONSTRAIN_SIZE)
-    {
-        GUI* gui = info->constrain_size.gui;
-
-        uint32_t width  = info->constrain_size.width;
-        uint32_t height = info->constrain_size.height;
-
-        uint32_t min_height = GUI_MIN_HEIGHT;
-        if (gui->plugin->lfo_section_open)
-        {
-            min_height += gui->layout.top_content_height;
-        }
-
-        if (width < GUI_MIN_WIDTH)
-            width = GUI_MIN_WIDTH;
-        if (height < min_height)
-            height = min_height;
-
-        info->constrain_size.width  = width;
-        info->constrain_size.height = height;
-    }
-}
-
 // Source: https://github.com/floooh/sokol/issues/102
 sg_image sg_make_image_with_mipmaps(const sg_image_desc* desc_)
 {
@@ -197,6 +166,33 @@ sg_image sg_make_image_with_mipmaps(const sg_image_desc* desc_)
     sg_image img = sg_make_image(&desc);
     MY_FREE(big_target);
     return img;
+}
+
+RenderTarget make_render_target(int width, int height)
+{
+    RenderTarget rt = {0};
+
+    sg_image img_colour = sg_make_image(&(sg_image_desc){
+        .usage.render_attachment = true,
+        .width                   = width,
+        .height                  = height,
+        .pixel_format = SG_PIXELFORMAT_BGRA8,
+        .sample_count = 1,
+        .label        = "render target colour image"});
+
+    sg_image img_depth  = sg_make_image(&(sg_image_desc){
+         .usage.render_attachment = true,
+         .width                   = width,
+         .height                  = height,
+         .pixel_format = SG_PIXELFORMAT_DEPTH_STENCIL,
+         .sample_count = 1,
+         .label        = "render target depth image"});
+    rt.attachment = sg_make_attachments(&(sg_attachments_desc){
+        .colors[0].image     = img_colour,
+        .depth_stencil.image = img_depth,
+        .label               = "render target attachment"});
+
+    return rt;
 }
 
 void* pw_create_gui(void* _plugin, void* _pw)
@@ -410,6 +406,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
     ted_init(&gui->texteditor);
 
+    gui->render_target_test = make_render_target(200, 200);
+
     gui->gui_create_time = gui->frame_end_time = xtime_now_ns();
 
     gui->imgui.frame.events = 1 << PW_EVENT_RESIZE;
@@ -456,6 +454,37 @@ void pw_destroy_gui(void* _gui)
     // TODO: save last used width & height to settings file
 
     linked_arena_destroy(gui->arena);
+}
+
+void pw_get_info(struct PWGetInfo* info)
+{
+    if (info->type == PW_INFO_INIT_SIZE)
+    {
+        Plugin* p              = info->init_size.plugin;
+        info->init_size.width  = p->width;
+        info->init_size.height = p->height;
+    }
+    else if (info->type == PW_INFO_CONSTRAIN_SIZE)
+    {
+        GUI* gui = info->constrain_size.gui;
+
+        uint32_t width  = info->constrain_size.width;
+        uint32_t height = info->constrain_size.height;
+
+        uint32_t min_height = GUI_MIN_HEIGHT;
+        if (gui->plugin->lfo_section_open)
+        {
+            min_height += gui->layout.top_content_height;
+        }
+
+        if (width < GUI_MIN_WIDTH)
+            width = GUI_MIN_WIDTH;
+        if (height < min_height)
+            height = min_height;
+
+        info->constrain_size.width  = width;
+        info->constrain_size.height = height;
+    }
 }
 
 bool pw_event(const PWEvent* event)
@@ -1118,8 +1147,6 @@ void pw_tick(void* _gui)
     CPLUG_LOG_ASSERT(gui->plugin);
     CPLUG_LOG_ASSERT(gui->nvg);
 
-    LINKED_ARENA_LEAK_DETECT_BEGIN(gui->arena);
-
     if (!gui || !gui->plugin)
         return;
 
@@ -1131,12 +1158,6 @@ void pw_tick(void* _gui)
             gui->imgui.num_duplicate_backbuffers = 0;
         main_dequeue_events(gui->plugin);
     }
-
-    // #ifndef NDEBUG
-    gui->frame_start_time = xtime_now_ns();
-    // #endif
-    if (!gui->nvg)
-        return;
 
 #if defined(_WIN32)
     // Using the CPLUG window extension, we have configured our DXGI backbuffer count to a maximum of 2
@@ -1155,16 +1176,31 @@ void pw_tick(void* _gui)
     // if (gui->imgui.num_duplicate_backbuffers >= MAX_DUP_BACKBUFFER_COUNT)
     //     return;
 
+    if (!gui->nvg)
+        return;
+
+    LINKED_ARENA_LEAK_DETECT_BEGIN(gui->arena);
+
+    // #ifndef NDEBUG
+    gui->frame_start_time = xtime_now_ns();
+    // #endif
+
     const float dpi = pw_get_dpi(gui->pw);
 #ifdef __APPLE__
-    const float content_scale = dpi * 0.5;
+    const float content_scale    = dpi * 0.5;
+    const float devicePixelRatio = dpi; // required for text to render properly...
 #else
-    const float content_scale = dpi;
+    const float content_scale    = dpi;
+    const float devicePixelRatio = 1;
 #endif
 
     NVGcontext*    nvg = gui->nvg;
     imgui_context* im  = &gui->imgui;
     LayoutMetrics* lm  = &gui->layout;
+
+    sg_set_global(gui->sg);
+    imgui_begin_frame(im);
+    nvgBeginFrame(nvg, devicePixelRatio);
 
     enum
     {
@@ -1189,6 +1225,23 @@ void pw_tick(void* _gui)
     {
         lm->width  = gui->plugin->width;
         lm->height = gui->plugin->height;
+
+        gui->swapchain = (sg_swapchain){
+            .width        = gui->layout.width,
+            .height       = gui->layout.height,
+            .sample_count = 1,
+            .color_format = SG_PIXELFORMAT_BGRA8,
+            .depth_format = SG_PIXELFORMAT_DEPTH_STENCIL,
+
+#if __APPLE__
+            .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
+            .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
+#endif
+#if _WIN32
+            .d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw),
+            .d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw),
+#endif
+        };
 
         int init_height = GUI_INIT_HEIGHT;
         int top_height  = lm->height;
@@ -1253,40 +1306,30 @@ void pw_tick(void* _gui)
         }
     }
 
-    // Begin frame
-    {
-        sg_pass_action pass_action = {
-            .colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0, 0, 0, 1.0f}}};
+    snvg_new_pass(
+        nvg,
+        &(sg_pass){
+            .action      = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0, 0, 0, 1}}},
+            .attachments = gui->render_target_test.attachment,
+            .label       = "render target test",
+        },
+        gui->render_target_test.width,
+        gui->render_target_test.height);
 
-        sg_swapchain swapchain;
-        memset(&swapchain, 0, sizeof(swapchain));
-        swapchain.width        = lm->width;
-        swapchain.height       = lm->height;
-        swapchain.sample_count = 1;
-        swapchain.color_format = SG_PIXELFORMAT_BGRA8;
-        swapchain.depth_format = SG_PIXELFORMAT_DEPTH_STENCIL;
+    nvgBeginPath(nvg);
+    nvgRect(nvg, 20, 20, 40, 60);
+    nvgFillColour(nvg, (NVGcolour){1, 0, 0, 1});
+    nvgFill(nvg);
 
-#if __APPLE__
-        swapchain.metal.current_drawable      = pw_get_metal_drawable(gui->pw);
-        swapchain.metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw);
-#endif
-#if _WIN32
-        swapchain.d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw);
-        swapchain.d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw);
-#endif
-        sg_set_global(gui->sg);
-        sg_begin_pass(&(sg_pass){.action = pass_action, .swapchain = swapchain});
-    }
-
-    imgui_begin_frame(im);
-
-    nvgBeginFrame(nvg);
-#ifdef __APPLE__
-    // required for text to render properly...
-    nvgBeginDraw(gui->nvg, lm->width, lm->height, dpi);
-#else
-    nvgBeginDraw(gui->nvg, lm->width, lm->height, 1.0f);
-#endif
+    snvg_new_pass(
+        gui->nvg,
+        &(sg_pass){
+            .action    = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0, 0, 0, 1.0f}}},
+            .swapchain = gui->swapchain,
+            .label     = "swapchain / main",
+        },
+        gui->layout.width,
+        gui->layout.height);
 
     // Background
     {
@@ -2186,8 +2229,13 @@ void pw_tick(void* _gui)
     }
 
     // End frame
-    nvgEndDraw(nvg);
     nvgEndFrame(gui->nvg);
+
+    sg_begin_pass(&(sg_pass){
+        .action    = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
+        .swapchain = gui->swapchain,
+        .label     = "swapchain / custom shaders",
+    });
 
     // Knob shader
     {
@@ -2290,7 +2338,7 @@ void pw_tick(void* _gui)
         sg_draw(0, 6, 1);
     }
 
-    unsigned bg_events = imgui_get_events_rect(im, 'bg', &(imgui_rect){0,0,lm->width, lm->height});
+    unsigned bg_events = imgui_get_events_rect(im, 'bg', &(imgui_rect){0, 0, lm->width, lm->height});
     if (bg_events & IMGUI_EVENT_MOUSE_ENTER)
     {
         pw_set_mouse_cursor(gui->pw, PW_CURSOR_DEFAULT);
