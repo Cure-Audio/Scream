@@ -1908,7 +1908,7 @@ void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func)
     SGNVGcommand* cmd    = sgnvg__allocCommand(sg);
     SGNVGcustom*  custom = linked_arena_alloc_clear(sg->frame_arena, sizeof(*custom));
 
-    cmd->type           = SGNVG_CMD_DRAW_NVG;
+    cmd->type           = SGNVG_CMD_CUSTOM;
     cmd->payload.custom = custom;
 
     custom->uptr = uptr;
