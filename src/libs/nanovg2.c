@@ -431,7 +431,7 @@ void             nvg__setPaintColour(NVGpaint* p, NVGcolour colour);
 
 void nvgReset(NVGcontext* ctx)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     memset(state, 0, sizeof(*state));
 
     nvg__setPaintColour(&state->paint, nvgRGBA(0, 0, 0, 255));
@@ -441,7 +441,6 @@ void nvgReset(NVGcontext* ctx)
     state->miterLimit         = 10.0f;
     state->lineCap            = NVG_BUTT;
     state->lineJoin           = NVG_MITER;
-    state->alpha              = 1.0f;
     nvgTransformIdentity(state->xform);
 
     state->scissor.extent[0] = -1.0f;
@@ -479,18 +478,6 @@ NVGcolour nvgRGBAf(float r, float g, float b, float a)
     colour.b = b;
     colour.a = a;
     return colour;
-}
-
-NVGcolour nvgTransRGBA(NVGcolour c, unsigned char a)
-{
-    c.a = a / 255.0f;
-    return c;
-}
-
-NVGcolour nvgTransRGBAf(NVGcolour c, float a)
-{
-    c.a = a;
-    return c;
 }
 
 NVGcolour nvgLerpRGBA(NVGcolour c0, NVGcolour c1, float u)
@@ -665,58 +652,52 @@ void nvg__setPaintColour(NVGpaint* p, NVGcolour colour)
 }
 
 // State setting
-void nvgShapeAntiAlias(NVGcontext* ctx, int enabled)
+void nvgSetShapeAntiAlias(NVGcontext* ctx, int enabled)
 {
-    NVGstate* state       = nvg__getState(ctx);
+    NVGstate* state       = &ctx->state;
     state->shapeAntiAlias = enabled;
 }
 
-void nvgStrokeWidth(NVGcontext* ctx, float width)
+void nvgSetStrokeWidth(NVGcontext* ctx, float width)
 {
-    NVGstate* state    = nvg__getState(ctx);
+    NVGstate* state    = &ctx->state;
     state->strokeWidth = width;
 }
 
-void nvgMiterLimit(NVGcontext* ctx, float limit)
+void nvgSetMiterLimit(NVGcontext* ctx, float limit)
 {
-    NVGstate* state   = nvg__getState(ctx);
+    NVGstate* state   = &ctx->state;
     state->miterLimit = limit;
 }
 
-void nvgLineCap(NVGcontext* ctx, int cap)
+void nvgSetLineCap(NVGcontext* ctx, int cap)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     state->lineCap  = cap;
 }
 
-void nvgLineJoin(NVGcontext* ctx, int join)
+void nvgSetLineJoin(NVGcontext* ctx, int join)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     state->lineJoin = join;
-}
-
-void nvgGlobalAlpha(NVGcontext* ctx, float alpha)
-{
-    NVGstate* state = nvg__getState(ctx);
-    state->alpha    = alpha;
 }
 
 void nvgTransform(NVGcontext* ctx, float a, float b, float c, float d, float e, float f)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     float     t[6]  = {a, b, c, d, e, f};
     nvgTransformPremultiply(state->xform, t);
 }
 
 void nvgResetTransform(NVGcontext* ctx)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     nvgTransformIdentity(state->xform);
 }
 
 void nvgTranslate(NVGcontext* ctx, float x, float y)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     float     t[6];
     nvgTransformTranslate(t, x, y);
     nvgTransformPremultiply(state->xform, t);
@@ -724,7 +705,7 @@ void nvgTranslate(NVGcontext* ctx, float x, float y)
 
 void nvgRotate(NVGcontext* ctx, float angle)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     float     t[6];
     nvgTransformRotate(t, angle);
     nvgTransformPremultiply(state->xform, t);
@@ -732,7 +713,7 @@ void nvgRotate(NVGcontext* ctx, float angle)
 
 void nvgSkewX(NVGcontext* ctx, float angle)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     float     t[6];
     nvgTransformSkewX(t, angle);
     nvgTransformPremultiply(state->xform, t);
@@ -740,7 +721,7 @@ void nvgSkewX(NVGcontext* ctx, float angle)
 
 void nvgSkewY(NVGcontext* ctx, float angle)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     float     t[6];
     nvgTransformSkewY(t, angle);
     nvgTransformPremultiply(state->xform, t);
@@ -748,7 +729,7 @@ void nvgSkewY(NVGcontext* ctx, float angle)
 
 void nvgScale(NVGcontext* ctx, float x, float y)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     float     t[6];
     nvgTransformScale(t, x, y);
     nvgTransformPremultiply(state->xform, t);
@@ -756,7 +737,7 @@ void nvgScale(NVGcontext* ctx, float x, float y)
 
 void nvgCurrentTransform(NVGcontext* ctx, float* xform)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     if (xform == NULL)
         return;
     memcpy(xform, state->xform, sizeof(float) * 6);
@@ -764,13 +745,13 @@ void nvgCurrentTransform(NVGcontext* ctx, float* xform)
 
 void nvgSetColour(NVGcontext* ctx, NVGcolour colour)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     nvg__setPaintColour(&state->paint, colour);
 }
 
 void nvgSetPaint(NVGcontext* ctx, NVGpaint paint)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     state->paint    = paint;
     nvgTransformMultiply(state->paint.xform, state->xform);
 }
@@ -951,9 +932,9 @@ NVGpaint nvgImagePattern(NVGcontext* ctx, float cx, float cy, float w, float h, 
 }
 
 // Scissoring
-void nvgScissor(NVGcontext* ctx, float x, float y, float w, float h)
+void nvgSetScissor(NVGcontext* ctx, float x, float y, float w, float h)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
 
     w = nvg__maxf(0.0f, w);
     h = nvg__maxf(0.0f, h);
@@ -981,7 +962,7 @@ static void nvg__isectRects(float* dst, float ax, float ay, float aw, float ah, 
 
 void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     float     pxform[6], invxorm[6];
     float     rect[4];
     float     ex, ey, tex, tey;
@@ -989,7 +970,7 @@ void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h)
     // If no previous scissor has been set, set the scissor as current scissor.
     if (state->scissor.extent[0] < 0)
     {
-        nvgScissor(ctx, x, y, w, h);
+        nvgSetScissor(ctx, x, y, w, h);
         return;
     }
 
@@ -1006,30 +987,30 @@ void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h)
     // Intersect rects.
     nvg__isectRects(rect, pxform[4] - tex, pxform[5] - tey, tex * 2, tey * 2, x, y, w, h);
 
-    nvgScissor(ctx, rect[0], rect[1], rect[2], rect[3]);
+    nvgSetScissor(ctx, rect[0], rect[1], rect[2], rect[3]);
 }
 
 void nvgResetScissor(NVGcontext* ctx)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     memset(state->scissor.xform, 0, sizeof(state->scissor.xform));
     state->scissor.extent[0] = -1.0f;
     state->scissor.extent[1] = -1.0f;
 }
 
 // Global composite operation.
-void nvgGlobalCompositeOperation(NVGcontext* ctx, int op)
+void nvgSetGlobalCompositeOperation(NVGcontext* ctx, int op)
 {
-    NVGstate* state           = nvg__getState(ctx);
+    NVGstate* state           = &ctx->state;
     state->compositeOperation = nvg__compositeOperationState(op);
 }
 
-void nvgGlobalCompositeBlendFunc(NVGcontext* ctx, int sfactor, int dfactor)
+void nvgSetGlobalCompositeBlendFunc(NVGcontext* ctx, int sfactor, int dfactor)
 {
-    nvgGlobalCompositeBlendFuncSeparate(ctx, sfactor, dfactor, sfactor, dfactor);
+    nvgSetGlobalCompositeBlendFuncSeparate(ctx, sfactor, dfactor, sfactor, dfactor);
 }
 
-void nvgGlobalCompositeBlendFuncSeparate(NVGcontext* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha)
+void nvgSetGlobalCompositeBlendFuncSeparate(NVGcontext* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha)
 {
     NVGcompositeOperationState op;
     op.srcRGB   = srcRGB;
@@ -1037,7 +1018,7 @@ void nvgGlobalCompositeBlendFuncSeparate(NVGcontext* ctx, int srcRGB, int dstRGB
     op.srcAlpha = srcAlpha;
     op.dstAlpha = dstAlpha;
 
-    NVGstate* state           = nvg__getState(ctx);
+    NVGstate* state           = &ctx->state;
     state->compositeOperation = op;
 }
 
@@ -1070,7 +1051,7 @@ static float nvg__distPtSeg(float x, float y, float px, float py, float qx, floa
 
 static void nvg__appendCommands(NVGcontext* ctx, float* vals, int nvals)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     int       i;
 
     if (ctx->ncommands + nvals > ctx->ccommands)
@@ -1345,7 +1326,7 @@ static void nvg__tesselateBezier(
 static void nvg__flattenPaths(NVGcontext* ctx)
 {
     NVGpathCache* cache = ctx->cache;
-    //	NVGstate* state = nvg__getState(ctx);
+    //	NVGstate* state = &ctx->state;
     NVGpoint* last;
     NVGpoint* p0;
     NVGpoint* p1;
@@ -2246,7 +2227,7 @@ void nvgClosePath(NVGcontext* ctx)
     nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgPathWinding(NVGcontext* ctx, int dir)
+void nvgSetPathWinding(NVGcontext* ctx, int dir)
 {
     float vals[] = {NVG_WINDING, (float)dir};
     nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
@@ -2538,45 +2519,45 @@ void nvgResetFallbackFonts(NVGcontext* ctx, const char* baseFont)
 }
 
 // State setting
-void nvgFontSize(NVGcontext* ctx, float size)
+void nvgSetFontSize(NVGcontext* ctx, float size)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     state->fontSize = size;
 }
 
-void nvgFontBlur(NVGcontext* ctx, float blur)
+void nvgSetFontBlur(NVGcontext* ctx, float blur)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     state->fontBlur = blur;
 }
 
-void nvgTextLetterSpacing(NVGcontext* ctx, float spacing)
+void nvgSetLetterSpacing(NVGcontext* ctx, float spacing)
 {
-    NVGstate* state      = nvg__getState(ctx);
+    NVGstate* state      = &ctx->state;
     state->letterSpacing = spacing;
 }
 
-void nvgTextLineHeight(NVGcontext* ctx, float lineHeight)
+void nvgSetTextLineHeight(NVGcontext* ctx, float lineHeight)
 {
-    NVGstate* state   = nvg__getState(ctx);
+    NVGstate* state   = &ctx->state;
     state->lineHeight = lineHeight;
 }
 
-void nvgTextAlign(NVGcontext* ctx, int align)
+void nvgSetTextAlign(NVGcontext* ctx, int align)
 {
-    NVGstate* state  = nvg__getState(ctx);
+    NVGstate* state  = &ctx->state;
     state->textAlign = align;
 }
 
-void nvgFontFaceId(NVGcontext* ctx, int font)
+void nvgSetFontFaceById(NVGcontext* ctx, int font)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     state->fontId   = font;
 }
 
-void nvgFontFace(NVGcontext* ctx, const char* font)
+void nvgSetFontFaceByName(NVGcontext* ctx, const char* font)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     state->fontId   = fonsGetFontByName(ctx->fs, font);
 }
 
@@ -2641,7 +2622,7 @@ static int nvg__isTransformFlipped(const float* xform)
 
 float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char* end)
 {
-    NVGstate*    state = nvg__getState(ctx);
+    NVGstate*    state = &ctx->state;
     FONStextIter iter, prevIter;
     FONSquad     q;
     NVGvertex*   verts;
@@ -2732,7 +2713,7 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 
 void nvgTextBox(NVGcontext* ctx, float x, float y, float breakRowWidth, const char* string, const char* end)
 {
-    NVGstate*  state = nvg__getState(ctx);
+    NVGstate*  state = &ctx->state;
     NVGtextRow rows[2];
     int        nrows    = 0, i;
     int        oldAlign = state->textAlign;
@@ -2775,7 +2756,7 @@ int nvgTextGlyphPositions(
     NVGglyphPosition* positions,
     int               maxPositions)
 {
-    NVGstate*    state    = nvg__getState(ctx);
+    NVGstate*    state    = &ctx->state;
     float        scale    = nvg__getFontScale(state) * ctx->devicePxRatio;
     float        invscale = 1.0f / scale;
     FONStextIter iter, prevIter;
@@ -2835,7 +2816,7 @@ int nvgTextBreakLines(
     NVGtextRow* rows,
     int         maxRows)
 {
-    NVGstate*    state    = nvg__getState(ctx);
+    NVGstate*    state    = &ctx->state;
     float        scale    = nvg__getFontScale(state) * ctx->devicePxRatio;
     float        invscale = 1.0f / scale;
     FONStextIter iter, prevIter;
@@ -3063,7 +3044,7 @@ int nvgTextBreakLines(
 
 float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const char* end, float* bounds)
 {
-    NVGstate* state    = nvg__getState(ctx);
+    NVGstate* state    = &ctx->state;
     float     scale    = nvg__getFontScale(state) * ctx->devicePxRatio;
     float     invscale = 1.0f / scale;
     float     width;
@@ -3099,7 +3080,7 @@ void nvgTextBoxBounds(
     const char* end,
     float*      bounds)
 {
-    NVGstate*  state = nvg__getState(ctx);
+    NVGstate*  state = &ctx->state;
     NVGtextRow rows[2];
     float      scale    = nvg__getFontScale(state) * ctx->devicePxRatio;
     float      invscale = 1.0f / scale;
@@ -3172,7 +3153,7 @@ void nvgTextBoxBounds(
 
 void nvgTextMetrics(NVGcontext* ctx, float* ascender, float* descender, float* lineh)
 {
-    NVGstate* state    = nvg__getState(ctx);
+    NVGstate* state    = &ctx->state;
     float     scale    = nvg__getFontScale(state) * ctx->devicePxRatio;
     float     invscale = 1.0f / scale;
 
@@ -4206,7 +4187,7 @@ static void sgnvg__generateTriangleStripIndexes(uint32_t* indexes, int offset, i
 
 void nvgFill(NVGcontext* ctx)
 {
-    NVGstate*      state = nvg__getState(ctx);
+    NVGstate*      state = &ctx->state;
     const NVGpath* path;
     NVGpaint       paint = state->paint;
     int            i;
@@ -4216,10 +4197,6 @@ void nvgFill(NVGcontext* ctx)
         nvg__expandFill(ctx, ctx->fringeWidth, NVG_MITER, 2.4f);
     else
         nvg__expandFill(ctx, 0.0f, NVG_MITER, 2.4f);
-
-    // Apply global alpha
-    paint.innerColour.a *= state->alpha;
-    paint.outerColour.a *= state->alpha;
 
     NVGcompositeOperationState compositeOperation = state->compositeOperation;
     NVGscissor*                scissor            = &state->scissor;
@@ -4343,7 +4320,7 @@ void nvgFill(NVGcontext* ctx)
 
 void nvgStroke(NVGcontext* ctx)
 {
-    NVGstate* state       = nvg__getState(ctx);
+    NVGstate* state       = &ctx->state;
     float     scale       = nvg__getAverageScale(state->xform);
     float     strokeWidth = nvg__clampf(state->strokeWidth * scale, 0.0f, 200.0f);
     NVGpaint  paint       = state->paint;
@@ -4358,10 +4335,6 @@ void nvgStroke(NVGcontext* ctx)
         paint.outerColour.a *= alpha * alpha;
         strokeWidth          = ctx->fringeWidth;
     }
-
-    // Apply global alpha
-    paint.innerColour.a *= state->alpha;
-    paint.outerColour.a *= state->alpha;
 
     nvg__flattenPaths(ctx);
 
@@ -4467,15 +4440,11 @@ void nvgStroke(NVGcontext* ctx)
 
 void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 {
-    NVGstate* state = nvg__getState(ctx);
+    NVGstate* state = &ctx->state;
     NVGpaint  paint = state->paint;
 
     // Render triangles.
     paint.image = ctx->fontImages[ctx->fontImageIdx];
-
-    // Apply global alpha
-    paint.innerColour.a *= state->alpha;
-    paint.outerColour.a *= state->alpha;
 
     SGNVGcall*         call = NULL;
     SGNVGfragUniforms* frag = NULL;

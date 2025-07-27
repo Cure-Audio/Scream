@@ -57,11 +57,11 @@ void im_slider(
     char     label[16];
     snprintf(label, sizeof(label), fmt_value, *pValue);
     nvgSetColour(nvg, (NVGcolour){1, 1, 1, 1});
-    nvgFontSize(nvg, slider_height * 0.75);
-    nvgTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_CENTER);
+    nvgSetFontSize(nvg, slider_height * 0.75);
+    nvgSetTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_CENTER);
     nvgText(nvg, c.x, c.y, label, NULL);
 
-    nvgTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_LEFT);
+    nvgSetTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_LEFT);
     nvgSetColour(nvg, (NVGcolour){1, 1, 1, 1});
     nvgText(nvg, rect.r + 10, c.y, name, NULL);
 }
@@ -84,22 +84,22 @@ void plot_expander(NVGcontext* nvg, float width, float height)
         nvgLineTo(nvg, x, height);
     }
     nvgSetColour(nvg, (NVGcolour){0, 0, 0, 0.2});
-    nvgStrokeWidth(nvg, 1.0f);
+    nvgSetStrokeWidth(nvg, 1.0f);
     nvgStroke(nvg);
 
-    nvgTextAlign(nvg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+    nvgSetTextAlign(nvg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
     nvgSetColour(nvg, (NVGcolour){0, 0, 0, 0.4});
-    nvgFontSize(nvg, 12);
+    nvgSetFontSize(nvg, 12);
     nvgText(nvg, 0, 0, "0dB", NULL);
-    nvgTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_LEFT);
+    nvgSetTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_LEFT);
     nvgText(nvg, 0, y_inc, "-12dB", NULL);
     nvgText(nvg, 0, y_inc * 2, "-24dB", NULL);
     nvgText(nvg, 0, y_inc * 3, "-36dB", NULL);
     nvgText(nvg, 0, y_inc * 4, "-48dB", NULL);
-    nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_LEFT);
+    nvgSetTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_LEFT);
     nvgText(nvg, 0, height, "-60dB", NULL);
 
-    nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_CENTER);
+    nvgSetTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_CENTER);
     nvgText(nvg, x_inc, height, "-48dB", NULL);
     nvgText(nvg, x_inc * 2, height, "-36dB", NULL);
     nvgText(nvg, x_inc * 3, height, "-24dB", NULL);
@@ -151,7 +151,7 @@ void plot_peak_detection(NVGcontext* nvg, float width, float height)
         x += 1.0f;
     }
     nvgSetColour(nvg, (NVGcolour){0, 0, 0, 1.0});
-    nvgStrokeWidth(nvg, 1.0f);
+    nvgSetStrokeWidth(nvg, 1.0f);
     nvgStroke(nvg);
 }
 
@@ -276,7 +276,7 @@ void plot_line(
     }
 
     nvgSetColour(nvg, col);
-    nvgStrokeWidth(nvg, 2);
+    nvgSetStrokeWidth(nvg, 2);
     nvgStroke(nvg);
 }
 
@@ -299,7 +299,7 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
     nvgLineTo(nvg, x + width * 0.5f, y + gui_height);
     nvgMoveTo(nvg, x, y + gui_height * 0.5f);
     nvgLineTo(nvg, x + width, y + gui_height * 0.5f);
-    nvgStrokeWidth(nvg, 1.2);
+    nvgSetStrokeWidth(nvg, 1.2);
     nvgSetColour(nvg, nvgRGBAf(0.2, 0.2, 0.3, 1.0f));
     nvgStroke(nvg);
 
@@ -397,7 +397,7 @@ void plot_peak_distortion(NVGcontext* nvg, imgui_context* im, float gui_width, f
         plot_line(nvg, x, y, width, height, buffer_processed, buffer_audio_len, nvgRGBA(255, 0, 127, 255));
 
         nvgSetColour(nvg, nvgRGBAf(0, 0, 0, 1));
-        nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
+        nvgSetTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
         char  label[64];
         float label_y = height - 60;
         snprintf(label, sizeof(label), "Attack samples: %.lf", atk_samples);
@@ -555,7 +555,7 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
     nvgLineTo(nvg, x + width * 0.5f, y + gui_height);
     nvgMoveTo(nvg, x, y + gui_height * 0.5f);
     nvgLineTo(nvg, x + width, y + gui_height * 0.5f);
-    nvgStrokeWidth(nvg, 1.2);
+    nvgSetStrokeWidth(nvg, 1.2);
     nvgSetColour(nvg, nvgRGBAf(0.2, 0.2, 0.3, 1.0f));
     nvgStroke(nvg);
 
@@ -658,7 +658,7 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
         plot_line(nvg, x, y, width, height, buffer_processed, buffer_audio_len, nvgRGBA(255, 0, 127, 255));
 
         nvgSetColour(nvg, nvgRGBAf(0, 0, 0, 1));
-        nvgTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
+        nvgSetTextAlign(nvg, NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT);
         char  label[64];
         float label_y = height - 76;
         snprintf(label, sizeof(label), "Buf length: %zu", buffer_audio_len);
@@ -678,7 +678,7 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
         snprintf(label, sizeof(label), "Release: %.10f", rel);
         nvgText(nvg, x + width - 5, label_y, label, NULL);
 
-        nvgTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_LEFT);
+        nvgSetTextAlign(nvg, NVG_ALIGN_MIDDLE | NVG_ALIGN_LEFT);
         snprintf(label, sizeof(label), "Ratio: 1:%.1f", skewed_ratio);
         nvgText(nvg, rect.x, rect.y, label, NULL);
 
@@ -704,11 +704,11 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
                 nvgLineTo(nvg, chart_r, y_pos);
                 nvgMoveTo(nvg, x_pos, chart_y);
                 nvgLineTo(nvg, x_pos, chart_b);
-                nvgStrokeWidth(nvg, 1.2);
+                nvgSetStrokeWidth(nvg, 1.2);
                 nvgSetColour(nvg, (NVGcolour){0, 0, 0, 0.1});
                 nvgStroke(nvg);
 
-                // nvgTextAlign(nvg, NVG)
+                // nvgSetTextAlign(nvg, NVG)
             }
 
             float chart_x_pos = chart_x;
@@ -731,7 +731,7 @@ void plot_peak_upwards_compression(NVGcontext* nvg, imgui_context* im, float gui
                 }
                 chart_x_pos += 1.0f;
             }
-            nvgStrokeWidth(nvg, 1.2);
+            nvgSetStrokeWidth(nvg, 1.2);
             nvgSetColour(nvg, (NVGcolour){0, 0, 0, 1});
             nvgStroke(nvg);
         }
@@ -848,7 +848,7 @@ void plot_oscilloscope(
     }
     nvgRect(nvg, x, y, width, height);
     NVGcolour col = {0, 0, 0, 1};
-    nvgStrokeWidth(nvg, 1.2f);
+    nvgSetStrokeWidth(nvg, 1.2f);
     nvgSetColour(nvg, col);
     nvgStroke(nvg);
 }

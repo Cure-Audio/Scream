@@ -144,8 +144,8 @@ NVGglyphPosition* ted_get_text_layout(TextEditor* ted, const char* text, size_t 
 
     GUI* gui = ted_shift_ptr(ted);
 
-    nvgFontSize(gui->nvg, ted->font_size);
-    nvgTextAlign(gui->nvg, NVG_ALIGN_TL);
+    nvgSetFontSize(gui->nvg, ted->font_size);
+    nvgSetTextAlign(gui->nvg, NVG_ALIGN_TL);
     int num_glyphs = nvgTextGlyphPositions(gui->nvg, 0, 0, text, text + text_len, glyphs, text_len);
     xassert(num_glyphs <= text_len);
 
@@ -925,7 +925,7 @@ void ted_draw(TextEditor* ted)
 
     float padding = roundf(ted->font_size * 0.1);
 
-    nvgScissor(nvg, d->x, d->y - padding, d->width, d->height + 2 * padding);
+    nvgSetScissor(nvg, d->x, d->y - padding, d->width, d->height + 2 * padding);
 
     size_t            total_chars = xarr_len(ted->codepoints);
     const char*       text        = NULL;
@@ -976,7 +976,7 @@ void ted_draw(TextEditor* ted)
             nvgFill(nvg);
         }
 
-        nvgTextAlign(nvg, TED_TEXT_ALIGN);
+        nvgSetTextAlign(nvg, TED_TEXT_ALIGN);
         nvgSetColour(nvg, COLOUR_TEXT);
         nvgText(nvg, d->x + d->width * 0.5 + ted->text_offset, d->y, text, NULL);
     }

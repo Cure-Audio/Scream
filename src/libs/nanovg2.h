@@ -254,7 +254,6 @@ typedef struct NVGstate
     float                      miterLimit;
     int                        lineJoin;
     int                        lineCap;
-    float                      alpha;
     float                      xform[6];
     NVGscissor                 scissor;
     float                      fontSize;
@@ -572,14 +571,14 @@ void nvgEndFrame(NVGcontext* ctx);
 // The colours in the blending state have premultiplied alpha.
 
 // Sets the composite operation. The op parameter should be one of NVGcompositeOperation.
-void nvgGlobalCompositeOperation(NVGcontext* ctx, int op);
+void nvgSetGlobalCompositeOperation(NVGcontext* ctx, int op);
 
 // Sets the composite operation with custom pixel arithmetic. The parameters should be one of NVGblendFactor.
-void nvgGlobalCompositeBlendFunc(NVGcontext* ctx, int sfactor, int dfactor);
+void nvgSetGlobalCompositeBlendFunc(NVGcontext* ctx, int sfactor, int dfactor);
 
 // Sets the composite operation with custom pixel arithmetic for RGB and alpha components separately. The parameters
 // should be one of NVGblendFactor.
-void nvgGlobalCompositeBlendFuncSeparate(NVGcontext* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha);
+void nvgSetGlobalCompositeBlendFuncSeparate(NVGcontext* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha);
 
 //
 // Colour utils
@@ -601,12 +600,6 @@ NVGcolour nvgRGBAf(float r, float g, float b, float a);
 // Linearly interpolates from colour c0 to c1, and returns resulting colour value.
 NVGcolour nvgLerpRGBA(NVGcolour c0, NVGcolour c1, float u);
 
-// Sets transparency of a colour value.
-NVGcolour nvgTransRGBA(NVGcolour c0, unsigned char a);
-
-// Sets transparency of a colour value.
-NVGcolour nvgTransRGBAf(NVGcolour c0, float a);
-
 // Returns colour value specified by hue, saturation and lightness.
 // HSL values are all in range [0..1], alpha will be set to 255.
 NVGcolour nvgHSL(float h, float s, float l);
@@ -624,7 +617,7 @@ NVGcolour nvgHSLA(float h, float s, float l, unsigned char a);
 //
 
 // Sets whether to draw antialias for nvgStroke() and nvgFill(). It's enabled by default.
-void nvgShapeAntiAlias(NVGcontext* ctx, int enabled);
+void nvgSetShapeAntiAlias(NVGcontext* ctx, int enabled);
 
 // Sets current paint style to a solid colour.
 void nvgSetColour(NVGcontext* ctx, NVGcolour colour);
@@ -634,22 +627,18 @@ void nvgSetPaint(NVGcontext* ctx, NVGpaint paint);
 
 // Sets the miter limit of the stroke style.
 // Miter limit controls when a sharp corner is beveled.
-void nvgMiterLimit(NVGcontext* ctx, float limit);
+void nvgSetMiterLimit(NVGcontext* ctx, float limit);
 
 // Sets the stroke width of the stroke style.
-void nvgStrokeWidth(NVGcontext* ctx, float size);
+void nvgSetStrokeWidth(NVGcontext* ctx, float size);
 
 // Sets how the end of the line (cap) is drawn,
 // Can be one of: NVG_BUTT (default), NVG_ROUND, NVG_SQUARE.
-void nvgLineCap(NVGcontext* ctx, int cap);
+void nvgSetLineCap(NVGcontext* ctx, int cap);
 
 // Sets how sharp path corners are drawn.
 // Can be one of NVG_MITER (default), NVG_ROUND, NVG_BEVEL.
-void nvgLineJoin(NVGcontext* ctx, int join);
-
-// Sets the transparency applied to all rendered shapes.
-// Already transparent paths will get proportionally more transparent as well.
-void nvgGlobalAlpha(NVGcontext* ctx, float alpha);
+void nvgSetLineJoin(NVGcontext* ctx, int join);
 
 //
 // Transforms
@@ -808,7 +797,7 @@ NVGpaint nvgImagePattern(NVGcontext* ctx, float ox, float oy, float ex, float ey
 
 // Sets the current scissor rectangle.
 // The scissor rectangle is transformed by the current transform.
-void nvgScissor(NVGcontext* ctx, float x, float y, float w, float h);
+void nvgSetScissor(NVGcontext* ctx, float x, float y, float w, float h);
 
 // Intersects current scissor rectangle with the specified rectangle.
 // The scissor rectangle is transformed by the current transform.
@@ -831,7 +820,7 @@ void nvgResetScissor(NVGcontext* ctx);
 //
 // NanoVG uses even-odd fill rule to draw the shapes. Solid shapes should have counter clockwise
 // winding and holes should have counter clockwise order. To specify winding of a path you can
-// call nvgPathWinding(). This is useful especially for the common shapes, which are drawn CCW.
+// call nvgSetPathWinding(). This is useful especially for the common shapes, which are drawn CCW.
 //
 // Finally you can fill the path using current fill style by calling nvgFill(), and stroke it
 // with current stroke style by calling nvgStroke().
@@ -860,7 +849,7 @@ void nvgArcTo(NVGcontext* ctx, float x1, float y1, float x2, float y2, float rad
 void nvgClosePath(NVGcontext* ctx);
 
 // Sets the current sub-path winding, see NVGwinding and NVGsolidity.
-void nvgPathWinding(NVGcontext* ctx, int dir);
+void nvgSetPathWinding(NVGcontext* ctx, int dir);
 
 // Creates new circle arc shaped sub-path. The arc center is at cx,cy, the arc radius is r,
 // and the arc is drawn from angle a0 to a1, and swept in direction dir (NVG_CCW, or NVG_CW).
@@ -966,25 +955,25 @@ void nvgResetFallbackFontsId(NVGcontext* ctx, int baseFont);
 void nvgResetFallbackFonts(NVGcontext* ctx, const char* baseFont);
 
 // Sets the font size of current text style.
-void nvgFontSize(NVGcontext* ctx, float size);
+void nvgSetFontSize(NVGcontext* ctx, float size);
 
 // Sets the blur of current text style.
-void nvgFontBlur(NVGcontext* ctx, float blur);
+void nvgSetFontBlur(NVGcontext* ctx, float blur);
 
 // Sets the letter spacing of current text style.
-void nvgTextLetterSpacing(NVGcontext* ctx, float spacing);
+void nvgSetLetterSpacing(NVGcontext* ctx, float spacing);
 
 // Sets the proportional line height of current text style. The line height is specified as multiple of font size.
-void nvgTextLineHeight(NVGcontext* ctx, float lineHeight);
+void nvgSetTextLineHeight(NVGcontext* ctx, float lineHeight);
 
 // Sets the text align of current text style, see NVGalign for options.
-void nvgTextAlign(NVGcontext* ctx, int align);
+void nvgSetTextAlign(NVGcontext* ctx, int align);
 
 // Sets the font face based on specified id of current text style.
-void nvgFontFaceId(NVGcontext* ctx, int font);
+void nvgSetFontFaceById(NVGcontext* ctx, int font);
 
 // Sets the font face based on specified name of current text style.
-void nvgFontFace(NVGcontext* ctx, const char* font);
+void nvgSetFontFaceByName(NVGcontext* ctx, const char* font);
 
 // Draws text string at specified location. If end is specified only the sub-string up to the end is drawn.
 float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char* end);

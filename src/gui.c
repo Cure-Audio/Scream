@@ -782,7 +782,7 @@ void draw_lfo_section(GUI* gui)
                 nvgBeginPath(nvg);
                 nvgRoundedRect(nvg, rect->x + 0.5, rect->y + 0.5, rect->r - rect->x, rect->b - rect->y, 4);
                 nvgSetColour(nvg, col2);
-                nvgStrokeWidth(nvg, 1.1);
+                nvgSetStrokeWidth(nvg, 1.1);
                 nvgStroke(nvg);
             }
 
@@ -794,9 +794,9 @@ void draw_lfo_section(GUI* gui)
             float icon_r = icon_x + LFO_TAB_ICON_WIDTH - 1;
             float icon_b = icon_y + LFO_TAB_ICON_WIDTH - 1;
 
-            // nvgLineCap(nvg, NVG_ROUND); // Doesn't look great when lines are so small and thin
-            nvgLineCap(nvg, NVG_BUTT);
-            nvgStrokeWidth(nvg, 1);
+            // nvgSetLineCap(nvg, NVG_ROUND); // Doesn't look great when lines are so small and thin
+            nvgSetLineCap(nvg, NVG_BUTT);
+            nvgSetStrokeWidth(nvg, 1);
             nvgSetColour(nvg, col2);
 
             nvgBeginPath(nvg);
@@ -836,7 +836,7 @@ void draw_lfo_section(GUI* gui)
             char label[]  = "LFO 1";
             label[4]     += i;
 
-            nvgTextAlign(nvg, NVG_ALIGN_CR);
+            nvgSetTextAlign(nvg, NVG_ALIGN_CR);
             nvgText(nvg, rect->r - LFO_TAB_ICON_PADDING, top_text_cy, label, label + 5);
         }
     }
@@ -853,9 +853,9 @@ void draw_lfo_section(GUI* gui)
 
         NVGglyphPosition glyphs[label_length_len];
 
-        nvgFontSize(nvg, 14);
+        nvgSetFontSize(nvg, 14);
         nvgSetColour(nvg, COLOUR_TEXT);
-        nvgTextAlign(nvg, NVG_ALIGN_CL);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
 
         nvgTextGlyphPositions(nvg, 0, 0, label_grid, label_grid + label_grid_len, glyphs, label_length_len);
         const float label_grid_width = glyphs[label_grid_len - 1].maxx;
@@ -863,14 +863,14 @@ void draw_lfo_section(GUI* gui)
         nvgTextGlyphPositions(nvg, 0, 0, label_length, label_length + label_length_len, glyphs, label_length_len);
         const float label_length_width = glyphs[label_length_len - 1].maxx;
 
-        nvgTextAlign(nvg, NVG_ALIGN_CL);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         nvgText(nvg, content_x, top_text_cy, label_grid, label_grid + label_grid_len);
 
-        nvgTextAlign(nvg, NVG_ALIGN_CR);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CR);
         float label_length_r = content_r - GRID_BUTTON_WIDTH * 2 - GRID_BUTTON_BUTTON_GAP - GRID_BUTTON_TEXT_GAP;
         nvgText(nvg, label_length_r, top_text_cy, label_length, label_length + label_length_len);
 
-        nvgTextAlign(nvg, NVG_ALIGN_CL);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
 
         const float button_top    = top_text_cy - GRID_BUTTON_HEIGHT * 0.5f;
         const float button_bottom = top_text_cy + GRID_BUTTON_HEIGHT * 0.5f;
@@ -923,7 +923,7 @@ void draw_lfo_section(GUI* gui)
 
             nvgSetColour(nvg, COLOUR_GREY_1);
             int txt_idx = i & 1;
-            nvgTextAlign(nvg, NVG_ALIGN_CC);
+            nvgSetTextAlign(nvg, NVG_ALIGN_CC);
             nvgText(nvg, btn_cx, text_cy, btn_labels[txt_idx], NULL);
         }
     }
@@ -1020,7 +1020,7 @@ void draw_lfo_section(GUI* gui)
         shape_inner_r += SHAPES_WIDTH;
     }
     nvgSetColour(nvg, nvgHexColour(0xffffffff));
-    nvgStrokeWidth(nvg, 1.2f);
+    nvgSetStrokeWidth(nvg, 1.2f);
     nvgStroke(nvg);
 
     float pattern_r  = content_r;
@@ -1036,13 +1036,13 @@ void draw_lfo_section(GUI* gui)
             println("TODO: handle changing patterns");
         }
 
-        nvgTextAlign(nvg, NVG_ALIGN_BC);
+        nvgSetTextAlign(nvg, NVG_ALIGN_BC);
         nvgSetColour(nvg, COLOUR_TEXT);
         nvgText(nvg, pattern_cx, pattern_b, "PATTERN", NULL);
 
-        nvgTextAlign(nvg, NVG_ALIGN_CL);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         nvgText(nvg, pattern_x, pattern_cy, "1", NULL);
-        nvgTextAlign(nvg, NVG_ALIGN_CR);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CR);
         nvgText(nvg, pattern_r, pattern_cy, "8", NULL);
 
         float pattern_line_y = floorf(pattern_cy) + 0.5f;
@@ -1081,7 +1081,7 @@ void draw_lfo_section(GUI* gui)
 
         nvgBeginPath(nvg);
         nvgRect(nvg, grid_x + 0.5f, grid_y + 0.5f, grid_r - grid_x - 1, grid_b - grid_y - 1);
-        nvgStrokeWidth(nvg, 1);
+        nvgSetStrokeWidth(nvg, 1);
         nvgSetColour(nvg, c_grid_1);
         nvgStroke(nvg);
     }
@@ -1131,7 +1131,7 @@ void draw_lfo_section(GUI* gui)
         nvgLineTo(nvg, grid_r, grid_y);
 
         nvgSetColour(nvg, c_light_blue);
-        nvgStrokeWidth(nvg, 2);
+        nvgSetStrokeWidth(nvg, 2);
         nvgStroke(nvg);
 
         linked_arena_release(gui->arena, points);
@@ -1451,9 +1451,9 @@ void pw_tick(void* _gui)
 
     // Header
     {
-        nvgFontSize(nvg, lm->content_scale * 24);
+        nvgSetFontSize(nvg, lm->content_scale * 24);
         nvgSetColour(nvg, COLOUR_BG_LIGHT);
-        nvgTextAlign(nvg, NVG_ALIGN_CC);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CC);
         nvgText(nvg, lm->width * 0.5f, lm->height_header * 0.5f + 4, "SCREAM", NULL);
 
         // Sokol nanovg isn't rendering this for some reason :(
@@ -1686,8 +1686,8 @@ void pw_tick(void* _gui)
 
                 const imgui_pt pt1 = {pt.x + tick_radius_start * angle_x, pt.y + tick_radius_start * angle_y};
                 const imgui_pt pt2 = {pt.x + tick_radius_end * angle_x, pt.y + tick_radius_end * angle_y};
-                nvgStrokeWidth(nvg, 6 * lm->param_scale);
-                nvgLineCap(nvg, NVG_ROUND);
+                nvgSetStrokeWidth(nvg, 6 * lm->param_scale);
+                nvgSetLineCap(nvg, NVG_ROUND);
 
                 nvgBeginPath(nvg); // Skeumorphic inner shadow
                 nvgMoveTo(nvg, pt1.x, pt1.y);
@@ -1701,11 +1701,11 @@ void pw_tick(void* _gui)
                 nvgSetColour(nvg, nvgHexColour(0x242E56FF));
                 nvgStroke(nvg);
 
-                nvgLineCap(nvg, NVG_BUTT);
+                nvgSetLineCap(nvg, NVG_BUTT);
 
                 // Value arc
                 const float arc_radius = roundf(RADIUS_VALUE_ARC * lm->param_scale);
-                nvgStrokeWidth(nvg, roundf(lm->param_scale * 4));
+                nvgSetStrokeWidth(nvg, roundf(lm->param_scale * 4));
                 nvgBeginPath(nvg);
                 nvgArc(nvg, pt.x, pt.y, arc_radius, SLIDER_START_RAD, SLIDER_END_RAD, NVG_CW);
                 nvgSetColour(nvg, COLOUR_GREY_1);
@@ -1982,7 +1982,7 @@ void pw_tick(void* _gui)
                     nvgMoveTo(nvg, rect.x, zero_dB_y);
                     nvgLineTo(nvg, rect.r, zero_dB_y);
                     nvgSetPaint(nvg, bg_paint);
-                    nvgStrokeWidth(nvg, 1);
+                    nvgSetStrokeWidth(nvg, 1);
                     nvgStroke(nvg);
                 }
                 else // param_id == PARAM_WET
@@ -2053,7 +2053,7 @@ void pw_tick(void* _gui)
                     nvgLineTo(nvg, notch_r, bot_y);
 
                     nvgSetColour(nvg, COLOUR_GREY_1);
-                    nvgStrokeWidth(nvg, 1);
+                    nvgSetStrokeWidth(nvg, 1);
                     nvgStroke(nvg);
 
                     // Handle drop shadow
@@ -2101,13 +2101,13 @@ void pw_tick(void* _gui)
                     // Handle notch
                     float snapped_y = floorf(handle_cy) - 1;
                     // float snapped_y = floorf(handle_cy) + 0.5f;
-                    nvgStrokeWidth(nvg, 2);
+                    nvgSetStrokeWidth(nvg, 2);
                     nvgBeginPath(nvg);
                     nvgMoveTo(nvg, notch_x, snapped_y);
                     nvgLineTo(nvg, notch_r, snapped_y);
                     nvgSetColour(nvg, nvgHexColour(0x242E56FF));
                     nvgStroke(nvg);
-                    nvgStrokeWidth(nvg, 1);
+                    nvgSetStrokeWidth(nvg, 1);
                     nvgBeginPath(nvg);
                     nvgMoveTo(nvg, notch_x, snapped_y - 2);
                     nvgLineTo(nvg, notch_r, snapped_y - 2);
@@ -2126,7 +2126,7 @@ void pw_tick(void* _gui)
 
         nvgSetColour(nvg, COLOUR_TEXT);
         const float param_font_size = 14 * lm->content_scale;
-        nvgFontSize(nvg, param_font_size);
+        nvgSetFontSize(nvg, param_font_size);
 
         const float content_cy  = lm->content_y + lm->top_content_height * 0.5f;
         const float text_offset = lm->knob_radius + 40 * lm->scale_y;
@@ -2140,7 +2140,7 @@ void pw_tick(void* _gui)
             const ParamID param_id = i;
             const float   param_cx = lm->param_positions_cx[i];
 
-            nvgTextAlign(nvg, NVG_ALIGN_BC);
+            nvgSetTextAlign(nvg, NVG_ALIGN_BC);
             nvgSetColour(nvg, COLOUR_TEXT);
             nvgText(nvg, param_cx, label_b, NAMES[param_id], NULL);
 
@@ -2196,7 +2196,7 @@ void pw_tick(void* _gui)
                 cplug_parameterValueToString(gui->plugin, param_id, label, sizeof(label), value);
 
                 nvgSetColour(nvg, COLOUR_TEXT);
-                nvgTextAlign(nvg, NVG_ALIGN_TC);
+                nvgSetTextAlign(nvg, NVG_ALIGN_TC);
                 nvgText(nvg, param_cx, value_y, label, NULL);
             }
         }
@@ -2208,7 +2208,7 @@ void pw_tick(void* _gui)
     const float peak_gain = gui->plugin->gui_output_peak_gain;
     if (peak_gain > 1)
     {
-        nvgTextAlign(nvg, NVG_ALIGN_BR);
+        nvgSetTextAlign(nvg, NVG_ALIGN_BR);
         nvgSetColour(nvg, nvgRGBAf(1, 0.1, 0.1, 1));
         float dB = xm_fast_gain_to_dB(peak_gain);
         char  label[48];
@@ -2290,7 +2290,7 @@ void pw_tick(void* _gui)
         gui->frame_end_time      = frame_time_end;
         double actual_fps        = 1000.0 / ((diff_last_frame >> 10) * 1024e-6);
 
-        nvgFontSize(nvg, 12 * lm->content_scale);
+        nvgSetFontSize(nvg, 12 * lm->content_scale);
         NVGcolour footer_col = COLOUR_BG_LIGHT;
         footer_col.a         = 0.5f;
         nvgSetColour(nvg, footer_col);
@@ -2302,7 +2302,7 @@ void pw_tick(void* _gui)
             (cpu_amt * 100),
             frame_time_ms,
             actual_fps);
-        nvgTextAlign(nvg, NVG_ALIGN_TL);
+        nvgSetTextAlign(nvg, NVG_ALIGN_TL);
         nvgText(nvg, 8, 8, text, text + len);
 
         // TODO: remove after release
@@ -2322,7 +2322,7 @@ void pw_tick(void* _gui)
         const char* os_name = "macOS";
 #endif
         len = snprintf(text, sizeof(text), "Scream %s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
-        nvgTextAlign(nvg, NVG_ALIGN_BL);
+        nvgSetTextAlign(nvg, NVG_ALIGN_BL);
         nvgText(nvg, 8, lm->height - 8, text, text + len);
 
         // Show window dimensions w/h
@@ -2333,7 +2333,7 @@ void pw_tick(void* _gui)
         if (time_since_resize_ns < threshold_1sec && time_since_creation_ns > threshold_1_2sec)
         {
             len = snprintf(text, sizeof(text), "%dx%d", lm->width, lm->height);
-            nvgTextAlign(nvg, NVG_ALIGN_BR);
+            nvgSetTextAlign(nvg, NVG_ALIGN_BR);
             nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
         }
     }
