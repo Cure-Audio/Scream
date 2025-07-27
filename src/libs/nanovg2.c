@@ -3456,37 +3456,21 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
     if (tex == NULL)
         return 0;
 
-#ifdef SOKOL_GLES2
-    // Check for non-power of 2.
-    if (sgnvg__nearestPow2(w) != (unsigned int)w || sgnvg__nearestPow2(h) != (unsigned int)h)
-    {
-        // No repeat
-        if ((imageFlags & NVG_IMAGE_REPEATX) != 0 || (imageFlags & NVG_IMAGE_REPEATY) != 0)
-        {
-            printf("Repeat X/Y is not supported for non power-of-two textures (%d x %d)", w, h);
-            imageFlags &= ~(NVG_IMAGE_REPEATX | NVG_IMAGE_REPEATY);
-        }
-        // No mips.
-        if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS)
-        {
-            printf("Mip-maps is not support for non power-of-two textures (%d x %d)", w, h);
-            imageFlags &= ~NVG_IMAGE_GENERATE_MIPMAPS;
-        }
-    }
-#endif
     NVG_ASSERT(!(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && "TODO mipmaps");
 
     // if we have mipmaps, we forbid updating
-    bool immutable = !!(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && data;
+    bool immutable = !!(imageFlags & (NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_IMMUTABLE)) && data;
 
-    tex->width              = w;
-    tex->height             = h;
-    tex->type               = type;
-    tex->flags              = imageFlags;
-    sg_image_data imageData = {
-        // TODO mipmaps
-        .subimage[0][0] = {data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1)},
-    };
+    tex->width  = w;
+    tex->height = h;
+    tex->type   = type;
+    tex->flags  = imageFlags;
+
+    sg_image_data imageData = {0};
+    if ((imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && data)
+    {
+        imageData.subimage[0][0] = (sg_range){data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1)};
+    }
     tex->img = sg_make_image(&(sg_image_desc){
         .type = SG_IMAGETYPE_2D,
         //.render_target
@@ -3496,8 +3480,7 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
         .usage.immutable      = immutable,
         .usage.dynamic_update = !immutable,
         .pixel_format         = type == NVG_TEXTURE_RGBA ? SG_PIXELFORMAT_RGBA8 : SG_PIXELFORMAT_R8,
-        .data                 = ((imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && data) ? imageData
-                                                                                    : (sg_image_data){.subimage[0][0] = {NULL, 0}},
+        .data                 = imageData,
         .label                = "nanovg.image[]",
     });
     NVG_ASSERT(tex->img.id != 0);
@@ -3507,17 +3490,7 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
         memcpy(tex->imgData, data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1));
         tex->flags |= NVG_IMAGE_DIRTY;
     }
-    tex->smp = sg_make_sampler(&(sg_sampler_desc){
-        .min_filter    = imageFlags & NVG_IMAGE_GENERATE_MIPMAPS
-                             ? _SG_FILTER_DEFAULT
-                             : (imageFlags & NVG_IMAGE_NEAREST ? SG_FILTER_NEAREST : SG_FILTER_LINEAR),
-        .mipmap_filter = imageFlags & NVG_IMAGE_GENERATE_MIPMAPS
-                             ? (imageFlags & NVG_IMAGE_NEAREST ? SG_FILTER_NEAREST : SG_FILTER_LINEAR)
-                             : _SG_FILTER_DEFAULT,
-        .mag_filter    = imageFlags & NVG_IMAGE_NEAREST ? SG_FILTER_NEAREST : SG_FILTER_LINEAR,
-        .wrap_u        = imageFlags & NVG_IMAGE_REPEATX ? SG_WRAP_REPEAT : SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v        = imageFlags & NVG_IMAGE_REPEATY ? SG_WRAP_REPEAT : SG_WRAP_CLAMP_TO_EDGE,
-    });
+    tex->smp = (imageFlags & NVG_IMAGE_NEAREST) ? ctx->sampler_nearest : ctx->sampler_linear;
 
     return tex->img.id;
 }
@@ -3529,6 +3502,11 @@ int nvgUpdateTexture(NVGcontext* ctx, int image, int x0, int y0, int w, int h, c
     if (tex == NULL)
         return 0;
 
+    bool immutable = tex->flags & (NVG_IMAGE_IMMUTABLE | NVG_IMAGE_GENERATE_MIPMAPS);
+    NVG_ASSERT(!immutable);
+    if (immutable)
+        return 0;
+
     if (tex->imgData)
     {
         // this is really weird but nanogl_gl.h is doing the same
@@ -3538,9 +3516,8 @@ int nvgUpdateTexture(NVGcontext* ctx, int image, int x0, int y0, int w, int h, c
 
         size_t bytePerPixel = 1;
         if (tex->type == NVG_TEXTURE_RGBA)
-        {
             bytePerPixel = 4;
-        }
+
         size_t               srcLineInBytes = w * bytePerPixel;
         size_t               dstLineInBytes = tex->width * bytePerPixel;
         const unsigned char* src            = data + y0 * srcLineInBytes;
@@ -3639,35 +3616,14 @@ static int sgnvg__convertPaint(
         tex = sgnvg__findTexture(ctx, paint->image);
         if (tex == NULL)
             return 0;
-        if ((tex->flags & NVG_IMAGE_FLIPY) != 0)
-        {
-            float m1[6], m2[6];
-            nvgTransformTranslate(m1, 0.0f, frag->extent[1] * 0.5f);
-            nvgTransformMultiply(m1, paint->xform);
-            nvgTransformScale(m2, 1.0f, -1.0f);
-            nvgTransformMultiply(m2, m1);
-            nvgTransformTranslate(m1, 0.0f, -frag->extent[1] * 0.5f);
-            nvgTransformMultiply(m1, m2);
-            nvgTransformInverse(invxform, m1);
-        }
-        else
-        {
-            nvgTransformInverse(invxform, paint->xform);
-        }
+
+        nvgTransformInverse(invxform, paint->xform);
         frag->type = NSVG_SHADER_FILLIMG;
 
-#if NANOVG_GL_USE_UNIFORMBUFFER
-        if (tex->type == NVG_TEXTURE_RGBA)
-            frag->texType = (tex->flags & NVG_IMAGE_PREMULTIPLIED) ? 0 : 1;
-        else
-            frag->texType = 2;
-#else
         if (tex->type == NVG_TEXTURE_RGBA)
             frag->texType = (tex->flags & NVG_IMAGE_PREMULTIPLIED) ? 0.0f : 1.0f;
         else
             frag->texType = 2.0f;
-#endif
-        //		printf("frag->texType = %d", frag->texType);
     }
     else
     {
@@ -4501,6 +4457,21 @@ NVGcontext* nvgCreateContext(int flags)
             ctx->pipelineCache.pipelines[i][t] = sg_alloc_pipeline();
         }
     }
+
+    ctx->sampler_linear  = sg_make_sampler(&(sg_sampler_desc){
+         .min_filter    = SG_FILTER_LINEAR,
+         .mag_filter    = SG_FILTER_LINEAR,
+         .mipmap_filter = SG_FILTER_LINEAR,
+         .wrap_u        = SG_WRAP_CLAMP_TO_EDGE,
+         .wrap_v        = SG_WRAP_CLAMP_TO_EDGE,
+    });
+    ctx->sampler_nearest = sg_make_sampler(&(sg_sampler_desc){
+        .min_filter    = SG_FILTER_NEAREST,
+        .mag_filter    = SG_FILTER_NEAREST,
+        .mipmap_filter = SG_FILTER_NEAREST,
+        .wrap_u        = SG_WRAP_CLAMP_TO_EDGE,
+        .wrap_v        = SG_WRAP_CLAMP_TO_EDGE,
+    });
 
     ctx->blend = (sg_blend_state){
         .enabled          = true,

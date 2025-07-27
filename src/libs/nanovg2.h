@@ -182,16 +182,12 @@ typedef struct NVGtextRow
 
 enum NVGimageFlags
 {
-    NVG_IMAGE_DIRTY = 1 << 0, // Force update image on GPU
-
-    NVG_IMAGE_GENERATE_MIPMAPS = 1 << 1, // Generate mipmaps during creation of the image.
-    NVG_IMAGE_REPEATX          = 1 << 2, // Repeat image in X direction.
-    NVG_IMAGE_REPEATY          = 1 << 3, // Repeat image in Y direction.
-    NVG_IMAGE_FLIPY            = 1 << 4, // Flips (inverses) image in Y direction when rendered.
-    NVG_IMAGE_PREMULTIPLIED    = 1 << 5, // Image data has premultiplied alpha.
-    NVG_IMAGE_NEAREST          = 1 << 6, // Image interpolation is Nearest instead Linear
-
-    NVG_IMAGE_NODELETE = 1 << 7, // Do not delete Sokol image.
+    NVG_IMAGE_DIRTY            = 1 << 0, // Force update image on GPU
+    NVG_IMAGE_IMMUTABLE        = 1 << 1, // Forbids updating the image
+    NVG_IMAGE_GENERATE_MIPMAPS = 1 << 2, // Generate mipmaps during creation of the image.
+    NVG_IMAGE_PREMULTIPLIED    = 1 << 3, // Image data has premultiplied alpha.
+    NVG_IMAGE_NEAREST          = 1 << 4, // Image interpolation is Nearest instead Linear
+    NVG_IMAGE_NODELETE         = 1 << 5, // Do not delete Sokol image.
 };
 
 //
@@ -522,6 +518,9 @@ typedef struct NVGcontext
     int             cindexes;
     int             nindexes;
     int             cindexes_gpu;
+
+    sg_sampler sampler_linear;
+    sg_sampler sampler_nearest;
 
     // Feel free to allocate anything you want with this at any time in a frame after nvgBeginFrame() is called
     // Note all allocations are dropped when nvgBeginFrame() is called

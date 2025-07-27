@@ -185,10 +185,14 @@ RenderTarget make_render_target(int width, int height)
         .pixel_format            = SG_PIXELFORMAT_DEPTH_STENCIL,
         .sample_count            = 1,
         .label                   = "render target depth image"});
-    rt.attachment      = sg_make_attachments(&(sg_attachments_desc){
-             .colors[0].image     = img_colour,
-             .depth_stencil.image = img_depth,
-             .label               = "render target attachment"});
+
+    rt.img_colour = img_colour;
+    rt.attachment = sg_make_attachments(&(sg_attachments_desc){
+        .colors[0].image     = rt.img_colour,
+        .depth_stencil.image = img_depth,
+        .label               = "render target attachment"});
+    rt.width      = width;
+    rt.height     = height;
 
     return rt;
 }
@@ -352,19 +356,10 @@ void* pw_create_gui(void* _plugin, void* _pw)
                 gui->logo_width  = x;
                 gui->logo_height = y;
 
-                // a sampler object
-                gui->logo_smp = sg_make_sampler(&(sg_sampler_desc){
-                    .min_filter    = SG_FILTER_LINEAR,
-                    .mag_filter    = SG_FILTER_LINEAR,
-                    .mipmap_filter = SG_FILTER_LINEAR,
-                    .wrap_u        = SG_WRAP_CLAMP_TO_EDGE,
-                    .wrap_v        = SG_WRAP_CLAMP_TO_EDGE,
-                });
-
                 snvgCreateImageFromHandleSokol(
                     gui->nvg,
                     gui->logo_id,
-                    gui->logo_smp,
+                    gui->nvg->sampler_linear,
                     NVG_TEXTURE_RGBA,
                     gui->logo_width,
                     gui->logo_height,
@@ -1324,10 +1319,12 @@ void pw_tick(void* _gui)
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
     // New calls to get this pointer must be issued every frame
-    gui->swapchain = (sg_swapchain)
-    {
-        .width = gui->layout.width, .height = gui->layout.height, .sample_count = 1,
-        .color_format = SG_PIXELFORMAT_BGRA8, .depth_format = SG_PIXELFORMAT_DEPTH_STENCIL,
+    gui->swapchain = (sg_swapchain){
+        .width        = gui->layout.width,
+        .height       = gui->layout.height,
+        .sample_count = 1,
+        .color_format = SG_PIXELFORMAT_BGRA8,
+        .depth_format = SG_PIXELFORMAT_DEPTH_STENCIL,
 
 #if __APPLE__
         .metal.current_drawable      = pw_get_metal_drawable(gui->pw),

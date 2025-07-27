@@ -43,8 +43,7 @@ typedef struct LayoutMetrics
 
 typedef struct RenderTarget
 {
-    // sg_image       img_colour;
-    // sg_image       img_depth;
+    sg_image       img_colour;
     sg_attachments attachment;
     int            width;
     int            height;
