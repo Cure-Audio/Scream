@@ -101,7 +101,7 @@ layout(binding=2) uniform texture2D tex;
 layout(binding=3) uniform sampler smp;
 layout(location = 0) in vec2 ftcoord;
 layout(location = 1) in vec2 fpos;
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec4 outColour;
 
 float sdroundrect(vec2 pt, vec2 ext, float rad) {
     vec2 ext2 = ext - vec2(rad,rad);
@@ -141,35 +141,35 @@ void main(void) {
     }
 
     if (type == 0) {    // Gradient
-        // Calculate gradient color using box gradient
+        // Calculate gradient colour using box gradient
         vec2 pt = (paintMat * vec3(fpos,1.0)).xy;
         float d = clamp((sdroundrect(pt, extent, radius) + feather*0.5) / feather, 0.0, 1.0);
-        vec4 color = mix(innerCol,outerCol,d);
+        vec4 colour = mix(innerCol,outerCol,d);
         // Combine alpha
-        color *= strokeAlpha * scissor;
-        result = color;
+        colour *= strokeAlpha * scissor;
+        result = colour;
     } else if (type == 1) {// Image
-        // Calculate color fron texture
+        // Calculate colour fron texture
         vec2 pt = (paintMat * vec3(fpos,1.0)).xy / extent;
-        vec4 color = texture(sampler2D(tex, smp), pt);
-        if (texType == 1) color = vec4(color.xyz*color.w,color.w);
-        if (texType == 2) color = vec4(color.x);
+        vec4 colour = texture(sampler2D(tex, smp), pt);
+        if (texType == 1) colour = vec4(colour.xyz*colour.w,colour.w);
+        if (texType == 2) colour = vec4(colour.x);
         // stencil support
-        if (texType == 3 && color.a == 1.0) discard;
-        // Apply color tint and alpha.
-        color *= innerCol;
+        if (texType == 3 && colour.a == 1.0) discard;
+        // Apply colour tint and alpha.
+        colour *= innerCol;
         // Combine alpha
-        color *= strokeAlpha * scissor;
-        result = color;
+        colour *= strokeAlpha * scissor;
+        result = colour;
     } else if (type == 2) {// Stencil fill
         result = vec4(1,1,1,1);
     } else if (type == 3) {// Textured tris
-        vec4 color = texture(sampler2D(tex, smp), ftcoord);
-        if (texType == 1) color = vec4(color.xyz*color.w,color.w);
-        if (texType == 2) color = vec4(color.x);
-        result = color * scissor * innerCol;
+        vec4 colour = texture(sampler2D(tex, smp), ftcoord);
+        if (texType == 1) colour = vec4(colour.xyz*colour.w,colour.w);
+        if (texType == 2) colour = vec4(colour.x);
+        result = colour * scissor * innerCol;
     }
-    outColor = result;
+    outColour = result;
 }
 >8
 
@@ -427,15 +427,15 @@ static NVGcompositeOperationState nvg__compositeOperationState(int op)
 }
 
 static NVGstate* nvg__getState(NVGcontext* ctx) { return &ctx->state; }
-void             nvg__setPaintColor(NVGpaint* p, NVGcolor color);
+void             nvg__setPaintColour(NVGpaint* p, NVGcolour colour);
 
 void nvgReset(NVGcontext* ctx)
 {
     NVGstate* state = nvg__getState(ctx);
     memset(state, 0, sizeof(*state));
 
-    nvg__setPaintColor(&state->fill, nvgRGBA(255, 255, 255, 255));
-    nvg__setPaintColor(&state->stroke, nvgRGBA(0, 0, 0, 255));
+    nvg__setPaintColour(&state->fill, nvgRGBA(255, 255, 255, 255));
+    nvg__setPaintColour(&state->stroke, nvgRGBA(0, 0, 0, 255));
     state->compositeOperation = nvg__compositeOperationState(NVG_SOURCE_OVER);
     state->shapeAntiAlias     = 1;
     state->strokeWidth        = 1.0f;
@@ -456,49 +456,49 @@ void nvgReset(NVGcontext* ctx)
     state->fontId        = 0;
 }
 
-NVGcolor nvgRGB(unsigned char r, unsigned char g, unsigned char b) { return nvgRGBA(r, g, b, 255); }
+NVGcolour nvgRGB(unsigned char r, unsigned char g, unsigned char b) { return nvgRGBA(r, g, b, 255); }
 
-NVGcolor nvgRGBf(float r, float g, float b) { return nvgRGBAf(r, g, b, 1.0f); }
+NVGcolour nvgRGBf(float r, float g, float b) { return nvgRGBAf(r, g, b, 1.0f); }
 
-NVGcolor nvgRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+NVGcolour nvgRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
-    NVGcolor color;
+    NVGcolour colour;
     // Use longer initialization to suppress warning.
-    color.r = r / 255.0f;
-    color.g = g / 255.0f;
-    color.b = b / 255.0f;
-    color.a = a / 255.0f;
-    return color;
+    colour.r = r / 255.0f;
+    colour.g = g / 255.0f;
+    colour.b = b / 255.0f;
+    colour.a = a / 255.0f;
+    return colour;
 }
 
-NVGcolor nvgRGBAf(float r, float g, float b, float a)
+NVGcolour nvgRGBAf(float r, float g, float b, float a)
 {
-    NVGcolor color;
+    NVGcolour colour;
     // Use longer initialization to suppress warning.
-    color.r = r;
-    color.g = g;
-    color.b = b;
-    color.a = a;
-    return color;
+    colour.r = r;
+    colour.g = g;
+    colour.b = b;
+    colour.a = a;
+    return colour;
 }
 
-NVGcolor nvgTransRGBA(NVGcolor c, unsigned char a)
+NVGcolour nvgTransRGBA(NVGcolour c, unsigned char a)
 {
     c.a = a / 255.0f;
     return c;
 }
 
-NVGcolor nvgTransRGBAf(NVGcolor c, float a)
+NVGcolour nvgTransRGBAf(NVGcolour c, float a)
 {
     c.a = a;
     return c;
 }
 
-NVGcolor nvgLerpRGBA(NVGcolor c0, NVGcolor c1, float u)
+NVGcolour nvgLerpRGBA(NVGcolour c0, NVGcolour c1, float u)
 {
-    int      i;
-    float    oneminu;
-    NVGcolor cint = {{{0}}};
+    int       i;
+    float     oneminu;
+    NVGcolour cint = {{{0}}};
 
     u       = nvg__clampf(u, 0.0f, 1.0f);
     oneminu = 1.0f - u;
@@ -510,7 +510,7 @@ NVGcolor nvgLerpRGBA(NVGcolor c0, NVGcolor c1, float u)
     return cint;
 }
 
-NVGcolor nvgHSL(float h, float s, float l) { return nvgHSLA(h, s, l, 255); }
+NVGcolour nvgHSL(float h, float s, float l) { return nvgHSLA(h, s, l, 255); }
 
 static float nvg__hue(float h, float m1, float m2)
 {
@@ -527,10 +527,10 @@ static float nvg__hue(float h, float m1, float m2)
     return m1;
 }
 
-NVGcolor nvgHSLA(float h, float s, float l, unsigned char a)
+NVGcolour nvgHSLA(float h, float s, float l, unsigned char a)
 {
-    float    m1, m2;
-    NVGcolor col;
+    float     m1, m2;
+    NVGcolour col;
     h = nvg__modf(h, 1.0f);
     if (h < 0.0f)
         h += 1.0f;
@@ -655,14 +655,14 @@ float nvgDegToRad(float deg) { return deg / 180.0f * NVG_PI; }
 
 float nvgRadToDeg(float rad) { return rad / NVG_PI * 180.0f; }
 
-void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
+void nvg__setPaintColour(NVGpaint* p, NVGcolour colour)
 {
     memset(p, 0, sizeof(*p));
     nvgTransformIdentity(p->xform);
-    p->radius     = 0.0f;
-    p->feather    = 1.0f;
-    p->innerColor = color;
-    p->outerColor = color;
+    p->radius      = 0.0f;
+    p->feather     = 1.0f;
+    p->innerColour = colour;
+    p->outerColour = colour;
 }
 
 // State setting
@@ -763,10 +763,10 @@ void nvgCurrentTransform(NVGcontext* ctx, float* xform)
     memcpy(xform, state->xform, sizeof(float) * 6);
 }
 
-void nvgStrokeColor(NVGcontext* ctx, NVGcolor color)
+void nvgStrokeColour(NVGcontext* ctx, NVGcolour colour)
 {
     NVGstate* state = nvg__getState(ctx);
-    nvg__setPaintColor(&state->stroke, color);
+    nvg__setPaintColour(&state->stroke, colour);
 }
 
 void nvgStrokePaint(NVGcontext* ctx, NVGpaint paint)
@@ -776,10 +776,10 @@ void nvgStrokePaint(NVGcontext* ctx, NVGpaint paint)
     nvgTransformMultiply(state->stroke.xform, state->xform);
 }
 
-void nvgFillColor(NVGcontext* ctx, NVGcolor color)
+void nvgFillColour(NVGcontext* ctx, NVGcolour colour)
 {
     NVGstate* state = nvg__getState(ctx);
-    nvg__setPaintColor(&state->fill, color);
+    nvg__setPaintColour(&state->fill, colour);
 }
 
 void nvgFillPaint(NVGcontext* ctx, NVGpaint paint)
@@ -852,7 +852,7 @@ void nvgDeleteImage(NVGcontext* ctx, int image)
     SGNVG_ASSERT(0);
 }
 
-NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float ey, NVGcolor icol, NVGcolor ocol)
+NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float ey, NVGcolour icol, NVGcolour ocol)
 {
     NVGpaint    p;
     float       dx, dy, d;
@@ -889,13 +889,13 @@ NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float 
 
     p.feather = nvg__maxf(1.0f, d);
 
-    p.innerColor = icol;
-    p.outerColor = ocol;
+    p.innerColour = icol;
+    p.outerColour = ocol;
 
     return p;
 }
 
-NVGpaint nvgRadialGradient(NVGcontext* ctx, float cx, float cy, float inr, float outr, NVGcolor icol, NVGcolor ocol)
+NVGpaint nvgRadialGradient(NVGcontext* ctx, float cx, float cy, float inr, float outr, NVGcolour icol, NVGcolour ocol)
 {
     NVGpaint p;
     float    r = (inr + outr) * 0.5f;
@@ -914,14 +914,14 @@ NVGpaint nvgRadialGradient(NVGcontext* ctx, float cx, float cy, float inr, float
 
     p.feather = nvg__maxf(1.0f, f);
 
-    p.innerColor = icol;
-    p.outerColor = ocol;
+    p.innerColour = icol;
+    p.outerColour = ocol;
 
     return p;
 }
 
 NVGpaint
-nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h, float r, float f, NVGcolor icol, NVGcolor ocol)
+nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h, float r, float f, NVGcolour icol, NVGcolour ocol)
 {
     NVGpaint p;
     NVG_NOTUSED(ctx);
@@ -938,8 +938,8 @@ nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h, float r, flo
 
     p.feather = nvg__maxf(1.0f, f);
 
-    p.innerColor = icol;
-    p.outerColor = ocol;
+    p.innerColour = icol;
+    p.outerColour = ocol;
 
     return p;
 }
@@ -959,7 +959,7 @@ NVGpaint nvgImagePattern(NVGcontext* ctx, float cx, float cy, float w, float h, 
 
     p.image = image;
 
-    p.innerColor = p.outerColor = nvgRGBAf(1, 1, 1, alpha);
+    p.innerColour = p.outerColour = nvgRGBAf(1, 1, 1, alpha);
 
     return p;
 }
@@ -3705,7 +3705,7 @@ static void sgnvg__xformToMat3x4(float* m3, float* t)
     m3[11] = 0.0f;
 }
 
-static NVGcolor sgnvg__premulColor(NVGcolor c)
+static NVGcolour sgnvg__premulColour(NVGcolour c)
 {
     c.r *= c.a;
     c.g *= c.a;
@@ -3727,8 +3727,8 @@ static int sgnvg__convertPaint(
 
     memset(frag, 0, sizeof(*frag));
 
-    frag->innerCol = sgnvg__premulColor(paint->innerColor);
-    frag->outerCol = sgnvg__premulColor(paint->outerColor);
+    frag->innerCol = sgnvg__premulColour(paint->innerColour);
+    frag->outerCol = sgnvg__premulColour(paint->outerColour);
 
     if (scissor->extent[0] < -0.5f || scissor->extent[1] < -0.5f)
     {
@@ -3883,13 +3883,13 @@ static sg_blend_factor sgnvg_convertBlendFuncFactor(int factor)
         return SG_BLENDFACTOR_ZERO;
     if (factor == NVG_ONE)
         return SG_BLENDFACTOR_ONE;
-    if (factor == NVG_SRC_COLOR)
+    if (factor == NVG_SRC_COLOUR)
         return SG_BLENDFACTOR_SRC_COLOR;
-    if (factor == NVG_ONE_MINUS_SRC_COLOR)
+    if (factor == NVG_ONE_MINUS_SRC_COLOUR)
         return SG_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
-    if (factor == NVG_DST_COLOR)
+    if (factor == NVG_DST_COLOUR)
         return SG_BLENDFACTOR_DST_COLOR;
-    if (factor == NVG_ONE_MINUS_DST_COLOR)
+    if (factor == NVG_ONE_MINUS_DST_COLOUR)
         return SG_BLENDFACTOR_ONE_MINUS_DST_COLOR;
     if (factor == NVG_SRC_ALPHA)
         return SG_BLENDFACTOR_SRC_ALPHA;
@@ -4232,8 +4232,8 @@ void nvgFill(NVGcontext* ctx)
         nvg__expandFill(ctx, 0.0f, NVG_MITER, 2.4f);
 
     // Apply global alpha
-    fillPaint.innerColor.a *= state->alpha;
-    fillPaint.outerColor.a *= state->alpha;
+    fillPaint.innerColour.a *= state->alpha;
+    fillPaint.outerColour.a *= state->alpha;
 
     NVGpaint*                  paint              = &fillPaint;
     NVGcompositeOperationState compositeOperation = state->compositeOperation;
@@ -4368,15 +4368,15 @@ void nvgStroke(NVGcontext* ctx)
     {
         // If the stroke width is less than pixel size, use alpha to emulate coverage.
         // Since coverage is area, scale by alpha*alpha.
-        float alpha               = nvg__clampf(strokeWidth / ctx->fringeWidth, 0.0f, 1.0f);
-        strokePaint.innerColor.a *= alpha * alpha;
-        strokePaint.outerColor.a *= alpha * alpha;
-        strokeWidth               = ctx->fringeWidth;
+        float alpha                = nvg__clampf(strokeWidth / ctx->fringeWidth, 0.0f, 1.0f);
+        strokePaint.innerColour.a *= alpha * alpha;
+        strokePaint.outerColour.a *= alpha * alpha;
+        strokeWidth                = ctx->fringeWidth;
     }
 
     // Apply global alpha
-    strokePaint.innerColor.a *= state->alpha;
-    strokePaint.outerColor.a *= state->alpha;
+    strokePaint.innerColour.a *= state->alpha;
+    strokePaint.outerColour.a *= state->alpha;
 
     nvg__flattenPaths(ctx);
 
@@ -4490,8 +4490,8 @@ void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
     paint.image = ctx->fontImages[ctx->fontImageIdx];
 
     // Apply global alpha
-    paint.innerColor.a *= state->alpha;
-    paint.outerColor.a *= state->alpha;
+    paint.innerColour.a *= state->alpha;
+    paint.outerColour.a *= state->alpha;
 
     SGNVGcall*         call = NULL;
     SGNVGfragUniforms* frag = NULL;

@@ -957,7 +957,7 @@ void ted_draw(TextEditor* ted)
             NVGcolour col = nvgHexColour(0x8BD1E4FF);
             if (!has_keyboard_focus)
                 col.a = 0.5f;
-            nvgFillColor(nvg, col);
+            nvgFillColour(nvg, col);
             const float start_x = glyphs[ted->selection_start].minx;
             const float end_x   = glyphs[ted->selection_end - 1].maxx;
 
@@ -977,7 +977,7 @@ void ted_draw(TextEditor* ted)
         }
 
         nvgTextAlign(nvg, TED_TEXT_ALIGN);
-        nvgFillColor(nvg, COLOUR_TEXT);
+        nvgFillColour(nvg, COLOUR_TEXT);
         nvgText(nvg, d->x + d->width * 0.5 + ted->text_offset, d->y, text, NULL);
     }
 
@@ -1011,7 +1011,7 @@ void ted_draw(TextEditor* ted)
             ibeam_x  = ceilf(ibeam_x);
 
             nvgBeginPath(nvg);
-            nvgFillColor(nvg, (NVGcolour){0, 0, 0, 1});
+            nvgFillColour(nvg, (NVGcolour){0, 0, 0, 1});
             nvgRect(nvg, ibeam_x, d->y - padding, 2, d->height);
             nvgFill(nvg);
         }

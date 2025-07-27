@@ -68,7 +68,7 @@ extern "C" {
 #pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
 #endif
 
-typedef struct NVGcolor
+typedef struct NVGcolour
 {
     union
     {
@@ -78,17 +78,17 @@ typedef struct NVGcolor
             float r, g, b, a;
         };
     };
-} NVGcolor;
+} NVGcolour;
 
 typedef struct NVGpaint
 {
-    float    xform[6];
-    float    extent[2];
-    float    radius;
-    float    feather;
-    NVGcolor innerColor;
-    NVGcolor outerColor;
-    int      image;
+    float     xform[6];
+    float     extent[2];
+    float     radius;
+    float     feather;
+    NVGcolour innerColour;
+    NVGcolour outerColour;
+    int       image;
 } NVGpaint;
 
 enum NVGwinding
@@ -127,17 +127,17 @@ enum NVGalign
 
 enum NVGblendFactor
 {
-    NVG_ZERO                = 1 << 0,
-    NVG_ONE                 = 1 << 1,
-    NVG_SRC_COLOR           = 1 << 2,
-    NVG_ONE_MINUS_SRC_COLOR = 1 << 3,
-    NVG_DST_COLOR           = 1 << 4,
-    NVG_ONE_MINUS_DST_COLOR = 1 << 5,
-    NVG_SRC_ALPHA           = 1 << 6,
-    NVG_ONE_MINUS_SRC_ALPHA = 1 << 7,
-    NVG_DST_ALPHA           = 1 << 8,
-    NVG_ONE_MINUS_DST_ALPHA = 1 << 9,
-    NVG_SRC_ALPHA_SATURATE  = 1 << 10,
+    NVG_ZERO                 = 1 << 0,
+    NVG_ONE                  = 1 << 1,
+    NVG_SRC_COLOUR           = 1 << 2,
+    NVG_ONE_MINUS_SRC_COLOUR = 1 << 3,
+    NVG_DST_COLOUR           = 1 << 4,
+    NVG_ONE_MINUS_DST_COLOUR = 1 << 5,
+    NVG_SRC_ALPHA            = 1 << 6,
+    NVG_ONE_MINUS_SRC_ALPHA  = 1 << 7,
+    NVG_DST_ALPHA            = 1 << 8,
+    NVG_ONE_MINUS_DST_ALPHA  = 1 << 9,
+    NVG_SRC_ALPHA_SATURATE   = 1 << 10,
 };
 
 enum NVGcompositeOperation
@@ -364,19 +364,19 @@ typedef struct SGNVGfragUniforms
     {
         struct
         {
-            float           scissorMat[12]; // matrices are actually 3 vec4s
-            float           paintMat[12];
-            struct NVGcolor innerCol;
-            struct NVGcolor outerCol;
-            float           scissorExt[2];
-            float           scissorScale[2];
-            float           extent[2];
-            float           radius;
-            float           feather;
-            float           strokeMult;
-            float           strokeThr;
-            float           texType;
-            float           type;
+            float            scissorMat[12]; // matrices are actually 3 vec4s
+            float            paintMat[12];
+            struct NVGcolour innerCol;
+            struct NVGcolour outerCol;
+            float            scissorExt[2];
+            float            scissorScale[2];
+            float            extent[2];
+            float            radius;
+            float            feather;
+            float            strokeMult;
+            float            strokeThr;
+            float            texType;
+            float            type;
         };
         float uniformArray[NANOVG_SG_UNIFORMARRAY_SIZE][4];
     };
@@ -570,7 +570,7 @@ void nvgEndFrame(NVGcontext* ctx);
 //
 // The composite operations in NanoVG are modeled after HTML Canvas API, and
 // the blend func is based on OpenGL (see corresponding manuals for more info).
-// The colors in the blending state have premultiplied alpha.
+// The colours in the blending state have premultiplied alpha.
 
 // Sets the composite operation. The op parameter should be one of NVGcompositeOperation.
 void nvgGlobalCompositeOperation(NVGcontext* ctx, int op);
@@ -583,58 +583,58 @@ void nvgGlobalCompositeBlendFunc(NVGcontext* ctx, int sfactor, int dfactor);
 void nvgGlobalCompositeBlendFuncSeparate(NVGcontext* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha);
 
 //
-// Color utils
+// Colour utils
 //
-// Colors in NanoVG are stored as unsigned ints in ABGR format.
+// Colours in NanoVG are stored as unsigned ints in ABGR format.
 
-// Returns a color value from red, green, blue values. Alpha will be set to 255 (1.0f).
-NVGcolor nvgRGB(unsigned char r, unsigned char g, unsigned char b);
+// Returns a colour value from red, green, blue values. Alpha will be set to 255 (1.0f).
+NVGcolour nvgRGB(unsigned char r, unsigned char g, unsigned char b);
 
-// Returns a color value from red, green, blue values. Alpha will be set to 1.0f.
-NVGcolor nvgRGBf(float r, float g, float b);
+// Returns a colour value from red, green, blue values. Alpha will be set to 1.0f.
+NVGcolour nvgRGBf(float r, float g, float b);
 
-// Returns a color value from red, green, blue and alpha values.
-NVGcolor nvgRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+// Returns a colour value from red, green, blue and alpha values.
+NVGcolour nvgRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 
-// Returns a color value from red, green, blue and alpha values.
-NVGcolor nvgRGBAf(float r, float g, float b, float a);
+// Returns a colour value from red, green, blue and alpha values.
+NVGcolour nvgRGBAf(float r, float g, float b, float a);
 
-// Linearly interpolates from color c0 to c1, and returns resulting color value.
-NVGcolor nvgLerpRGBA(NVGcolor c0, NVGcolor c1, float u);
+// Linearly interpolates from colour c0 to c1, and returns resulting colour value.
+NVGcolour nvgLerpRGBA(NVGcolour c0, NVGcolour c1, float u);
 
-// Sets transparency of a color value.
-NVGcolor nvgTransRGBA(NVGcolor c0, unsigned char a);
+// Sets transparency of a colour value.
+NVGcolour nvgTransRGBA(NVGcolour c0, unsigned char a);
 
-// Sets transparency of a color value.
-NVGcolor nvgTransRGBAf(NVGcolor c0, float a);
+// Sets transparency of a colour value.
+NVGcolour nvgTransRGBAf(NVGcolour c0, float a);
 
-// Returns color value specified by hue, saturation and lightness.
+// Returns colour value specified by hue, saturation and lightness.
 // HSL values are all in range [0..1], alpha will be set to 255.
-NVGcolor nvgHSL(float h, float s, float l);
+NVGcolour nvgHSL(float h, float s, float l);
 
-// Returns color value specified by hue, saturation and lightness and alpha.
+// Returns colour value specified by hue, saturation and lightness and alpha.
 // HSL values are all in range [0..1], alpha in range [0..255]
-NVGcolor nvgHSLA(float h, float s, float l, unsigned char a);
+NVGcolour nvgHSLA(float h, float s, float l, unsigned char a);
 
 //
 // Render styles
 //
-// Fill and stroke render style can be either a solid color or a paint which is a gradient or a pattern.
-// Solid color is simply defined as a color value, different kinds of paints can be created
+// Fill and stroke render style can be either a solid colour or a paint which is a gradient or a pattern.
+// Solid colour is simply defined as a colour value, different kinds of paints can be created
 // using nvgLinearGradient(), nvgBoxGradient(), nvgRadialGradient() and nvgImagePattern().
 //
 
 // Sets whether to draw antialias for nvgStroke() and nvgFill(). It's enabled by default.
 void nvgShapeAntiAlias(NVGcontext* ctx, int enabled);
 
-// Sets current stroke style to a solid color.
-void nvgStrokeColor(NVGcontext* ctx, NVGcolor color);
+// Sets current stroke style to a solid colour.
+void nvgStrokeColour(NVGcontext* ctx, NVGcolour colour);
 
 // Sets current stroke style to a paint, which can be a one of the gradients or a pattern.
 void nvgStrokePaint(NVGcontext* ctx, NVGpaint paint);
 
-// Sets current fill style to a solid color.
-void nvgFillColor(NVGcontext* ctx, NVGcolor color);
+// Sets current fill style to a solid colour.
+void nvgFillColour(NVGcontext* ctx, NVGcolour colour);
 
 // Sets current fill style to a paint, which can be a one of the gradients or a pattern.
 void nvgFillPaint(NVGcontext* ctx, NVGpaint paint);
@@ -785,22 +785,22 @@ int nvgUpdateTexture(NVGcontext* ctx, int image, int x, int y, int w, int h, con
 // These can be used as paints for strokes and fills.
 
 // Creates and returns a linear gradient. Parameters (sx,sy)-(ex,ey) specify the start and end coordinates
-// of the linear gradient, icol specifies the start color and ocol the end color.
+// of the linear gradient, icol specifies the start colour and ocol the end colour.
 // The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
-NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float ey, NVGcolor icol, NVGcolor ocol);
+NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float ey, NVGcolour icol, NVGcolour ocol);
 
 // Creates and returns a box gradient. Box gradient is a feathered rounded rectangle, it is useful for rendering
 // drop shadows or highlights for boxes. Parameters (x,y) define the top-left corner of the rectangle,
 // (w,h) define the size of the rectangle, r defines the corner radius, and f feather. Feather defines how blurry
-// the border of the rectangle is. Parameter icol specifies the inner color and ocol the outer color of the gradient.
+// the border of the rectangle is. Parameter icol specifies the inner colour and ocol the outer colour of the gradient.
 // The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 NVGpaint
-nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h, float r, float f, NVGcolor icol, NVGcolor ocol);
+nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h, float r, float f, NVGcolour icol, NVGcolour ocol);
 
 // Creates and returns a radial gradient. Parameters (cx,cy) specify the center, inr and outr specify
-// the inner and outer radius of the gradient, icol specifies the start color and ocol the end color.
+// the inner and outer radius of the gradient, icol specifies the start colour and ocol the end colour.
 // The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
-NVGpaint nvgRadialGradient(NVGcontext* ctx, float cx, float cy, float inr, float outr, NVGcolor icol, NVGcolor ocol);
+NVGpaint nvgRadialGradient(NVGcontext* ctx, float cx, float cy, float inr, float outr, NVGcolour icol, NVGcolour ocol);
 
 // Creates and returns an image pattern. Parameters (ox,oy) specify the left-top location of the image pattern,
 // (ex,ey) the size of one image, angle rotation around the top-left corner, image is handle to the image to render.
@@ -910,7 +910,7 @@ void nvgStroke(NVGcontext* ctx);
 // NanoVG allows you to load .ttf files and use the font to render text.
 //
 // The appearance of the text can be defined by setting the current text style
-// and by specifying the fill color. Common text and font settings such as
+// and by specifying the fill colour. Common text and font settings such as
 // font size, letter spacing and text align are supported. Font blur allows you
 // to create simple text effects such as drop shadows.
 //
@@ -935,7 +935,7 @@ void nvgStroke(NVGcontext* ctx);
 //		nvgRect(vg, bounds[0],bounds[1], bounds[2]-bounds[0], bounds[3]-bounds[1]);
 //		nvgFill(vg);
 //
-// Note: currently only solid color fill is supported for text.
+// Note: currently only solid colour fill is supported for text.
 
 // Creates font by loading it from the disk from specified file name.
 // Returns handle to the font.

@@ -1476,7 +1476,7 @@ void pw_tick(void* _gui)
         // nvgFill(nvg);
 
         // Doesn't look great rendered by nanovg...
-        // nvgFillColor(nvg, (NVGcolor){1, 1, 1, 1});
+        // nvgFillColour(nvg, (NVGcolour){1, 1, 1, 1});
         // draw_cure_audio_logo_fixed_svg(nvg, (28.0f / 241.0f), lm->width - 16 - 20, 2);
     }
 
@@ -1505,8 +1505,8 @@ void pw_tick(void* _gui)
         nvgFill(nvg);
 
         // Bottom inner shadow (dark)
-        paint.innerColor = (NVGcolour){0, 0, 0, 0};
-        paint.outerColor = (NVGcolour){0, 0, 0, 0.75f};
+        paint.innerColour = (NVGcolour){0, 0, 0, 0};
+        paint.outerColour = (NVGcolour){0, 0, 0, 0.75f};
         nvgBeginPath(nvg);
         nvgRoundedRectVarying(nvg, 8, lm->content_b - blur_radius * 2, lm->width - 16, blur_radius * 2, 0, 0, 8, 8);
         nvgFillPaint(nvg, paint);
@@ -1543,7 +1543,7 @@ void pw_tick(void* _gui)
         {
             nvgCircle(nvg, points[i].x, points[i].y, DOT_RADIUS);
         }
-        nvgFillColor(nvg, (NVGcolour){1, 1, 1, 1});
+        nvgFillColour(nvg, (NVGcolour){1, 1, 1, 1});
 
         nvgFill(nvg);
         nvgBeginPath(nvg);
@@ -1551,7 +1551,7 @@ void pw_tick(void* _gui)
         {
             nvgCircle(nvg, points[i].x, points[i].y - 1, DOT_RADIUS);
         }
-        nvgFillColor(nvg, nvgHexColour(0x111629FF));
+        nvgFillColour(nvg, nvgHexColour(0x111629FF));
         nvgFill(nvg);
     }
 
@@ -1590,9 +1590,9 @@ void pw_tick(void* _gui)
                     const float r90  = roundf(r100 * 0.9f);
                     const float r80  = roundf(r100 * 0.8f);
 
-                    static const NVGcolor stop100 = nvgHexColour(0x40454AFF);
-                    static const NVGcolor stop90  = nvgHexColour(0xB7C7D7FF);
-                    static const NVGcolor stop80  = nvgHexColour(0xC9D3DDFF);
+                    static const NVGcolour stop100 = nvgHexColour(0x40454AFF);
+                    static const NVGcolour stop90  = nvgHexColour(0xB7C7D7FF);
+                    static const NVGcolour stop80  = nvgHexColour(0xC9D3DDFF);
 
                     NVGpaint grad_100_90 = nvgRadialGradient(nvg, pt.x, pt.y, r90, r100, stop90, stop100);
                     nvgBeginPath(nvg);
@@ -1618,8 +1618,8 @@ void pw_tick(void* _gui)
                     const float inner_radius = radius_outer - 8 * lm->param_scale;
                     const float outer_radius = radius_outer + 4 * lm->param_scale;
 
-                    static const NVGcolor icol = {0, 0, 0, 0.25f};
-                    static const NVGcolor ocol = {0, 0, 0, 0};
+                    static const NVGcolour icol = {0, 0, 0, 0.25f};
+                    static const NVGcolour ocol = {0, 0, 0, 0};
                     NVGpaint grad = nvgRadialGradient(nvg, pt.x, y, inner_radius, outer_radius, icol, ocol);
                     nvgBeginPath(nvg);
                     nvgCircle(nvg, pt.x, y, outer_radius);
@@ -1628,8 +1628,8 @@ void pw_tick(void* _gui)
                 }
 
                 {
-                    static const NVGcolor stop0 = nvgHexColour(0xD4DFEAFF);
-                    static const NVGcolor stop1 = nvgHexColour(0xB5BFC8FF);
+                    static const NVGcolour stop0 = nvgHexColour(0xD4DFEAFF);
+                    static const NVGcolour stop1 = nvgHexColour(0xB5BFC8FF);
 
                     const float top         = outer_y + outer_h * 0.13f;
                     const float bottom      = outer_y + outer_h * 0.84f;
@@ -1642,8 +1642,8 @@ void pw_tick(void* _gui)
 
                 // Outer knob inner shadow
                 {
-                    static const NVGcolor icol = {1, 1, 1, 0};
-                    static const NVGcolor ocol = {1, 1, 1, 0.8};
+                    static const NVGcolour icol = {1, 1, 1, 0};
+                    static const NVGcolour ocol = {1, 1, 1, 0.8};
                     NVGpaint grad = nvgRadialGradient(nvg, pt.x, pt.y + 1, radius_outer - 1, radius_outer, icol, ocol);
                     nvgBeginPath(nvg);
                     nvgCircle(nvg, pt.x, pt.y, radius_outer);
@@ -1658,8 +1658,8 @@ void pw_tick(void* _gui)
                 const float inner_s0_y   = inner_y + inner_h * 0.16f;
                 const float inner_s1_y   = inner_y + inner_h * 0.87f;
 
-                static const NVGcolor in_lin_s0 = nvgHexColour(0xB5BFC8FF);
-                static const NVGcolor in_lin_s1 = nvgHexColour(0xD4DFEAFF);
+                static const NVGcolour in_lin_s0 = nvgHexColour(0xB5BFC8FF);
+                static const NVGcolour in_lin_s1 = nvgHexColour(0xD4DFEAFF);
                 NVGpaint inner_grad = nvgLinearGradient(nvg, 0, inner_s0_y, 0, inner_s1_y, in_lin_s0, in_lin_s1);
 
                 nvgBeginPath(nvg);
@@ -2076,8 +2076,8 @@ void pw_tick(void* _gui)
                     // Handle BG
                     nvgBeginPath(nvg);
                     nvgRoundedRect(nvg, handle.x, handle.y, w, w, 4 * lm->param_scale);
-                    NVGcolor stop1 = nvgHexColour(0xB5BFC8FF);
-                    NVGcolor stop2 = nvgHexColour(0xD5DFEAFF);
+                    NVGcolour stop1 = nvgHexColour(0xB5BFC8FF);
+                    NVGcolour stop2 = nvgHexColour(0xD5DFEAFF);
                     paint = nvgLinearGradient(0, 0, handle_cy - w * 0.35, 0, handle_cy + w * 0.35, stop1, stop2);
                     nvgFillPaint(nvg, paint);
                     nvgFill(nvg);

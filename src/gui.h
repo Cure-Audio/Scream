@@ -109,14 +109,10 @@ typedef struct GUI
 #define NVG_ALIGN_BR (NVG_ALIGN_BOTTOM | NVG_ALIGN_RIGHT)
 
 // clang-format off
-// Fake english to real english helpers
-typedef struct NVGcolor NVGcolour;
-static inline void nvgFillColour(NVGcontext* ctx, NVGcolour col) { nvgFillColor(ctx, col); }
-static inline void nvgStrokeColour(NVGcontext* ctx, NVGcolour col) { nvgStrokeColor(ctx, col); }
 #define nvgHexColour(hex) (NVGcolour){( hex >> 24)         / 255.0f,\
-                                     ((hex >> 16) & 0xff) / 255.0f,\
-                                     ((hex >>  8) & 0xff) / 255.0f,\
-                                     ( hex        & 0xff) / 255.0f}
+                                      ((hex >> 16) & 0xff) / 255.0f,\
+                                      ((hex >>  8) & 0xff) / 255.0f,\
+                                      ( hex        & 0xff) / 255.0f}
 // clang-format on
 
 static const NVGcolour COLOUR_TEXT = nvgHexColour(0x828A91FF);
