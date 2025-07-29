@@ -2147,17 +2147,17 @@ void pw_tick(void* _gui)
 
     snvg_command_end_pass(nvg);
 
-    static float apply_lightfilter     = 0;
-    static float apply_bloom           = 0;
-    static float lightfilter_threshold = 0.86;
-    static float bloom_amount          = 1;
-    static float num_stages            = 4;
+    static float apply_lightfilter   = 0;
+    static float apply_bloom         = 0;
+    static float lightness_threshold = 0.86;
+    static float bloom_amount        = 1;
+    static float num_stages          = 2;
 
     snvg_command_fx(
         nvg,
         apply_lightfilter > 0.5,
         apply_bloom > 0.5,
-        lightfilter_threshold,
+        lightness_threshold,
         bloom_amount,
         (int)num_stages,
         &gui->main_framebuffer,
@@ -2190,7 +2190,7 @@ void pw_tick(void* _gui)
         im_slider(nvg, im, rect, &apply_bloom, 0, 1, "%.2f", "Apply bloom");
         rect.b += offset;
         rect.y += offset;
-        im_slider(nvg, im, rect, &lightfilter_threshold, 0, 1, "%.2f", "Filter threshold");
+        im_slider(nvg, im, rect, &lightness_threshold, 0, 1, "%.2f", "Filter threshold");
         rect.b += offset;
         rect.y += offset;
         im_slider(nvg, im, rect, &bloom_amount, 0, 1, "%.2f", "Bloom amount");

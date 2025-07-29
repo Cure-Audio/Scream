@@ -3900,8 +3900,9 @@ void nvgEndFrame(NVGcontext* ctx)
             SGNVGcommandNVG* draws = cmd->payload.drawNVG;
 
             SGNVGcall* call = draws->calls;
+            int        i;
 
-            for (int i = 0; i < draws->num_calls && call != NULL; i++)
+            for (i = 0; i < draws->num_calls && call != NULL; i++)
             {
                 ctx->blend.src_factor_rgb   = call->blendFunc.srcRGB;
                 ctx->blend.dst_factor_rgb   = call->blendFunc.dstRGB;
@@ -3919,6 +3920,7 @@ void nvgEndFrame(NVGcontext* ctx)
 
                 call = call->next;
             }
+            NVG_ASSERT(i == draws->num_calls && call == NULL); // Oh oh, you built the list wrong
             break;
         }
         case SGNVG_CMD_IMAGE_FX:
@@ -4475,6 +4477,29 @@ void snvgDestroyImageFX(NVGcontext* ctx, SGNVGimageFX* fx)
 
 void snvg__processImageFX(NVGcontext* ctx, SGNVGcommandImageFX* state)
 {
+    // Based off of Dual filter blur. Marius Bjorge - Bandwith-Efficient Rendering, Siggraph 2015
+    // https://community.arm.com/cfs-file/__key/communityserver-blogs-components-weblogfiles/00-00-00-20-66/siggraph2015_2D00_mmg_2D00_marius_2D00_notes.pdf
+    // The idea behind this blur is to downsample then upsample the image several times, using half pixel offsets when
+    // reading from textures and applying weights to them. The algorithm is super simple as far as blurs go, it looks
+    // good, and runs way faster than box blurs and gaussian blurs, and only a bit faster than the Kawase blurs
+    // 2x downsample produces an 8px blur, 4x downsample = 16px blur, 8x downsample = 32px, etc.
+
+    // Blooms are roughly created like this:
+    // 1. Filter the 'lightness' from an image with a hard step.
+    // 2. Blur the filtered image
+    // 3. Apply the blur additively to the original image
+    // You can get creative here by adjusting the lightness threshold and the amount of bloom applied additively
+    // Other bloom implementations will do the filtering and downsampling at the same time and claim to get better
+    // quality results and/or performance. Here we filter seperately, but feel free to copy paste the code and design
+    // your own
+
+    // TODO: linearly interpolate between mip maps based off of a log2 distance
+    // float radius_stages = log2(radius_px);
+    // float radius_remainder = radius_stages - (int)radius_stages;
+    // int num_stages = cielf(radius_stages);
+    // ...
+    // lerp(radius_remainder, img_stage_lo, img_stage_hi)
+
     sg_begin_pass(&(sg_pass){
         .action      = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
         .attachments = state->fx->mip_levels[0].att,
@@ -4490,7 +4515,7 @@ void snvg__processImageFX(NVGcontext* ctx, SGNVGcommandImageFX* state)
     });
     if (state->apply_lightfilter)
     {
-        fs_lightfilter_t lightfilter_uniforms = {.u_threshold = state->lightfilter_threshold};
+        fs_lightfilter_t lightfilter_uniforms = {.u_threshold = state->lightness_threshold};
         sg_apply_uniforms(UB_fs_lightfilter, &SG_RANGE(lightfilter_uniforms));
     }
     sg_draw(0, 3, 1);
@@ -4601,7 +4626,7 @@ void snvg_command_fx(
     NVGcontext*       ctx,
     bool              apply_lightfilter,
     bool              apply_bloom,
-    float             lightfilter_threshold,
+    float             lightness_threshold,
     float             bloom_amount,
     int               num_stages,
     SGNVGframebuffer* src,
@@ -4623,13 +4648,13 @@ void snvg_command_fx(
     cmd->type       = SGNVG_CMD_IMAGE_FX;
     cmd->payload.fx = cmdfx;
 
-    cmdfx->apply_lightfilter     = apply_lightfilter;
-    cmdfx->apply_bloom           = apply_bloom;
-    cmdfx->lightfilter_threshold = lightfilter_threshold;
-    cmdfx->bloom_amount          = bloom_amount;
-    cmdfx->num_stages            = num_stages;
-    cmdfx->src                   = src;
-    cmdfx->fx                    = fx;
+    cmdfx->apply_lightfilter   = apply_lightfilter;
+    cmdfx->apply_bloom         = apply_bloom;
+    cmdfx->lightness_threshold = lightness_threshold;
+    cmdfx->bloom_amount        = bloom_amount;
+    cmdfx->num_stages          = num_stages;
+    cmdfx->src                 = src;
+    cmdfx->fx                  = fx;
 }
 
 void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func)

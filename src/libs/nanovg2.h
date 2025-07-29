@@ -466,7 +466,7 @@ typedef struct SGNVGcommandImageFX
     bool apply_lightfilter;
     bool apply_bloom;
 
-    float lightfilter_threshold;
+    float lightness_threshold;
     float bloom_amount;
 
     // Num downsampling stages.
@@ -1090,7 +1090,7 @@ void snvg_command_fx(
     NVGcontext*       ctx,
     bool              apply_lightfilter,
     bool              apply_bloom,
-    float             lightfilter_threshold,
+    float             lightness_threshold,
     float             bloom_amount,
     int               num_stages,
     SGNVGframebuffer* src,
