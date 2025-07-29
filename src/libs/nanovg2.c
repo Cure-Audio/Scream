@@ -240,6 +240,7 @@ void main(void) {
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <dualfilter.glsl.h>
 #include <nanovg_sokol.glsl.h>
 
 #define FONTSTASH_IMPLEMENTATION
@@ -3882,7 +3883,7 @@ void nvgEndFrame(NVGcontext* ctx)
         {
         case SGNVG_CMD_BEGIN_PASS:
         {
-            SGNVGbeginPass* p = cmd->payload.beginPass;
+            SGNVGcommandBeginPass* p = cmd->payload.beginPass;
 
             sg_begin_pass(&p->pass);
 
@@ -3896,7 +3897,7 @@ void nvgEndFrame(NVGcontext* ctx)
             break;
         case SGNVG_CMD_DRAW_NVG:
         {
-            SGNVGdrawNVG* draws = cmd->payload.drawNVG;
+            SGNVGcommandNVG* draws = cmd->payload.drawNVG;
 
             SGNVGcall* call = draws->calls;
 
@@ -3920,9 +3921,16 @@ void nvgEndFrame(NVGcontext* ctx)
             }
             break;
         }
+        case SGNVG_CMD_IMAGE_FX:
+        {
+            SGNVGcommandImageFX* cmdfx = cmd->payload.fx;
+            void                 snvg__processImageFX(NVGcontext * ctx, SGNVGcommandImageFX * state);
+            snvg__processImageFX(ctx, cmdfx);
+            break;
+        }
         case SGNVG_CMD_CUSTOM:
         {
-            SGNVGcustom* custom = cmd->payload.custom;
+            SGNVGcommandCustom* custom = cmd->payload.custom;
             custom->func(custom->uptr);
             break;
         }
@@ -4428,10 +4436,141 @@ void snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* rt)
     }
 }
 
+SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, int max_mip_levels)
+{
+    size_t base_size      = sizeof(SGNVGimageFX);
+    size_t miplevels_size = sizeof(SGNVGframebuffer) * max_mip_levels;
+
+    size_t alloc_size = base_size + miplevels_size;
+
+    SGNVGimageFX* fx = NVG_MALLOC(alloc_size);
+    memset(fx, 0, alloc_size);
+
+    fx->resolve = snvgCreateFramebuffer(ctx, width, height);
+    for (int i = 0; i < max_mip_levels; i++)
+    {
+        int w = width >> i;
+        int h = height >> i;
+        if (w && h)
+        {
+            fx->mip_levels[i] = snvgCreateFramebuffer(ctx, w, h);
+            fx->max_mip_levels++;
+        }
+    }
+
+    return fx;
+}
+
+void snvgDestroyImageFX(NVGcontext* ctx, SGNVGimageFX* fx)
+{
+    if (fx == NULL)
+        return;
+    snvgDestroyFramebuffer(ctx, &fx->resolve);
+    for (int i = 0; i < fx->max_mip_levels; i++)
+    {
+        snvgDestroyFramebuffer(ctx, &fx->mip_levels[i]);
+    }
+    NVG_FREE(fx);
+}
+
+void snvg__processImageFX(NVGcontext* ctx, SGNVGcommandImageFX* state)
+{
+    sg_begin_pass(&(sg_pass){
+        .action      = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
+        .attachments = state->fx->mip_levels[0].att,
+    });
+    if (state->apply_lightfilter)
+        sg_apply_pipeline(ctx->pip_lightness_filter);
+    else
+        sg_apply_pipeline(ctx->pip_texread);
+
+    sg_apply_bindings(&(sg_bindings){
+        .images[0]   = state->src->img,
+        .samplers[0] = ctx->sampler_nearest,
+    });
+    if (state->apply_lightfilter)
+    {
+        fs_lightfilter_t lightfilter_uniforms = {.u_threshold = state->lightfilter_threshold};
+        sg_apply_uniforms(UB_fs_lightfilter, &SG_RANGE(lightfilter_uniforms));
+    }
+    sg_draw(0, 3, 1);
+    sg_end_pass();
+
+    const int num_stages = state->num_stages;
+    xassert(state->num_stages <= state->fx->max_mip_levels);
+    for (int i = 0; i < num_stages - 1; i++)
+    {
+        SGNVGframebuffer* a = state->fx->mip_levels + i;
+        SGNVGframebuffer* b = state->fx->mip_levels + i + 1;
+
+        sg_begin_pass(&(sg_pass){
+            .action = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE, .clear_value = {0.0f, 0.0f, 0.0f, 1.0f}}},
+            .attachments = b->att,
+        });
+        sg_apply_pipeline(ctx->pip_downsample);
+        sg_apply_bindings(&(sg_bindings){
+            .images[0]   = a->img,
+            .samplers[0] = ctx->sampler_linear,
+        });
+        // More numerically stable than 1.0f / a->width
+        double          halfpixel_x = 0.5 / b->width;
+        double          halfpixel_y = 0.5 / b->height;
+        fs_downsample_t uniforms    = {.u_offset = {halfpixel_x, halfpixel_y}};
+        sg_apply_uniforms(UB_fs_downsample, &SG_RANGE(uniforms));
+        sg_draw(0, 3, 1);
+        sg_end_pass();
+    }
+
+    for (int i = num_stages - 2; i >= 0; i--)
+    {
+        SGNVGframebuffer* a = state->fx->mip_levels + i + 1;
+        SGNVGframebuffer* b = state->fx->mip_levels + i;
+
+        sg_begin_pass(&(sg_pass){
+            .action      = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0.0f, 0.0f, 0.0f, 1.0f}}},
+            .attachments = b->att,
+        });
+        sg_apply_pipeline(ctx->pip_upsample);
+        sg_apply_bindings(&(sg_bindings){
+            .images[0]   = a->img,
+            .samplers[0] = ctx->sampler_linear,
+        });
+        float           halfpixel_x = 0.5f / a->width;
+        float           halfpixel_y = 0.5f / a->height;
+        fs_downsample_t uniforms    = {.u_offset = {halfpixel_x, halfpixel_y}};
+        sg_apply_uniforms(UB_fs_downsample, &SG_RANGE(uniforms));
+        sg_draw(0, 3, 1);
+        sg_end_pass();
+    }
+
+    // Draw resolve image
+    sg_begin_pass(&(sg_pass){
+        .action      = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
+        .attachments = state->fx->resolve.att});
+
+    if (state->apply_bloom)
+        sg_apply_pipeline(ctx->pip_bloom);
+    else // blur
+        sg_apply_pipeline(ctx->pip_texread);
+
+    sg_apply_bindings(&(sg_bindings){
+        .images[0]   = state->fx->mip_levels[0].img,
+        .images[1]   = state->src->img,
+        .samplers[0] = ctx->sampler_nearest,
+    });
+    if (state->apply_bloom)
+    {
+        fs_bloom_t bloom_uniforms = {.u_amount = state->bloom_amount};
+        sg_apply_uniforms(UB_fs_bloom, &SG_RANGE(bloom_uniforms));
+    }
+    sg_draw(0, 3, 1);
+    sg_end_pass();
+}
+
 void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass* pass, int width, int height)
 {
-    SGNVGcommand*   cmd = sgnvg__allocCommand(ctx);
-    SGNVGbeginPass* bp  = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*bp));
+    SGNVGcommand*          cmd = sgnvg__allocCommand(ctx);
+    SGNVGcommandBeginPass* bp  = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*bp));
 
     cmd->type              = SGNVG_CMD_BEGIN_PASS;
     cmd->payload.beginPass = bp;
@@ -4449,13 +4588,48 @@ void snvg_command_end_pass(NVGcontext* ctx)
 
 void snvg_command_draw_nvg(NVGcontext* ctx)
 {
-    SGNVGcommand* cmd   = sgnvg__allocCommand(ctx);
-    SGNVGdrawNVG* draws = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*draws));
+    SGNVGcommand*    cmd   = sgnvg__allocCommand(ctx);
+    SGNVGcommandNVG* draws = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*draws));
 
     cmd->type            = SGNVG_CMD_DRAW_NVG;
     cmd->payload.drawNVG = draws;
 
     ctx->current_nvg_draw = draws;
+}
+
+void snvg_command_fx(
+    NVGcontext*       ctx,
+    bool              apply_lightfilter,
+    bool              apply_bloom,
+    float             lightfilter_threshold,
+    float             bloom_amount,
+    int               num_stages,
+    SGNVGframebuffer* src,
+    SGNVGimageFX*     fx)
+{
+    // Clear cached call points
+    // This will help us to enforce users are correctly calling snvg_command_draw_nvg() before issuing
+    // nvgFill/Stroke/Text commands
+    ctx->current_call     = NULL;
+    ctx->current_nvg_draw = NULL;
+
+    NVG_ASSERT(num_stages <= fx->max_mip_levels); // Oops!
+    if (num_stages > fx->max_mip_levels)
+        num_stages = fx->max_mip_levels;
+
+    SGNVGcommand*        cmd   = sgnvg__allocCommand(ctx);
+    SGNVGcommandImageFX* cmdfx = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*cmdfx));
+
+    cmd->type       = SGNVG_CMD_IMAGE_FX;
+    cmd->payload.fx = cmdfx;
+
+    cmdfx->apply_lightfilter     = apply_lightfilter;
+    cmdfx->apply_bloom           = apply_bloom;
+    cmdfx->lightfilter_threshold = lightfilter_threshold;
+    cmdfx->bloom_amount          = bloom_amount;
+    cmdfx->num_stages            = num_stages;
+    cmdfx->src                   = src;
+    cmdfx->fx                    = fx;
 }
 
 void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func)
@@ -4466,8 +4640,8 @@ void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func)
     ctx->current_call     = NULL;
     ctx->current_nvg_draw = NULL;
 
-    SGNVGcommand* cmd    = sgnvg__allocCommand(ctx);
-    SGNVGcustom*  custom = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*custom));
+    SGNVGcommand*       cmd    = sgnvg__allocCommand(ctx);
+    SGNVGcommandCustom* custom = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*custom));
 
     cmd->type           = SGNVG_CMD_CUSTOM;
     cmd->payload.custom = custom;
@@ -4506,6 +4680,29 @@ NVGcontext* nvgCreateContext(int flags)
         }
     }
 
+    // Image post processing FX pipelines
+    ctx->pip_texread = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = sg_make_shader(texread_shader_desc(sg_query_backend())),
+        //   .depth                  = {.pixel_format = SG_PIXELFORMAT_NONE},
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+
+    ctx->pip_lightness_filter = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(lightfilter_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+
+    ctx->pip_downsample = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(downsample_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+
+    ctx->pip_upsample = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(upsample_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+
+    ctx->pip_bloom = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(bloom_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+
+    // Default samplers
     ctx->sampler_linear  = sg_make_sampler(&(sg_sampler_desc){
          .min_filter    = SG_FILTER_LINEAR,
          .mag_filter    = SG_FILTER_LINEAR,

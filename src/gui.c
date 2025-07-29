@@ -4,9 +4,7 @@
 #include "imgui.h"
 #include "plugin.h"
 
-#ifdef CPLUG_BUILD_STANDALONE
 #include "plot_dsp.h"
-#endif
 
 #include <xhl/array.h>
 #include <xhl/debug.h>
@@ -363,6 +361,7 @@ void pw_destroy_gui(void* _gui)
     sg_set_global(gui->sg);
 
     snvgDestroyFramebuffer(gui->nvg, &gui->main_framebuffer);
+    snvgDestroyImageFX(gui->nvg, gui->main_framebuffer_fx);
 
     nvgDestroyContext(gui->nvg);
     sg_shutdown(gui->sg);
@@ -1287,7 +1286,9 @@ void pw_tick(void* _gui)
         }
 
         snvgDestroyFramebuffer(nvg, &gui->main_framebuffer);
-        gui->main_framebuffer = snvgCreateFramebuffer(nvg, lm->width, lm->height);
+        snvgDestroyImageFX(nvg, gui->main_framebuffer_fx);
+        gui->main_framebuffer    = snvgCreateFramebuffer(nvg, lm->width, lm->height);
+        gui->main_framebuffer_fx = snvgCreateImageFX(nvg, lm->width, lm->height, 4);
     }
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
@@ -2146,6 +2147,22 @@ void pw_tick(void* _gui)
 
     snvg_command_end_pass(nvg);
 
+    static float apply_lightfilter     = 0;
+    static float apply_bloom           = 0;
+    static float lightfilter_threshold = 0.86;
+    static float bloom_amount          = 1;
+    static float num_stages            = 4;
+
+    snvg_command_fx(
+        nvg,
+        apply_lightfilter > 0.5,
+        apply_bloom > 0.5,
+        lightfilter_threshold,
+        bloom_amount,
+        (int)num_stages,
+        &gui->main_framebuffer,
+        gui->main_framebuffer_fx);
+
     snvg_command_begin_pass(
         gui->nvg,
         &(sg_pass){
@@ -2156,12 +2173,33 @@ void pw_tick(void* _gui)
         gui->layout.width,
         gui->layout.height);
     snvg_command_draw_nvg(nvg);
+
     nvgBeginPath(nvg);
     nvgRect(nvg, 0, 0, lm->width, lm->height);
-    nvgSetPaint(
-        nvg,
-        nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, gui->main_framebuffer.img.id, 1, nvg->sampler_nearest));
+    // int bgimg = gui->main_framebuffer.img.id;
+    int bgimg = gui->main_framebuffer_fx->resolve.img.id;
+    nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, bgimg, 1, nvg->sampler_nearest));
     nvgFill(nvg);
+
+    {
+        imgui_rect  rect   = {10, 10, 200, 30};
+        const float offset = 10 + (rect.b - rect.y);
+        im_slider(nvg, im, rect, &apply_lightfilter, 0, 1, "%.2f", "Apply lightness filter");
+        rect.b += offset;
+        rect.y += offset;
+        im_slider(nvg, im, rect, &apply_bloom, 0, 1, "%.2f", "Apply bloom");
+        rect.b += offset;
+        rect.y += offset;
+        im_slider(nvg, im, rect, &lightfilter_threshold, 0, 1, "%.2f", "Filter threshold");
+        rect.b += offset;
+        rect.y += offset;
+        im_slider(nvg, im, rect, &bloom_amount, 0, 1, "%.2f", "Bloom amount");
+        rect.b += offset;
+        rect.y += offset;
+        im_slider(nvg, im, rect, &num_stages, 1, gui->main_framebuffer_fx->max_mip_levels, "%.2f", "Blur stages");
+        rect.b += offset;
+        rect.y += offset;
+    }
 
     // Footer
     {
@@ -2230,13 +2268,6 @@ void pw_tick(void* _gui)
             nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
         }
     }
-
-    // {
-    //     nvgBeginPath(nvg);
-    //     nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, 32, 32, 0, gui->main_framebuffer.img.id, 1));
-    //     nvgRect(nvg, 0, 0, 32, 32);
-    //     nvgFill(nvg);
-    // }
 
     unsigned bg_events = imgui_get_events_rect(im, 'bg', &(imgui_rect){0, 0, lm->width, lm->height});
     if (bg_events & IMGUI_EVENT_MOUSE_ENTER)

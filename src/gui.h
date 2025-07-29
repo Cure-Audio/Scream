@@ -79,6 +79,7 @@ typedef struct GUI
     uint64_t last_resize_time;
 
     SGNVGframebuffer main_framebuffer;
+    SGNVGimageFX*    main_framebuffer_fx;
 } GUI;
 
 // Nanovg helpers

@@ -324,6 +324,13 @@ typedef struct SGNVGframebuffer
     int            height;
 } SGNVGframebuffer;
 
+typedef struct SGNVGimageFX
+{
+    SGNVGframebuffer resolve;
+    int              max_mip_levels;
+    SGNVGframebuffer mip_levels[];
+} SGNVGimageFX;
+
 typedef struct SGNVGblend
 {
     sg_blend_factor srcRGB;
@@ -441,31 +448,49 @@ typedef struct SGNVGcall
     struct SGNVGcall* next;
 } SGNVGcall;
 
-typedef struct SGNVGbeginPass
+typedef struct SGNVGcommandBeginPass
 {
     sg_pass pass;
     int     width, height;
-} SGNVGbeginPass;
+} SGNVGcommandBeginPass;
 
-typedef struct SGNVGdrawNVG
+typedef struct SGNVGcommandNVG
 {
     int               num_calls;
     struct SGNVGcall* calls;
-} SGNVGdrawNVG;
+} SGNVGcommandNVG;
+
+typedef struct SGNVGcommandImageFX
+{
+    // These are probably redundant and could be implied by the above params being > 0
+    bool apply_lightfilter;
+    bool apply_bloom;
+
+    float lightfilter_threshold;
+    float bloom_amount;
+
+    // Num downsampling stages.
+    // TODO: replace this with blur radius in px and dynamically calculate the number of downsample stages at runtime
+    int num_stages;
+
+    SGNVGframebuffer* src;
+    SGNVGimageFX*     fx;
+} SGNVGcommandImageFX;
 
 typedef void (*SGNVGcustomFunc)(void* uptr);
 
-typedef struct SGNVGcustom
+typedef struct SGNVGcommandCustom
 {
     void*           uptr;
     SGNVGcustomFunc func;
-} SGNVGcustom;
+} SGNVGcommandCustom;
 
 enum SGNVGcommandType
 {
     SGNVG_CMD_BEGIN_PASS,
     SGNVG_CMD_END_PASS,
     SGNVG_CMD_DRAW_NVG,
+    SGNVG_CMD_IMAGE_FX,
     SGNVG_CMD_CUSTOM,
 };
 
@@ -476,9 +501,10 @@ typedef struct SGNVGcommand
     {
         void* data;
 
-        SGNVGbeginPass* beginPass;
-        SGNVGdrawNVG*   drawNVG;
-        SGNVGcustom*    custom;
+        SGNVGcommandBeginPass* beginPass;
+        SGNVGcommandNVG*       drawNVG;
+        SGNVGcommandImageFX*   fx;
+        SGNVGcommandCustom*    custom;
     } payload;
 
     struct SGNVGcommand* next;
@@ -520,6 +546,13 @@ typedef struct NVGcontext
     sg_buffer          indexBuf;
     SGNVGpipelineCache pipelineCache;
 
+    // Image post processing FX (blur & bloom)
+    sg_pipeline pip_texread;
+    sg_pipeline pip_lightness_filter;
+    sg_pipeline pip_downsample;
+    sg_pipeline pip_upsample;
+    sg_pipeline pip_bloom;
+
     // Per frame buffers
     SGNVGattribute* verts;
     int             cverts;
@@ -539,10 +572,10 @@ typedef struct NVGcontext
     // If these rules/guidelines are okay with you, go ahead
     LinkedArena* frame_arena;
 
-    SGNVGcall*    current_call;     // linked list current position
-    SGNVGdrawNVG* current_nvg_draw; // linked list current position
-    SGNVGcommand* current_command;  // linked list current position
-    SGNVGcommand* first_command;    // linked list start
+    SGNVGcall*       current_call;     // linked list current position
+    SGNVGcommandNVG* current_nvg_draw; // linked list current position
+    SGNVGcommand*    current_command;  // linked list current position
+    SGNVGcommand*    first_command;    // linked list start
 
     // state
     int            pipelineCacheIndex;
@@ -1047,9 +1080,21 @@ int snvgCreateImageFromHandleSokol(NVGcontext* ctx, sg_image imageSokol, enum NV
 SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height);
 void             snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* renderTarget);
 
+SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, int max_mip_levels);
+void          snvgDestroyImageFX(NVGcontext* ctx, SGNVGimageFX* fx);
+
 void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass*, int width, int height);
 void snvg_command_end_pass(NVGcontext* ctx);
 void snvg_command_draw_nvg(NVGcontext* ctx);
+void snvg_command_fx(
+    NVGcontext*       ctx,
+    bool              apply_lightfilter,
+    bool              apply_bloom,
+    float             lightfilter_threshold,
+    float             bloom_amount,
+    int               num_stages,
+    SGNVGframebuffer* src,
+    SGNVGimageFX*     fx);
 void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func);
 
 #ifdef _MSC_VER

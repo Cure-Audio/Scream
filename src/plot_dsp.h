@@ -44,7 +44,7 @@ void im_slider(
 
     nvgBeginPath(nvg);
     nvgRect(nvg, rect.x, rect.y, slider_width, slider_height);
-    nvgSetColour(nvg, nvgRGBAf(0.6, 0.6, 0.75, 0.5));
+    nvgSetColour(nvg, nvgRGBAf(0.6, 0.6, 0.75, 1));
     nvgFill(nvg);
 
     float val_x = xm_mapf(*pValue, vmin, vmax, rect.x, rect.r - slider_height);
