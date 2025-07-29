@@ -827,7 +827,16 @@ nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h, float r, flo
     return p;
 }
 
-NVGpaint nvgImagePattern(NVGcontext* ctx, float cx, float cy, float w, float h, float angle, int image, float alpha)
+NVGpaint nvgImagePattern(
+    NVGcontext* ctx,
+    float       cx,
+    float       cy,
+    float       w,
+    float       h,
+    float       angle,
+    int         image,
+    float       alpha,
+    sg_sampler  smp)
 {
     NVGpaint p;
     NVG_NOTUSED(ctx);
@@ -841,6 +850,7 @@ NVGpaint nvgImagePattern(NVGcontext* ctx, float cx, float cy, float w, float h, 
     p.extent[1] = h;
 
     p.image = image;
+    p.smp   = smp;
 
     p.innerColour = p.outerColour = nvgRGBAf(1, 1, 1, alpha);
 
@@ -3421,6 +3431,7 @@ static void sgnvg__preparePipelineUniforms(
     NVGcontext*            ctx,
     SGNVGfragUniforms*     uniforms,
     int                    image,
+    sg_sampler             smp,
     enum SGNVGpipelineType pipelineType)
 {
     sg_pipeline   pip = sgnvg__getPipelineFromCache(ctx, pipelineType);
@@ -3439,12 +3450,13 @@ static void sgnvg__preparePipelineUniforms(
     if (tex == NULL)
     {
         tex = sgnvg__findTexture(ctx, ctx->dummyTex);
+        smp = ctx->sampler_nearest;
     }
     sg_apply_bindings(&(sg_bindings){
         .vertex_buffers[0]        = ctx->vertBuf,
         .index_buffer             = ctx->indexBuf,
         .images[IMG_nanovg_tex]   = tex ? tex->img : (sg_image){0},
-        .samplers[SMP_nanovg_smp] = tex ? tex->smp : (sg_sampler){0},
+        .samplers[SMP_nanovg_smp] = smp,
     });
 }
 
@@ -3456,10 +3468,7 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
     if (tex == NULL)
         return 0;
 
-    NVG_ASSERT(!(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && "TODO mipmaps");
-
-    // if we have mipmaps, we forbid updating
-    bool immutable = !!(imageFlags & (NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_IMMUTABLE)) && data;
+    bool immutable = !!(imageFlags & NVG_IMAGE_IMMUTABLE) && data;
 
     tex->width  = w;
     tex->height = h;
@@ -3467,7 +3476,7 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
     tex->flags  = imageFlags;
 
     sg_image_data imageData = {0};
-    if ((imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) && data)
+    if (data)
     {
         imageData.subimage[0][0] = (sg_range){data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1)};
     }
@@ -3490,7 +3499,6 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
         memcpy(tex->imgData, data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1));
         tex->flags |= NVG_IMAGE_DIRTY;
     }
-    tex->smp = (imageFlags & NVG_IMAGE_NEAREST) ? ctx->sampler_nearest : ctx->sampler_linear;
 
     return tex->img.id;
 }
@@ -3502,7 +3510,7 @@ int nvgUpdateTexture(NVGcontext* ctx, int image, int x0, int y0, int w, int h, c
     if (tex == NULL)
         return 0;
 
-    bool immutable = tex->flags & (NVG_IMAGE_IMMUTABLE | NVG_IMAGE_GENERATE_MIPMAPS);
+    bool immutable = !!(tex->flags & NVG_IMAGE_IMMUTABLE);
     NVG_ASSERT(!immutable);
     if (immutable)
         return 0;
@@ -3643,19 +3651,19 @@ static void sgnvg__fill(NVGcontext* ctx, SGNVGcall* call)
     SGNVGpath* paths = call->paths;
     int        i, npaths = call->num_paths;
 
-    sgnvg__preparePipelineUniforms(ctx, call->uniforms, 0, SGNVG_PIP_FILL_STENCIL);
+    sgnvg__preparePipelineUniforms(ctx, call->uniforms, 0, (sg_sampler){0}, SGNVG_PIP_FILL_STENCIL);
     for (i = 0; i < npaths; i++)
         sg_draw(paths[i].fillOffset, paths[i].fillCount, 1);
 
     // if (ctx->flags & NVG_ANTIALIAS) {
-    sgnvg__preparePipelineUniforms(ctx, call->uniforms + 1, call->image, SGNVG_PIP_FILL_ANTIALIAS);
+    sgnvg__preparePipelineUniforms(ctx, call->uniforms + 1, call->image, call->smp, SGNVG_PIP_FILL_ANTIALIAS);
     // Draw fringes
     for (i = 0; i < npaths; i++)
         sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
     // }
 
     // Draw fill
-    sgnvg__preparePipelineUniforms(ctx, call->uniforms + 1, call->image, SGNVG_PIP_FILL_DRAW);
+    sgnvg__preparePipelineUniforms(ctx, call->uniforms + 1, call->image, call->smp, SGNVG_PIP_FILL_DRAW);
     sg_draw(call->triangleOffset, call->triangleCount, 1);
 }
 
@@ -3664,7 +3672,7 @@ static void sgnvg__convexFill(NVGcontext* ctx, SGNVGcall* call)
     SGNVGpath* paths = call->paths;
     int        i, npaths = call->num_paths;
 
-    sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, SGNVG_PIP_BASE);
+    sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, call->smp, SGNVG_PIP_BASE);
     for (i = 0; i < npaths; i++)
     {
         sg_draw(paths[i].fillOffset, paths[i].fillCount, 1);
@@ -3683,24 +3691,24 @@ static void sgnvg__stroke(NVGcontext* ctx, SGNVGcall* call)
 
     if (ctx->flags & NVG_STENCIL_STROKES)
     {
-        sgnvg__preparePipelineUniforms(ctx, call->uniforms + 1, call->image, SGNVG_PIP_STROKE_STENCIL_DRAW);
+        sgnvg__preparePipelineUniforms(ctx, call->uniforms + 1, call->image, call->smp, SGNVG_PIP_STROKE_STENCIL_DRAW);
 
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
 
         // Draw anti-aliased pixels.
-        sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, SGNVG_PIP_STROKE_STENCIL_ANTIALIAS);
+        sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, call->smp, SGNVG_PIP_STROKE_STENCIL_ANTIALIAS);
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
 
         // Clear stencil buffer.
-        sgnvg__preparePipelineUniforms(ctx, call->uniforms, 0, SGNVG_PIP_STROKE_STENCIL_CLEAR);
+        sgnvg__preparePipelineUniforms(ctx, call->uniforms, 0, (sg_sampler){0}, SGNVG_PIP_STROKE_STENCIL_CLEAR);
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
     }
     else
     {
-        sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, SGNVG_PIP_BASE);
+        sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, call->smp, SGNVG_PIP_BASE);
         // Draw Strokes
         for (i = 0; i < npaths; i++)
             sg_draw(paths[i].strokeOffset, paths[i].strokeCount, 1);
@@ -3709,7 +3717,7 @@ static void sgnvg__stroke(NVGcontext* ctx, SGNVGcall* call)
 
 static void sgnvg__triangles(NVGcontext* ctx, SGNVGcall* call)
 {
-    sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, SGNVG_PIP_BASE);
+    sgnvg__preparePipelineUniforms(ctx, call->uniforms, call->image, call->smp, SGNVG_PIP_BASE);
     sg_draw(call->triangleOffset, call->triangleCount, 1);
 }
 
@@ -4096,6 +4104,7 @@ void nvgFill(NVGcontext* ctx)
         return;
     call->num_paths = npaths;
     call->image     = paint.image;
+    call->smp       = paint.smp;
     call->blendFunc = sgnvg__blendCompositeOperation(compositeOperation);
 
     if (npaths == 1 && paths[0].convex)
@@ -4238,6 +4247,7 @@ void nvgStroke(NVGcontext* ctx)
         return;
     call->num_paths = npaths;
     call->image     = paint.image;
+    call->smp       = paint.smp;
     call->blendFunc = sgnvg__blendCompositeOperation(compositeOperation);
 
     // Allocate vertices for all the paths.
@@ -4324,6 +4334,7 @@ void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 
     call->type      = SGNVG_TRIANGLES;
     call->image     = paint.image;
+    call->smp       = ctx->sampler_linear;
     call->blendFunc = sgnvg__blendCompositeOperation(state->compositeOperation);
 
     int offset, ioffset;
@@ -4356,14 +4367,7 @@ void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
     ctx->textTriCount += nverts / 3;
 }
 
-int snvgCreateImageFromHandleSokol(
-    NVGcontext*     ctx,
-    sg_image        imageSokol,
-    sg_sampler      samplerSokol,
-    enum NVGtexture type,
-    int             w,
-    int             h,
-    int             flags)
+int snvgCreateImageFromHandleSokol(NVGcontext* ctx, sg_image imageSokol, enum NVGtexture type, int w, int h, int flags)
 {
     SGNVGtexture* tex = sgnvg__allocTexture(ctx);
 
@@ -4372,7 +4376,6 @@ int snvgCreateImageFromHandleSokol(
 
     tex->type   = type;
     tex->img    = imageSokol;
-    tex->smp    = samplerSokol;
     tex->flags  = flags;
     tex->width  = w;
     tex->height = h;
@@ -4409,16 +4412,20 @@ SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height)
     rt.width  = width;
     rt.height = height;
 
-    snvgCreateImageFromHandleSokol(ctx, rt.img, ctx->sampler_linear, NVG_TEXTURE_RGBA, rt.width, rt.height, 0);
+    snvgCreateImageFromHandleSokol(ctx, rt.img, NVG_TEXTURE_RGBA, rt.width, rt.height, 0);
 
     return rt;
 }
 
 void snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* rt)
 {
-    nvgDeleteImage(ctx, rt->img.id);
-    sg_destroy_image(rt->depth);
-    sg_destroy_attachments(rt->att);
+    if (rt->img.id)
+    {
+        nvgDeleteImage(ctx, rt->img.id);
+        sg_destroy_image(rt->depth);
+        sg_destroy_attachments(rt->att);
+        memset(rt, 0, sizeof(*rt));
+    }
 }
 
 void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass* pass, int width, int height)

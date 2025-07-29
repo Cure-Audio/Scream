@@ -310,11 +310,12 @@ void* pw_create_gui(void* _plugin, void* _pw)
             if (img_buf)
             {
                 gui->logo_id = sg_make_image_with_mipmaps(&(sg_image_desc){
-                    .width        = x,
-                    .height       = y,
-                    .num_mipmaps  = 5,
-                    .num_slices   = 1,
-                    .pixel_format = SG_PIXELFORMAT_RGBA8,
+                    .usage.immutable = true,
+                    .width           = x,
+                    .height          = y,
+                    .num_mipmaps     = 5,
+                    .num_slices      = 1,
+                    .pixel_format    = SG_PIXELFORMAT_RGBA8,
 
                     .data.subimage[0][0] = {
                         .ptr  = img_buf,
@@ -328,11 +329,10 @@ void* pw_create_gui(void* _plugin, void* _pw)
                 snvgCreateImageFromHandleSokol(
                     gui->nvg,
                     gui->logo_id,
-                    gui->nvg->sampler_linear,
                     NVG_TEXTURE_RGBA,
                     gui->logo_width,
                     gui->logo_height,
-                    0);
+                    NVG_IMAGE_IMMUTABLE);
             }
 
             XFILES_FREE(file_data);
@@ -340,8 +340,6 @@ void* pw_create_gui(void* _plugin, void* _pw)
     }
 
     ted_init(&gui->texteditor);
-
-    gui->framebuffer_test = snvgCreateFramebuffer(gui->nvg, 200, 200);
 
     gui->gui_create_time = gui->frame_end_time = xtime_now_ns();
 
@@ -364,7 +362,7 @@ void pw_destroy_gui(void* _gui)
 
     sg_set_global(gui->sg);
 
-    snvgDestroyFramebuffer(gui->nvg, &gui->framebuffer_test);
+    snvgDestroyFramebuffer(gui->nvg, &gui->main_framebuffer);
 
     nvgDestroyContext(gui->nvg);
     sg_shutdown(gui->sg);
@@ -1287,6 +1285,9 @@ void pw_tick(void* _gui)
             lm->knobs_pos[i].x = lm->param_positions_cx[i];
             lm->knobs_pos[i].y = roundf(lm->content_y + lm->top_content_height * 0.5f);
         }
+
+        snvgDestroyFramebuffer(nvg, &gui->main_framebuffer);
+        gui->main_framebuffer = snvgCreateFramebuffer(nvg, lm->width, lm->height);
     }
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
@@ -1314,30 +1315,12 @@ void pw_tick(void* _gui)
     snvg_command_begin_pass(
         nvg,
         &(sg_pass){
-            .action      = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0, 0, 0, 1}}},
-            .attachments = gui->framebuffer_test.att,
-            .label       = "render target test",
+            .action      = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
+            .attachments = gui->main_framebuffer.att,
+            .label       = "main_framebuffer",
         },
-        gui->framebuffer_test.width,
-        gui->framebuffer_test.height);
-    snvg_command_draw_nvg(nvg);
-
-    nvgBeginPath(nvg);
-    nvgRect(nvg, 20, 20, 40, 60);
-    nvgSetColour(nvg, (NVGcolour){1, 0, 0, 1});
-    nvgFill(nvg);
-
-    snvg_command_end_pass(nvg);
-
-    snvg_command_begin_pass(
-        gui->nvg,
-        &(sg_pass){
-            .action    = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0, 0, 0, 1.0f}}},
-            .swapchain = gui->swapchain,
-            .label     = "swapchain / main",
-        },
-        gui->layout.width,
-        gui->layout.height);
+        gui->main_framebuffer.width,
+        gui->main_framebuffer.height);
     snvg_command_draw_nvg(nvg);
 
     // Background
@@ -1366,7 +1349,7 @@ void pw_tick(void* _gui)
         x         = lm->width - 16 - w;
         nvgBeginPath(nvg);
         nvgRect(nvg, x, y, w, h);
-        nvgSetPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_id.id, 1));
+        nvgSetPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_id.id, 1, nvg->sampler_linear));
         nvgFill(nvg);
     }
 
@@ -2161,6 +2144,25 @@ void pw_tick(void* _gui)
         draw_lfo_section(gui);
     }
 
+    snvg_command_end_pass(nvg);
+
+    snvg_command_begin_pass(
+        gui->nvg,
+        &(sg_pass){
+            .action    = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0, 0, 0, 1}}},
+            .swapchain = gui->swapchain,
+            .label     = "swapchain / main",
+        },
+        gui->layout.width,
+        gui->layout.height);
+    snvg_command_draw_nvg(nvg);
+    nvgBeginPath(nvg);
+    nvgRect(nvg, 0, 0, lm->width, lm->height);
+    nvgSetPaint(
+        nvg,
+        nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, gui->main_framebuffer.img.id, 1, nvg->sampler_nearest));
+    nvgFill(nvg);
+
     // Footer
     {
         uint64_t frame_time_end         = xtime_now_ns();
@@ -2229,12 +2231,12 @@ void pw_tick(void* _gui)
         }
     }
 
-    {
-        nvgBeginPath(nvg);
-        nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, 32, 32, 0, gui->framebuffer_test.img.id, 1));
-        nvgRect(nvg, 0, 0, 32, 32);
-        nvgFill(nvg);
-    }
+    // {
+    //     nvgBeginPath(nvg);
+    //     nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, 32, 32, 0, gui->main_framebuffer.img.id, 1));
+    //     nvgRect(nvg, 0, 0, 32, 32);
+    //     nvgFill(nvg);
+    // }
 
     unsigned bg_events = imgui_get_events_rect(im, 'bg', &(imgui_rect){0, 0, lm->width, lm->height});
     if (bg_events & IMGUI_EVENT_MOUSE_ENTER)

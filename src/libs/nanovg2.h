@@ -45,6 +45,8 @@
 // - Merged with nanovg
 // - Create 'drity' flag for textures to only update them on new data
 // - Add snvgCreateFramebuffer() & snvgDestroyFramebuffer()
+// - Move sampler support out of snvgCreateImageFromHandleSokol and into to NVGpaint
+// - Remove linear and mipmap image flags
 
 #ifndef NANOVG_H
 #define NANOVG_H
@@ -83,13 +85,14 @@ typedef struct NVGcolour
 
 typedef struct NVGpaint
 {
-    float     xform[6];
-    float     extent[2];
-    float     radius;
-    float     feather;
-    NVGcolour innerColour;
-    NVGcolour outerColour;
-    int       image;
+    float      xform[6];
+    float      extent[2];
+    float      radius;
+    float      feather;
+    NVGcolour  innerColour;
+    NVGcolour  outerColour;
+    int        image;
+    sg_sampler smp;
 } NVGpaint;
 
 enum NVGwinding
@@ -183,12 +186,10 @@ typedef struct NVGtextRow
 
 enum NVGimageFlags
 {
-    NVG_IMAGE_DIRTY            = 1 << 0, // Force update image on GPU
-    NVG_IMAGE_IMMUTABLE        = 1 << 1, // Forbids updating the image
-    NVG_IMAGE_GENERATE_MIPMAPS = 1 << 2, // Generate mipmaps during creation of the image.
-    NVG_IMAGE_PREMULTIPLIED    = 1 << 3, // Image data has premultiplied alpha.
-    NVG_IMAGE_NEAREST          = 1 << 4, // Image interpolation is Nearest instead Linear
-    NVG_IMAGE_NODELETE         = 1 << 5, // Do not delete Sokol image.
+    NVG_IMAGE_DIRTY         = 1 << 0, // Force update image on GPU
+    NVG_IMAGE_IMMUTABLE     = 1 << 1, // Forbids updating the image
+    NVG_IMAGE_PREMULTIPLIED = 1 << 2, // Image data has premultiplied alpha.
+    NVG_IMAGE_NODELETE      = 1 << 3, // Do not delete Sokol image.
 };
 
 //
@@ -307,12 +308,11 @@ enum SGNVGshaderType
 
 typedef struct SGNVGtexture
 {
-    sg_image   img;
-    sg_sampler smp;
-    int        width, height;
-    int        type;
-    int        flags;
-    uint8_t*   imgData;
+    sg_image img;
+    int      type;
+    int      width, height;
+    int      flags;
+    uint8_t* imgData;
 } SGNVGtexture;
 
 typedef struct SGNVGframebuffer
@@ -424,10 +424,11 @@ typedef struct SGNVGpipelineCache
 
 typedef struct SGNVGcall
 {
-    int type;
-    int image;
-    int triangleOffset;
-    int triangleCount;
+    int        type;
+    int        image;
+    sg_sampler smp;
+    int        triangleOffset;
+    int        triangleCount;
 
     SGNVGblend blendFunc;
 
@@ -791,7 +792,16 @@ NVGpaint nvgRadialGradient(NVGcontext* ctx, float cx, float cy, float inr, float
 // Creates and returns an image pattern. Parameters (ox,oy) specify the left-top location of the image pattern,
 // (ex,ey) the size of one image, angle rotation around the top-left corner, image is handle to the image to render.
 // The gradient is transformed by the current transform when it is passed to nvgSetPaint().
-NVGpaint nvgImagePattern(NVGcontext* ctx, float ox, float oy, float ex, float ey, float angle, int image, float alpha);
+NVGpaint nvgImagePattern(
+    NVGcontext* ctx,
+    float       ox,
+    float       oy,
+    float       ex,
+    float       ey,
+    float       angle,
+    int         image,
+    float       alpha,
+    sg_sampler  smp);
 
 //
 // Scissoring
@@ -1032,17 +1042,10 @@ int nvgTextBreakLines(
     NVGtextRow* rows,
     int         maxRows);
 
-int snvgCreateImageFromHandleSokol(
-    NVGcontext*     ctx,
-    sg_image        imageSokol,
-    sg_sampler      samplerSokol,
-    enum NVGtexture type,
-    int             w,
-    int             h,
-    int             flags);
+int snvgCreateImageFromHandleSokol(NVGcontext* ctx, sg_image imageSokol, enum NVGtexture type, int w, int h, int flags);
 
 SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height);
-void              snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* renderTarget);
+void             snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* renderTarget);
 
 void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass*, int width, int height);
 void snvg_command_end_pass(NVGcontext* ctx);
