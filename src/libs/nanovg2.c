@@ -3969,11 +3969,12 @@ static int sgnvg__maxIndexCount(const NVGpath* paths, int npaths)
 
 static void sgnvg__addCall(NVGcontext* ctx, SGNVGcall* call)
 {
+    NVG_ASSERT(call->next == NULL);
     if (ctx->current_call)
         ctx->current_call->next = call;
     ctx->current_call = call;
 
-    xassert(ctx->current_nvg_draw != NULL);
+    NVG_ASSERT(ctx->current_nvg_draw != NULL);
     if (ctx->current_nvg_draw)
     {
         ctx->current_nvg_draw->num_calls++;
@@ -3982,17 +3983,29 @@ static void sgnvg__addCall(NVGcontext* ctx, SGNVGcall* call)
     }
 }
 
-static SGNVGcommand* sgnvg__allocCommand(NVGcontext* ctx)
+static SGNVGcommand* sgnvg__allocCommand(NVGcontext* ctx, enum SGNVGcommandType type, const char* label)
 {
     SGNVGcommand* cmd = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*cmd));
+
+    cmd->type  = type;
+    cmd->label = label;
 
     if (ctx->first_command == NULL)
         ctx->first_command = cmd;
 
     if (ctx->current_command)
+    {
+        NVG_ASSERT(ctx->current_command->next == NULL);
         ctx->current_command->next = cmd;
+    }
 
     ctx->current_command = cmd;
+
+    // Clear cached call points
+    // This will help us to enforce users are correctly calling snvg_command_draw_nvg() before issuing
+    // nvgFill/Stroke/Text commands
+    ctx->current_call     = NULL;
+    ctx->current_nvg_draw = NULL;
 
     return cmd;
 }
@@ -4102,7 +4115,7 @@ void nvgFill(NVGcontext* ctx)
     // Looks like you forgot to call snvg_command_draw_nvg() before issuing nvgFill()/nvgStroke()/nvgText() commands!
     // NVG_ASSERT(ctx->current_nvg_draw != NULL); // TODO: remove?
     if (ctx->current_nvg_draw == NULL)
-        snvg_command_draw_nvg(ctx);
+        snvg_command_draw_nvg(ctx, 0);
 
     call = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*call));
 
@@ -4181,10 +4194,10 @@ void nvgFill(NVGcontext* ctx)
         call->uniforms = frag;
 
         // Simple shader for stencil
-        call->uniforms->strokeThr = -1.0f;
-        call->uniforms->type      = NSVG_SHADER_SIMPLE;
+        frag->strokeThr = -1.0f;
+        frag->type      = NSVG_SHADER_SIMPLE;
         // Fill shader
-        sgnvg__convertPaint(ctx, call->uniforms + 1, &paint, scissor, fringe, fringe, -1.0f);
+        sgnvg__convertPaint(ctx, frag + 1, &paint, scissor, fringe, fringe, -1.0f);
     }
     else
     {
@@ -4246,7 +4259,7 @@ void nvgStroke(NVGcontext* ctx)
     // Looks like you forgot to call snvg_command_draw_nvg() before issuing nvgFill()/nvgStroke()/nvgText() commands!
     // NVG_ASSERT(ctx->current_nvg_draw != NULL); // TODO: remove?
     if (ctx->current_nvg_draw == NULL)
-        snvg_command_draw_nvg(ctx);
+        snvg_command_draw_nvg(ctx, 0);
 
     call = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*call));
 
@@ -4337,7 +4350,7 @@ void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
     // Looks like you forgot to call snvg_command_draw_nvg() before issuing nvgFill()/nvgStroke()/nvgText() commands!
     // NVG_ASSERT(ctx->current_nvg_draw != NULL); // TODO: remove?
     if (ctx->current_nvg_draw == NULL)
-        snvg_command_draw_nvg(ctx);
+        snvg_command_draw_nvg(ctx, 0);
 
     call = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*call));
 
@@ -4713,12 +4726,11 @@ resolve:
     sg_end_pass();
 }
 
-void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass* pass, int width, int height)
+void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass* pass, int width, int height, const char* label)
 {
-    SGNVGcommand*          cmd = sgnvg__allocCommand(ctx);
+    SGNVGcommand*          cmd = sgnvg__allocCommand(ctx, SGNVG_CMD_BEGIN_PASS, label);
     SGNVGcommandBeginPass* bp  = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*bp));
 
-    cmd->type              = SGNVG_CMD_BEGIN_PASS;
     cmd->payload.beginPass = bp;
 
     bp->pass   = *pass;
@@ -4726,20 +4738,15 @@ void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass* pass, int width, in
     bp->height = height;
 }
 
-void snvg_command_end_pass(NVGcontext* ctx)
-{
-    SGNVGcommand* cmd = sgnvg__allocCommand(ctx);
-    cmd->type         = SGNVG_CMD_END_PASS;
-}
+void snvg_command_end_pass(NVGcontext* ctx, const char* label) { sgnvg__allocCommand(ctx, SGNVG_CMD_END_PASS, label); }
 
-void snvg_command_draw_nvg(NVGcontext* ctx)
+void snvg_command_draw_nvg(NVGcontext* ctx, const char* label)
 {
-    SGNVGcommand*    cmd   = sgnvg__allocCommand(ctx);
+    SGNVGcommand*    cmd   = sgnvg__allocCommand(ctx, SGNVG_CMD_DRAW_NVG, label);
     SGNVGcommandNVG* draws = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*draws));
+    NVG_ASSERT(label != NULL);
 
-    cmd->type            = SGNVG_CMD_DRAW_NVG;
-    cmd->payload.drawNVG = draws;
-
+    cmd->payload.drawNVG  = draws;
     ctx->current_nvg_draw = draws;
 }
 
@@ -4751,22 +4758,16 @@ void snvg_command_fx(
     float             radius_px,
     float             bloom_amount,
     SGNVGframebuffer* src,
-    SGNVGimageFX*     fx)
+    SGNVGimageFX*     fx,
+    const char*       label)
 {
-    // Clear cached call points
-    // This will help us to enforce users are correctly calling snvg_command_draw_nvg() before issuing
-    // nvgFill/Stroke/Text commands
-    ctx->current_call     = NULL;
-    ctx->current_nvg_draw = NULL;
-
     NVG_ASSERT(radius_px <= fx->max_radius_px); // Oops!
     if (radius_px > fx->max_radius_px)
         radius_px = fx->max_radius_px;
 
-    SGNVGcommand*        cmd   = sgnvg__allocCommand(ctx);
+    SGNVGcommand*        cmd   = sgnvg__allocCommand(ctx, SGNVG_CMD_IMAGE_FX, label);
     SGNVGcommandImageFX* cmdfx = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*cmdfx));
 
-    cmd->type       = SGNVG_CMD_IMAGE_FX;
     cmd->payload.fx = cmdfx;
 
     cmdfx->apply_lightness_filter = apply_lightness_filter;
@@ -4778,18 +4779,11 @@ void snvg_command_fx(
     cmdfx->fx                     = fx;
 }
 
-void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func)
+void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func, const char* label)
 {
-    // Clear cached call points
-    // This will help us to enforce users are correctly calling snvg_command_draw_nvg() before issuing
-    // nvgFill/Stroke/Text commands
-    ctx->current_call     = NULL;
-    ctx->current_nvg_draw = NULL;
-
-    SGNVGcommand*       cmd    = sgnvg__allocCommand(ctx);
+    SGNVGcommand*       cmd    = sgnvg__allocCommand(ctx, SGNVG_CMD_CUSTOM, label);
     SGNVGcommandCustom* custom = linked_arena_alloc_clear(ctx->frame_arena, sizeof(*custom));
 
-    cmd->type           = SGNVG_CMD_CUSTOM;
     cmd->payload.custom = custom;
 
     custom->uptr = uptr;

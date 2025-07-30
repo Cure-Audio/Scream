@@ -1346,8 +1346,9 @@ void pw_tick(void* _gui)
             .label       = DBGTXT(main_framebuffer),
         },
         gui->main_framebuffer.width,
-        gui->main_framebuffer.height);
-    snvg_command_draw_nvg(nvg);
+        gui->main_framebuffer.height,
+        DBGTXT(main framebuffer begin pass));
+    snvg_command_draw_nvg(nvg, DBGTXT(main framebuffer));
 
     // Background
     {
@@ -2102,7 +2103,7 @@ void pw_tick(void* _gui)
         }
     }
 
-    snvg_command_custom(nvg, gui, do_knob_shader);
+    snvg_command_custom(nvg, gui, do_knob_shader, DBGTXT(Knob shader));
 
     /*
     const float peak_gain = gui->plugin->gui_output_peak_gain;
@@ -2159,7 +2160,7 @@ void pw_tick(void* _gui)
         draw_lfo_section(gui);
     }
 
-    snvg_command_end_pass(nvg);
+    snvg_command_end_pass(nvg, DBGTXT(end main framebuffer));
 
     snvg_command_begin_pass(
         gui->nvg,
@@ -2169,8 +2170,9 @@ void pw_tick(void* _gui)
             .label     = DBGTXT(swapchain / main),
         },
         gui->layout.width,
-        gui->layout.height);
-    snvg_command_draw_nvg(nvg);
+        gui->layout.height,
+        0);
+    snvg_command_draw_nvg(nvg, DBGTXT(swapchain));
 
     nvgBeginPath(nvg);
     nvgRect(nvg, 0, 0, lm->width, lm->height);
@@ -2252,7 +2254,7 @@ void pw_tick(void* _gui)
         pw_set_mouse_cursor(gui->pw, PW_CURSOR_DEFAULT);
     }
 
-    snvg_command_end_pass(nvg);
+    snvg_command_end_pass(nvg, DBGTXT(end swapchain));
     nvgEndFrame(gui->nvg);
     sg_commit();
     sg_set_global(NULL);

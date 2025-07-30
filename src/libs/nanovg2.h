@@ -496,6 +496,7 @@ enum SGNVGcommandType
 typedef struct SGNVGcommand
 {
     enum SGNVGcommandType type;
+    const char*           label;
     union
     {
         void* data;
@@ -1084,9 +1085,9 @@ void             snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* rende
 SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, int max_blur_radius);
 void          snvgDestroyImageFX(NVGcontext* ctx, SGNVGimageFX* fx);
 
-void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass*, int width, int height);
-void snvg_command_end_pass(NVGcontext* ctx);
-void snvg_command_draw_nvg(NVGcontext* ctx);
+void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass*, int width, int height, const char* label);
+void snvg_command_end_pass(NVGcontext* ctx, const char* label);
+void snvg_command_draw_nvg(NVGcontext* ctx, const char* label);
 // 'radius_px' can be animated each frame. For best performance, finish your animations with radius at a power of 2,
 // and a minimum of 8px
 void snvg_command_fx(
@@ -1097,8 +1098,9 @@ void snvg_command_fx(
     float             radius_px,
     float             bloom_amount,
     SGNVGframebuffer* src,
-    SGNVGimageFX*     fx);
-void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func);
+    SGNVGimageFX*     fx,
+    const char*       label);
+void snvg_command_custom(NVGcontext* ctx, void* uptr, SGNVGcustomFunc func, const char* label);
 
 #ifdef _MSC_VER
 #pragma warning(pop)
