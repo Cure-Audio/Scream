@@ -1,10 +1,12 @@
 
 #include "common.h"
-#include "dsp.h"
-#include "imgui.h"
+
+#include "gui.h"
 #include "plugin.h"
 
-#include "plot_dsp.h"
+#include "dsp.h"
+#include "imgui.h"
+#include "widgets.h"
 
 #include <xhl/array.h>
 #include <xhl/debug.h>
@@ -22,8 +24,6 @@
 #include <string.h>
 
 #include <knob.glsl.h>
-
-#include "gui.h"
 
 static void my_sg_logger(
     const char* tag,              // always "sapp"
