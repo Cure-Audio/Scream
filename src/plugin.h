@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include <cplug.h>
+#include <xhl/array.h>
 #include <xhl/thread.h>
 #include <xhl/vector.h>
 
@@ -24,6 +25,10 @@ enum
 {
     NUM_PARAMS = PARAM_WET + 1,
 
+    NUM_LFO_PATTERNS = 8,
+
+    MAX_PATTERN_LENGTH_PATTERNS = 16,
+
     GUI_INIT_WIDTH  = 960,
     GUI_INIT_HEIGHT = 400,
 
@@ -39,6 +44,21 @@ typedef enum EventType
     EVENT_SET_PARAMETER = 16,
     EVENT_SET_PARAMETER_NOTIFYING_HOST,
 } EventType;
+
+typedef struct LFOPoint
+{
+    float x;    // 0-pattern_length. Values are in beat time
+    float y;    // 0,1
+    float skew; // 0,1, default 0.5
+} LFOPoint;
+
+typedef struct LFO
+{
+    LFOPoint* points[NUM_LFO_PATTERNS];
+
+    // Length in beats
+    int pattern_length[NUM_LFO_PATTERNS];
+} LFO;
 
 typedef struct Plugin
 {
@@ -64,6 +84,8 @@ typedef struct Plugin
     // Plugin data
     double   sample_rate;
     uint32_t max_block_size;
+
+    LFO lfos[2];
 
     struct FilterState
     {

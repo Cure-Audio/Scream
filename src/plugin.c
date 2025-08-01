@@ -7,9 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <xhl/maths.h>
-#include <xhl/thread.h>
 #include <xhl/time.h>
-#include <xhl/vector.h>
 
 #include "params_and_events.c"
 #include "state.c"
@@ -74,12 +72,44 @@ void* cplug_createPlugin(CplugHostContext* ctx)
     memcpy(p->audio_params, p->main_params, sizeof(p->main_params));
     _Static_assert(sizeof(p->main_params) == sizeof(p->audio_params));
 
+    for (int i = 0; i < ARRLEN(p->lfos); i++)
+    {
+        LFO* lfo = p->lfos + i;
+        for (int j = 0; j < ARRLEN(lfo->points); j++)
+        {
+            xarr_setcap(lfo->points[j], (2 * MAX_PATTERN_LENGTH_PATTERNS));
+
+            lfo->pattern_length[j] = 4;
+
+            for (int k = 0; k < lfo->pattern_length[j]; k++)
+            {
+                float    x1  = k;
+                float    x2  = x1 + 0.5;
+                LFOPoint pt1 = {x1, 0, 0.5};
+                LFOPoint pt2 = {x2, 1, 0.5};
+                xarr_push(lfo->points[j], pt1);
+                xarr_push(lfo->points[j], pt2);
+            }
+        }
+    }
+
     return p;
 }
 
-void cplug_destroyPlugin(void* p)
+void cplug_destroyPlugin(void* _p)
 {
-    CPLUG_LOG_ASSERT(p != NULL);
+    CPLUG_LOG_ASSERT(_p != NULL);
+
+    Plugin* p = _p;
+    for (int i = 0; i < ARRLEN(p->lfos); i++)
+    {
+        LFO* lfo = p->lfos + i;
+        for (int j = 0; j < ARRLEN(lfo->points); j++)
+        {
+            xarr_free(lfo->points[j]);
+        }
+    }
+
     library_unload_platform();
 
     MY_FREE(p);
