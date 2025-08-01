@@ -1,9 +1,5 @@
 #pragma once
 
-#ifndef CPLUG_BUILD_STANDALONE
-#error This is for testing only
-#endif
-
 #include "dsp.h"
 #include "imgui.h"
 #include <math.h>

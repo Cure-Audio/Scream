@@ -322,6 +322,7 @@ typedef struct SGNVGframebuffer
     sg_attachments att;
     int            width;
     int            height;
+    float          devicePixelRatio;
 } SGNVGframebuffer;
 
 typedef struct SGNVGimageFX
@@ -1078,11 +1079,11 @@ int nvgTextBreakLines(
 
 int snvgCreateImageFromHandleSokol(NVGcontext* ctx, sg_image imageSokol, enum NVGtexture type, int w, int h, int flags);
 
-SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height);
+SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height, float devicePixelRatio);
 void             snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* renderTarget);
 
 // If you pass a blur radius less than a power of two, it will be rounded up to a power of two
-SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, int max_blur_radius);
+SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, float devicePixelRatio, int max_blur_radius);
 void          snvgDestroyImageFX(NVGcontext* ctx, SGNVGimageFX* fx);
 
 void snvg_command_begin_pass(NVGcontext* ctx, const sg_pass*, int width, int height, const char* label);

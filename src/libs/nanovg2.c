@@ -4408,34 +4408,40 @@ int snvgCreateImageFromHandleSokol(NVGcontext* ctx, sg_image imageSokol, enum NV
     return tex->img.id;
 }
 
-SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height)
+SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height, float devicePixelRatio)
 {
     SGNVGframebuffer rt = {0};
 
-    sg_image img_colour = sg_make_image(&(sg_image_desc){
+    int adjusted_width  = (int)((float)width * devicePixelRatio);
+    int adjusted_height = (int)((float)height * devicePixelRatio);
+
+    const sg_image_desc col_desc = {
         .usage.render_attachment = true,
-        .width                   = width,
-        .height                  = height,
+        .width                   = adjusted_width,
+        .height                  = adjusted_height,
         .pixel_format            = SG_PIXELFORMAT_BGRA8,
         .sample_count            = 1,
-        .label                   = "SGNVGframebuffer colour image"});
+        .label                   = "SGNVGframebuffer colour image"};
+    sg_image img_colour = sg_make_image(&col_desc);
 
-    sg_image img_depth = sg_make_image(&(sg_image_desc){
+    const sg_image_desc depth_desc = {
         .usage.render_attachment = true,
-        .width                   = width,
-        .height                  = height,
+        .width                   = adjusted_width,
+        .height                  = adjusted_height,
         .pixel_format            = SG_PIXELFORMAT_DEPTH_STENCIL,
         .sample_count            = 1,
-        .label                   = "SGNVGframebuffer depth image"});
+        .label                   = "SGNVGframebuffer depth image"};
+    sg_image img_depth = sg_make_image(&depth_desc);
 
-    rt.img    = img_colour;
-    rt.depth  = img_depth;
-    rt.att    = sg_make_attachments(&(sg_attachments_desc){
-           .colors[0].image     = rt.img,
-           .depth_stencil.image = img_depth,
-           .label               = "SGNVGframebuffer attachment"});
-    rt.width  = width;
-    rt.height = height;
+    rt.img   = img_colour;
+    rt.depth = img_depth;
+    rt.att   = sg_make_attachments(&(sg_attachments_desc){.colors[0].image     = rt.img,
+                                                          .depth_stencil.image = img_depth,
+                                                          .label               = "SGNVGframebuffer attachment"});
+
+    rt.width            = width;
+    rt.height           = height;
+    rt.devicePixelRatio = devicePixelRatio;
 
     snvgCreateImageFromHandleSokol(ctx, rt.img, NVG_TEXTURE_RGBA, rt.width, rt.height, 0);
 
@@ -4453,7 +4459,7 @@ void snvgDestroyFramebuffer(NVGcontext* ctx, SGNVGframebuffer* rt)
     }
 }
 
-SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, int max_blur_radius)
+SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, float devicePixelRatio, int max_blur_radius)
 {
     NVG_ASSERT(max_blur_radius >= 2);
     int max_mip_levels = (int)nvg__ceilf(nvg__log2f(max_blur_radius));
@@ -4471,15 +4477,15 @@ SGNVGimageFX* snvgCreateImageFX(NVGcontext* ctx, int width, int height, int max_
     fx->mip_levels    = (SGNVGframebuffer*)(ptr + base_size);
     fx->interp_levels = (SGNVGframebuffer*)(ptr + base_size + miplevels_size);
 
-    fx->resolve = snvgCreateFramebuffer(ctx, width, height);
+    fx->resolve = snvgCreateFramebuffer(ctx, width, height, devicePixelRatio);
     for (int i = 0; i < max_mip_levels; i++)
     {
         int w = width >> i;
         int h = height >> i;
         if (w && h)
         {
-            fx->mip_levels[i]    = snvgCreateFramebuffer(ctx, w, h);
-            fx->interp_levels[i] = snvgCreateFramebuffer(ctx, w, h);
+            fx->mip_levels[i]    = snvgCreateFramebuffer(ctx, w, h, devicePixelRatio);
+            fx->interp_levels[i] = snvgCreateFramebuffer(ctx, w, h, devicePixelRatio);
             fx->max_mip_levels++;
         }
     }
@@ -4821,30 +4827,30 @@ NVGcontext* nvgCreateContext(int flags)
     }
 
     // Image post processing FX pipelines
-    ctx->pip_texread = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = sg_make_shader(texread_shader_desc(sg_query_backend())),
-        //   .depth                  = {.pixel_format = SG_PIXELFORMAT_NONE},
-        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_texread =
+        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(texread_shader_desc(sg_query_backend())),
+                                             //   .depth                  = {.pixel_format = SG_PIXELFORMAT_NONE},
+                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_lightness_filter = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader                 = sg_make_shader(lightfilter_shader_desc(sg_query_backend())),
-        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_lightness_filter =
+        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(lightfilter_shader_desc(sg_query_backend())),
+                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_downsample = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader                 = sg_make_shader(downsample_shader_desc(sg_query_backend())),
-        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_downsample =
+        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(downsample_shader_desc(sg_query_backend())),
+                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_upsample = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader                 = sg_make_shader(upsample_shader_desc(sg_query_backend())),
-        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_upsample =
+        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(upsample_shader_desc(sg_query_backend())),
+                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_upsample_mix = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader                 = sg_make_shader(upsample_mix_shader_desc(sg_query_backend())),
-        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_upsample_mix =
+        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(upsample_mix_shader_desc(sg_query_backend())),
+                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_bloom = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader                 = sg_make_shader(bloom_shader_desc(sg_query_backend())),
-        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_bloom =
+        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(bloom_shader_desc(sg_query_backend())),
+                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
     // Default samplers
     ctx->sampler_linear  = sg_make_sampler(&(sg_sampler_desc){

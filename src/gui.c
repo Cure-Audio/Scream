@@ -238,15 +238,14 @@ void* pw_create_gui(void* _plugin, void* _pw)
         gui->font_id = font_id;
     }
 
-    gui->scale = (float)gui->plugin->width / (float)GUI_INIT_WIDTH;
-
     // Knob shader
     {
-        gui->knob_vbo = sg_make_buffer(&(sg_buffer_desc){
+        static const sg_buffer_desc knob_vbo_desc = {
             .usage.vertex_buffer = true,
             .usage.stream_update = true,
             .size                = sizeof(vertex_t) * 4 * 3,
-            .label               = DBGTXT(knob vertices)});
+            .label               = DBGTXT(knob vertices)};
+        gui->knob_vbo = sg_make_buffer(&knob_vbo_desc);
 
         // clang-format off
         static const uint16_t KNOB_INDICES[] = {
@@ -257,15 +256,16 @@ void* pw_create_gui(void* _plugin, void* _pw)
         _Static_assert(ARRLEN(KNOB_INDICES) == (3 * 6), "");
         // clang-format on
 
-        gui->knob_ibo = sg_make_buffer(&(sg_buffer_desc){
+        static const sg_buffer_desc knob_ibo_desc = {
             .usage.index_buffer = true,
             .usage.immutable    = true,
             .data               = SG_RANGE(KNOB_INDICES),
             .size               = sizeof(KNOB_INDICES),
-            .label              = DBGTXT(knob indices)});
+            .label              = DBGTXT(knob indices)};
+        gui->knob_ibo = sg_make_buffer(&knob_ibo_desc);
 
-        sg_shader shd = sg_make_shader(knob_shader_desc(sg_query_backend()));
-        gui->knob_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        sg_shader              shd      = sg_make_shader(knob_shader_desc(sg_query_backend()));
+        const sg_pipeline_desc pip_desc = {
             .shader     = shd,
             .index_type = SG_INDEXTYPE_UINT16,
             .layout =
@@ -282,7 +282,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
                          .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                          .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                      }},
-            .label = DBGTXT(knob pipeline)});
+            .label = DBGTXT(knob pipeline)};
+        gui->knob_pip = sg_make_pipeline(&pip_desc);
     }
 
     // Logo shader
@@ -307,7 +308,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
             xassert(comp == 4);
             if (img_buf)
             {
-                gui->logo_id = sg_make_image_with_mipmaps(&(sg_image_desc){
+                sg_image_desc img_desc = {
                     .usage.immutable = true,
                     .width           = x,
                     .height          = y,
@@ -318,7 +319,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
                     .data.subimage[0][0] = {
                         .ptr  = img_buf,
                         .size = x * y * comp,
-                    }});
+                    }};
+                gui->logo_id = sg_make_image_with_mipmaps(&img_desc);
                 stbi_image_free(img_buf);
 
                 gui->logo_width  = x;
@@ -435,7 +437,6 @@ bool pw_event(const PWEvent* event)
         // Retain size info for when the GUI is destroyed / reopened
         gui->plugin->width  = event->resize.width;
         gui->plugin->height = event->resize.height;
-        gui->scale          = (float)event->resize.width / (float)GUI_INIT_WIDTH;
 
         gui->last_resize_time = xtime_now_ns();
     }
@@ -1313,7 +1314,7 @@ void pw_tick(void* _gui)
         gui->lfo_toggle_button = lfo_btn;
 
         snvgDestroyFramebuffer(nvg, &gui->main_framebuffer);
-        gui->main_framebuffer = snvgCreateFramebuffer(nvg, lm->width, lm->height);
+        gui->main_framebuffer = snvgCreateFramebuffer(nvg, lm->width, lm->height, lm->devicePixelRatio);
     }
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
@@ -2169,15 +2170,15 @@ void pw_tick(void* _gui)
             .swapchain = gui->swapchain,
             .label     = DBGTXT(swapchain / main),
         },
-        gui->layout.width,
-        gui->layout.height,
+        lm->width,
+        lm->height,
         0);
     snvg_command_draw_nvg(nvg, DBGTXT(swapchain));
 
-    nvgBeginPath(nvg);
-    nvgRect(nvg, 0, 0, lm->width, lm->height);
     int bgimg = gui->main_framebuffer.img.id;
     nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, bgimg, 1, nvg->sampler_nearest));
+    nvgBeginPath(nvg);
+    nvgRect(nvg, 0, 0, lm->width, lm->height);
     nvgFill(nvg);
 
     // Footer
