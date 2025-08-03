@@ -187,9 +187,10 @@ typedef struct NVGtextRow
 enum NVGimageFlags
 {
     NVG_IMAGE_DIRTY         = 1 << 0, // Force update image on GPU
-    NVG_IMAGE_IMMUTABLE     = 1 << 1, // Forbids updating the image
-    NVG_IMAGE_PREMULTIPLIED = 1 << 2, // Image data has premultiplied alpha.
-    NVG_IMAGE_NODELETE      = 1 << 3, // Do not delete Sokol image.
+    NVG_IMAGE_CPU_UPDATE    = 1 << 1, // Will you be regularly updating this with data from the CPU?
+    NVG_IMAGE_IMMUTABLE     = 1 << 2, // Forbids updating the image
+    NVG_IMAGE_PREMULTIPLIED = 1 << 3, // Image data has premultiplied alpha.
+    NVG_IMAGE_NODELETE      = 1 << 4, // Do not delete Sokol image.
 };
 
 //

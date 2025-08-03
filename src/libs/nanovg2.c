@@ -2531,7 +2531,8 @@ static int nvg__allocTextAtlas(NVGcontext* ctx)
             iw *= 2;
         if (iw > NVG_MAX_FONTIMAGE_SIZE || ih > NVG_MAX_FONTIMAGE_SIZE)
             iw = ih = NVG_MAX_FONTIMAGE_SIZE;
-        ctx->fontImages[ctx->fontImageIdx + 1] = nvgCreateTexture(ctx, NVG_TEXTURE_ALPHA, iw, ih, 0, NULL);
+        ctx->fontImages[ctx->fontImageIdx + 1] =
+            nvgCreateTexture(ctx, NVG_TEXTURE_ALPHA, iw, ih, NVG_IMAGE_CPU_UPDATE, NULL);
     }
     ++ctx->fontImageIdx;
     fonsResetAtlas(ctx->fs, iw, ih);
@@ -3471,7 +3472,10 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
     if (tex == NULL)
         return 0;
 
-    bool immutable = !!(imageFlags & NVG_IMAGE_IMMUTABLE) && data;
+    bool            immutable      = !!(imageFlags & NVG_IMAGE_IMMUTABLE) && data;
+    bool            dynamic_update = !!(imageFlags & NVG_IMAGE_CPU_UPDATE);
+    int             nchannels      = type == NVG_TEXTURE_RGBA ? 4 : 1;
+    sg_pixel_format format         = type == NVG_TEXTURE_RGBA ? SG_PIXELFORMAT_RGBA8 : SG_PIXELFORMAT_R8;
 
     tex->width  = w;
     tex->height = h;
@@ -3481,25 +3485,27 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
     sg_image_data imageData = {0};
     if (data)
     {
-        imageData.subimage[0][0] = (sg_range){data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1)};
+        imageData.subimage[0][0] = (sg_range){data, w * h * nchannels};
     }
     tex->img = sg_make_image(&(sg_image_desc){
-        .type = SG_IMAGETYPE_2D,
-        //.render_target
+        .type                 = SG_IMAGETYPE_2D,
         .width                = w,
         .height               = h,
         .num_mipmaps          = 1, // TODO mipmaps
         .usage.immutable      = immutable,
-        .usage.dynamic_update = !immutable,
-        .pixel_format         = type == NVG_TEXTURE_RGBA ? SG_PIXELFORMAT_RGBA8 : SG_PIXELFORMAT_R8,
+        .usage.dynamic_update = dynamic_update,
+        .pixel_format         = format,
         .data                 = imageData,
         .label                = "nanovg.image[]",
     });
     NVG_ASSERT(tex->img.id != 0);
-    tex->imgData = NVG_MALLOC(w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1));
+    if (data != NULL || dynamic_update)
+    {
+        tex->imgData = NVG_MALLOC(w * h * nchannels);
+    }
     if (data != NULL)
     {
-        memcpy(tex->imgData, data, w * h * (type == NVG_TEXTURE_RGBA ? 4 : 1));
+        memcpy(tex->imgData, data, w * h * nchannels);
         tex->flags |= NVG_IMAGE_DIRTY;
     }
 
@@ -3832,6 +3838,7 @@ void nvgEndFrame(NVGcontext* ctx)
 
             if (tex->flags & NVG_IMAGE_DIRTY)
             {
+                NVG_ASSERT(tex->imgData != NULL);
                 tex->flags   ^= NVG_IMAGE_DIRTY;
                 int channels  = tex->type == NVG_TEXTURE_RGBA ? 4 : 1;
                 int nbytes    = tex->width * tex->height * channels;
@@ -4435,9 +4442,10 @@ SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height, f
 
     rt.img   = img_colour;
     rt.depth = img_depth;
-    rt.att   = sg_make_attachments(&(sg_attachments_desc){.colors[0].image     = rt.img,
-                                                          .depth_stencil.image = img_depth,
-                                                          .label               = "SGNVGframebuffer attachment"});
+    rt.att   = sg_make_attachments(&(sg_attachments_desc){
+          .colors[0].image     = rt.img,
+          .depth_stencil.image = img_depth,
+          .label               = "SGNVGframebuffer attachment"});
 
     rt.width            = width;
     rt.height           = height;
@@ -4827,30 +4835,30 @@ NVGcontext* nvgCreateContext(int flags)
     }
 
     // Image post processing FX pipelines
-    ctx->pip_texread =
-        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(texread_shader_desc(sg_query_backend())),
-                                             //   .depth                  = {.pixel_format = SG_PIXELFORMAT_NONE},
-                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_texread = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = sg_make_shader(texread_shader_desc(sg_query_backend())),
+        //   .depth                  = {.pixel_format = SG_PIXELFORMAT_NONE},
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_lightness_filter =
-        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(lightfilter_shader_desc(sg_query_backend())),
-                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_lightness_filter = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(lightfilter_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_downsample =
-        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(downsample_shader_desc(sg_query_backend())),
-                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_downsample = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(downsample_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_upsample =
-        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(upsample_shader_desc(sg_query_backend())),
-                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_upsample = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(upsample_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_upsample_mix =
-        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(upsample_mix_shader_desc(sg_query_backend())),
-                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_upsample_mix = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(upsample_mix_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
-    ctx->pip_bloom =
-        sg_make_pipeline(&(sg_pipeline_desc){.shader = sg_make_shader(bloom_shader_desc(sg_query_backend())),
-                                             .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
+    ctx->pip_bloom = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader                 = sg_make_shader(bloom_shader_desc(sg_query_backend())),
+        .colors[0].pixel_format = SG_PIXELFORMAT_BGRA8});
 
     // Default samplers
     ctx->sampler_linear  = sg_make_sampler(&(sg_sampler_desc){
@@ -4883,7 +4891,7 @@ NVGcontext* nvgCreateContext(int flags)
 
     // Some platforms does not allow to have samples to unset textures.
     // Create empty one which is bound when there's no texture specified.
-    ctx->dummyTex = nvgCreateTexture(ctx, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
+    ctx->dummyTex = nvgCreateTexture(ctx, NVG_TEXTURE_ALPHA, 1, 1, NVG_IMAGE_CPU_UPDATE, NULL);
 
     nvgReset(ctx);
     nvg__setDevicePixelRatio(ctx, 1.0f);
@@ -4913,7 +4921,8 @@ NVGcontext* nvgCreateContext(int flags)
     NVG_ASSERT_GOTO(ctx->fs != NULL, error);
 
     // Create font texture
-    ctx->fontImages[0] = nvgCreateTexture(ctx, NVG_TEXTURE_ALPHA, fontParams.width, fontParams.height, 0, NULL);
+    ctx->fontImages[0] =
+        nvgCreateTexture(ctx, NVG_TEXTURE_ALPHA, fontParams.width, fontParams.height, NVG_IMAGE_CPU_UPDATE, NULL);
     NVG_ASSERT_GOTO(ctx->fontImages[0] != 0, error);
 
     return ctx;
