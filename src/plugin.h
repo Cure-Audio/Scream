@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include <cplug.h>
+#include <stdint.h>
 #include <xhl/array.h>
 #include <xhl/thread.h>
 #include <xhl/vector.h>
@@ -16,6 +17,10 @@ typedef enum ParamID
     PARAM_RESONANCE,
     PARAM_INPUT_GAIN,
     PARAM_WET,
+
+    // TODO: uncomment this
+    // PARAM_PATTERN_LFO_1,
+    // PARAM_PATTERN_LFO_2,
 } ParamID;
 
 #define RANGE_INPUT_GAIN_MIN -72.0
@@ -23,7 +28,8 @@ typedef enum ParamID
 
 enum
 {
-    NUM_PARAMS = PARAM_WET + 1,
+    NUM_AUTOMATABLE_PARAMS = PARAM_WET + 1,
+    NUM_PARAMS             = PARAM_WET + 1,
 
     NUM_LFO_PATTERNS = 8,
 
@@ -54,6 +60,8 @@ typedef struct LFOPoint
 
 typedef struct LFO
 {
+    // NOTE: the GUI will display a point on the right edge. This does not represent the final point in this array. We
+    // calculate that point at runtime based off of the first point in these arrays
     LFOPoint* points[NUM_LFO_PATTERNS];
 
     // Length in beats
@@ -87,9 +95,22 @@ typedef struct Plugin
 
     LFO lfos[2];
 
+    xvec2f* mod_buffer;
+    double  bpm;
+    double  beat_position;
+    double  beat_inc;
+
+    // These flags represent active LFO modulations on parameters
+    // The index of the set bit corresponds to the parameter idx that is being modulated
+    uint8_t lfo_1_mod_flags;
+    uint8_t lfo_2_mod_flags;
+
+    float lfo_1_mod_amounts[NUM_AUTOMATABLE_PARAMS];
+    float lfo_2_mod_amounts[NUM_AUTOMATABLE_PARAMS];
+
     struct FilterState
     {
-        SmoothedValue values[NUM_PARAMS];
+        SmoothedValue values[NUM_AUTOMATABLE_PARAMS];
 
         Tanh_ADAA2 tanh_1;
         Tanh_ADAA2 tanh_2;

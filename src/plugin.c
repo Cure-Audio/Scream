@@ -11,6 +11,9 @@
 
 #include "params_and_events.c"
 #include "state.c"
+#include "xhl/array.h"
+#include "xhl/debug.h"
+#include "xhl/vector.h"
 
 // Apparently denormals aren't a problem on ARM & M1?
 // https://en.wikipedia.org/wiki/Subnormal_number
@@ -44,12 +47,18 @@
 XTHREAD_LOCAL bool g_is_main_thread = false;
 bool               is_main_thread() { return g_is_main_thread; }
 
+extern void audio_set_param(Plugin* p, ParamID id, double value);
+
 void cplug_libraryLoad()
 {
     xtime_init();
     xalloc_init();
 }
-void cplug_libraryUnload() { xalloc_shutdown(); }
+void cplug_libraryUnload()
+{
+    // Triggers leak detector
+    xalloc_shutdown();
+}
 
 extern void library_load_platform();
 extern void library_unload_platform();
@@ -77,7 +86,7 @@ void* cplug_createPlugin(CplugHostContext* ctx)
         LFO* lfo = p->lfos + i;
         for (int j = 0; j < ARRLEN(lfo->points); j++)
         {
-            xarr_setcap(lfo->points[j], (2 * MAX_PATTERN_LENGTH_PATTERNS));
+            xarr_setcap(lfo->points[j], (4 * MAX_PATTERN_LENGTH_PATTERNS));
 
             lfo->pattern_length[j] = 4;
 
@@ -90,8 +99,16 @@ void* cplug_createPlugin(CplugHostContext* ctx)
                 xarr_push(lfo->points[j], pt1);
                 xarr_push(lfo->points[j], pt2);
             }
+            // LFOPoint(*points_view)[32] = (void*)(lfo->points[j]);
+            // xassert(false);
         }
     }
+
+    p->bpm = 120;
+
+    // TODO: uncomment this
+    p->lfo_1_mod_flags                 |= 1 << PARAM_CUTOFF;
+    p->lfo_1_mod_amounts[PARAM_CUTOFF]  = 0.25f;
 
     return p;
 }
@@ -109,6 +126,8 @@ void cplug_destroyPlugin(void* _p)
             xarr_free(lfo->points[j]);
         }
     }
+
+    xarr_free(p->mod_buffer);
 
     library_unload_platform();
 
@@ -133,6 +152,8 @@ void cplug_setSampleRateAndBlockSize(void* _p, double sampleRate, uint32_t maxBl
     Plugin* p         = _p;
     p->sample_rate    = sampleRate;
     p->max_block_size = maxBlockSize;
+
+    xarr_setlen(p->mod_buffer, maxBlockSize);
 
     memset(&p->state, 0, sizeof(p->state));
 
@@ -161,7 +182,107 @@ const float g_release_ms = 5.0;
 // float g_hp_Q = XM_SQRT2f;
 #endif
 
-void audio_set_param(Plugin* p, ParamID id, double value);
+void render_lfo(Plugin* p, int num_samples, int channel)
+{
+    xassert(channel >= 0 && channel < ARRLEN(p->lfos));
+
+    LFO*    lfo    = p->lfos + channel;
+    xvec2f* buffer = p->mod_buffer;
+
+    // Inspect in debugger
+    xvec2f(*buffer_view)[512] = (void*)buffer;
+
+    const int pattern_idx = 0;
+
+    xassert(num_samples > 0 && num_samples <= xarr_len(buffer));
+
+    const double pattern_length = lfo->pattern_length[pattern_idx];
+
+    double beat_position = fmod(p->beat_position, pattern_length);
+    xassert(beat_position < pattern_length);
+    const double beat_inc = p->beat_inc;
+
+    const int             num_points   = xarr_len(lfo->points[pattern_idx]);
+    const LFOPoint* const points_start = lfo->points[pattern_idx];
+    const LFOPoint* const points_end   = points_start + num_points;
+
+    const LFOPoint* it = points_end;
+    while (it-- != points_start)
+        if (beat_position >= it->x)
+            break;
+
+    LFOPoint pt1 = *it;
+    xvec2f   pt2;
+    if ((it + 1) == points_end)
+    {
+        // last point in array (wrap)
+        pt2.x = pattern_length;
+        pt2.y = points_start->y;
+    }
+    else
+    {
+        // Next point
+        pt2.x = it[1].x;
+        pt2.y = it[1].y;
+    }
+
+    for (int i = 0; i < num_samples; i++)
+    {
+        xassert(beat_position >= pt1.x);
+        xassert(beat_position < pt2.x);
+        xassert(it >= points_start && it < points_end);
+
+        float rel_position  = (float)beat_position - pt1.x;
+        rel_position       /= pt2.x - pt1.x;
+
+        // Calc LFO value
+        float v;
+        if (pt1.x == pt2.x)
+        {
+            v = pt1.y;
+        }
+        else
+        {
+            float skewPos = pt1.y < pt2.y ? skewf(rel_position, pt1.skew) : 1.0f - skewf(1.0f - rel_position, pt1.skew);
+
+            v = xm_lerpf(skewPos, pt1.y, pt2.y);
+            xassert(v >= 0 && v <= 1);
+        }
+
+        buffer[i].data[channel] = v;
+
+        beat_position += beat_inc;
+
+        if (beat_position >= pt2.x)
+        {
+            if (beat_position >= pattern_length)
+                beat_position -= pattern_length;
+
+            it = points_end;
+            while (it-- != points_start)
+                if (beat_position >= it->x)
+                    break;
+
+            if (it == points_end)
+                it = points_start;
+
+            pt1 = *it;
+            if ((it + 1) == points_end)
+            {
+                // last point in array (wrap)
+                pt2.x = pattern_length;
+                pt2.y = points_start->y;
+            }
+            else
+            {
+                // Next point
+                pt2.x = it[1].x;
+                pt2.y = it[1].y;
+            }
+        }
+    }
+}
+
 void cplug_process(void* _p, CplugProcessContext* ctx)
 {
     DISABLE_DENORMALS
@@ -247,6 +368,19 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
     CplugEvent event;
     uint32_t   frame = 0;
 
+    if (ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_BPM)
+    {
+        p->bpm = ctx->bpm;
+    }
+    if (ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_PLAYHEAD_BEATS)
+    {
+        p->beat_position = fmod(ctx->playheadBeats, MAX_PATTERN_LENGTH_PATTERNS);
+    }
+
+    const double beats_per_second = p->bpm / 60.0;
+    const double samples_per_beat = p->sample_rate / beats_per_second;
+    p->beat_inc                   = 1.0 / samples_per_beat;
+
 #ifdef CPLUG_BUILD_STANDALONE
     float phase = g_osc_phase;
 #endif
@@ -322,6 +456,11 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             }
 #endif
 
+            if (p->lfo_1_mod_flags)
+                render_lfo(p, num_frames, 0);
+            if (p->lfo_2_mod_flags)
+                render_lfo(p, num_frames, 1);
+
             // Setup params
 
             const float expander_attack = convert_compressor_time(1);
@@ -392,6 +531,8 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                                            s.values[PARAM_RESONANCE].remaining | s.values[PARAM_INPUT_GAIN].remaining |
                                            s.values[PARAM_WET].remaining;
 
+                const bool has_modulation_or_smoothing = p->lfo_1_mod_flags || p->lfo_2_mod_flags || smooth_params;
+
                 if (p->gui)
                 {
                     enum
@@ -425,8 +566,10 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     }
                 }
 
+                xvec2f* mod_buffer = p->mod_buffer;
+
                 // Process
-                for (; it != end; it++)
+                for (; it != end; it++, mod_buffer++)
                 {
                     float x = *it;
 
@@ -484,16 +627,32 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
                     s.fb_yn_1 = feed;
 
-                    if (smooth_params)
+                    if (has_modulation_or_smoothing)
                     {
+                        _Static_assert(NUM_AUTOMATABLE_PARAMS == ARRLEN(s.values), "");
+                        _Static_assert(NUM_AUTOMATABLE_PARAMS == ARRLEN(p->lfo_1_mod_amounts), "");
+                        _Static_assert(NUM_AUTOMATABLE_PARAMS == ARRLEN(p->lfo_2_mod_amounts), "");
+                        float modvals[NUM_AUTOMATABLE_PARAMS];
                         for (int i = 0; i < ARRLEN(s.values); i++)
+                        {
                             smoothvalue_tick(&s.values[i]);
 
-                        lp_cutoff = s.values[PARAM_CUTOFF].current;
-                        hp_cutoff = s.values[PARAM_SCREAM].current;
-                        resonance = s.values[PARAM_RESONANCE].current;
-                        in_gain   = s.values[PARAM_INPUT_GAIN].current;
-                        wet       = s.values[PARAM_WET].current;
+                            float v = s.values[i].current;
+
+                            // TODO: apply bidirectional algorithm?
+                            if (p->lfo_1_mod_flags & (1 << i))
+                                v += p->lfo_1_mod_amounts[i] * mod_buffer->data[0];
+                            if (p->lfo_2_mod_flags & (1 << i))
+                                v += p->lfo_2_mod_amounts[i] * mod_buffer->data[1];
+
+                            modvals[i] = xm_clampf(v, 0, 1);
+                        }
+
+                        lp_cutoff = modvals[PARAM_CUTOFF];
+                        hp_cutoff = modvals[PARAM_SCREAM];
+                        resonance = modvals[PARAM_RESONANCE];
+                        in_gain   = modvals[PARAM_INPUT_GAIN];
+                        wet       = modvals[PARAM_WET];
 
                         lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
                         hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
@@ -529,6 +688,12 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
                 p->state[ch] = s;
             }
+
+            // Wrap beat position
+            p->beat_position += num_frames * p->beat_inc;
+            if (p->beat_position >= MAX_PATTERN_LENGTH_PATTERNS)
+                p->beat_position -= MAX_PATTERN_LENGTH_PATTERNS;
+            xassert(p->beat_position >= 0 && p->beat_position < MAX_PATTERN_LENGTH_PATTERNS);
 
             frame = event.processAudio.endFrame;
             break;
