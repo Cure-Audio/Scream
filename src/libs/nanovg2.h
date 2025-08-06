@@ -71,6 +71,12 @@ extern "C" {
 #pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
 #endif
 
+#ifndef NDEBUG
+#define NVG_LABEL(txt) #txt
+#else
+#define NVG_LABEL(...) 0
+#endif
+
 typedef struct NVGcolour
 {
     union
@@ -644,6 +650,13 @@ NVGcolour nvgHSL(float h, float s, float l);
 // Returns colour value specified by hue, saturation and lightness and alpha.
 // HSL values are all in range [0..1], alpha in range [0..255]
 NVGcolour nvgHSLA(float h, float s, float l, unsigned char a);
+
+// clang-format off
+#define nvgHexColour(hex) (NVGcolour){( hex >> 24)         / 255.0f,\
+                                      ((hex >> 16) & 0xff) / 255.0f,\
+                                      ((hex >>  8) & 0xff) / 255.0f,\
+                                      ( hex        & 0xff) / 255.0f}
+// clang-format on
 
 //
 // Transforms

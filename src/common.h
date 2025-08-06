@@ -34,12 +34,10 @@
 #define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
 #ifndef NDEBUG
-#define DBGTXT(txt) #txt
 void println(const char* const fmt, ...);
 #define cplug_log println
 #else
 #define println(...)
-#define DBGTXT(...) 0
 #endif
 
 #ifdef CPLUG_BUILD_STANDALONE

@@ -680,9 +680,9 @@ int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags)
     stbi_set_unpremultiply_on_load(1);
     stbi_convert_iphone_png_to_rgb(1);
     img = stbi_load(filename, &w, &h, &n, 4);
+    NVG_ASSERT(img);
     if (img == NULL)
     {
-        //		printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
         return 0;
     }
     image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
@@ -694,9 +694,9 @@ int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int 
 {
     int            w, h, n, image;
     unsigned char* img = stbi_load_from_memory(data, ndata, &w, &h, &n, 4);
+    NVG_ASSERT(img);
     if (img == NULL)
     {
-        //		printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
         return 0;
     }
     image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
@@ -2115,8 +2115,6 @@ void nvgArcTo(NVGcontext* ctx, float x1, float y1, float x2, float y2, float rad
     a = nvg__acosf(dx0 * dx1 + dy0 * dy1);
     d = radius / nvg__tanf(a / 2.0f);
 
-    //	printf("a=%f° d=%f\n", a/NVG_PI*180.0f, d);
-
     if (d > 10000.0f)
     {
         nvgLineTo(ctx, x1, y1);
@@ -2130,7 +2128,6 @@ void nvgArcTo(NVGcontext* ctx, float x1, float y1, float x2, float y2, float rad
         a0  = nvg__atan2f(dx0, -dy0);
         a1  = nvg__atan2f(-dx1, dy1);
         dir = NVG_CW;
-        //		printf("CW c=(%f, %f) a0=%f° a1=%f°\n", cx, cy, a0/NVG_PI*180.0f, a1/NVG_PI*180.0f);
     }
     else
     {
@@ -2139,7 +2136,6 @@ void nvgArcTo(NVGcontext* ctx, float x1, float y1, float x2, float y2, float rad
         a0  = nvg__atan2f(-dx0, dy0);
         a1  = nvg__atan2f(dx1, -dy1);
         dir = NVG_CCW;
-        //		printf("CCW c=(%f, %f) a0=%f° a1=%f°\n", cx, cy, a0/NVG_PI*180.0f, a1/NVG_PI*180.0f);
     }
 
     nvgArc(ctx, cx, cy, radius, a0, a1, dir);
@@ -3196,7 +3192,7 @@ static void sgnvg__initPipeline(
             .index_type     = SG_INDEXTYPE_UINT32,
             .cull_mode      = cull_mode,
             .face_winding   = SG_FACEWINDING_CCW,
-            .label          = "nanovg.pipeline",
+            .label          = NVG_LABEL("nanovg.pipeline"),
         });
 }
 
@@ -3496,7 +3492,7 @@ int nvgCreateTexture(NVGcontext* ctx, enum NVGtexture type, int w, int h, int im
         .usage.dynamic_update = dynamic_update,
         .pixel_format         = format,
         .data                 = imageData,
-        .label                = "nanovg.image[]",
+        .label                = NVG_LABEL("nanovg.image[]"),
     });
     NVG_ASSERT(tex->img.id != 0);
     if (data != NULL || dynamic_update)
@@ -3777,10 +3773,6 @@ static SGNVGblend sgnvg__blendCompositeOperation(NVGcompositeOperationState op)
 
 void nvgBeginFrame(NVGcontext* ctx, float devicePixelRatio)
 {
-    /*	printf("Tris: draws:%d  fill:%d  stroke:%d  text:%d  TOT:%d",
-                    ctx->drawCallCount, ctx->fillTriCount, ctx->strokeTriCount, ctx->textTriCount,
-                    ctx->fillTriCount+ctx->strokeTriCount+ctx->textTriCount);*/
-
     ctx->nstates = 0;
     nvgReset(ctx);
 
@@ -3861,7 +3853,7 @@ void nvgEndFrame(NVGcontext* ctx)
                 .size                = ctx->cverts_gpu * sizeof(*ctx->verts),
                 .usage.vertex_buffer = true,
                 .usage.stream_update = true,
-                .label               = "nanovg.vertBuf",
+                .label               = NVG_LABEL("nanovg.vertBuf"),
             });
     }
     // upload vertex data
@@ -3878,7 +3870,7 @@ void nvgEndFrame(NVGcontext* ctx)
                 .size                = ctx->cindexes_gpu * sizeof(*ctx->indexes),
                 .usage.index_buffer  = true,
                 .usage.stream_update = true,
-                .label               = "nanovg.indexBuf",
+                .label               = NVG_LABEL("nanovg.indexBuf"),
             });
     }
     // upload index data
@@ -4436,7 +4428,7 @@ SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height, f
         .height                  = adjusted_height,
         .pixel_format            = SG_PIXELFORMAT_BGRA8,
         .sample_count            = 1,
-        .label                   = "SGNVGframebuffer colour image"};
+        .label                   = NVG_LABEL("SGNVGframebuffer colour image")};
     sg_image img_colour = sg_make_image(&col_desc);
 
     const sg_image_desc depth_desc = {
@@ -4445,7 +4437,7 @@ SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height, f
         .height                  = adjusted_height,
         .pixel_format            = SG_PIXELFORMAT_DEPTH_STENCIL,
         .sample_count            = 1,
-        .label                   = "SGNVGframebuffer depth image"};
+        .label                   = NVG_LABEL("SGNVGframebuffer depth image")};
     sg_image img_depth = sg_make_image(&depth_desc);
 
     rt.img   = img_colour;
@@ -4453,7 +4445,7 @@ SGNVGframebuffer snvgCreateFramebuffer(NVGcontext* ctx, int width, int height, f
     rt.att   = sg_make_attachments(&(sg_attachments_desc){
           .colors[0].image     = rt.img,
           .depth_stencil.image = img_depth,
-          .label               = "SGNVGframebuffer attachment"});
+          .label               = NVG_LABEL("SGNVGframebuffer attachment")});
 
     rt.width            = width;
     rt.height           = height;
