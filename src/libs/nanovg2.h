@@ -77,6 +77,18 @@ extern "C" {
 #define NVG_LABEL(...) 0
 #endif
 
+#ifndef NVG_ASSERT
+#include <assert.h>
+#define NVG_ASSERT(cond) assert(cond)
+#endif
+
+#if !defined(NVG_MALLOC) || !defined(NVG_REALLOC) || !defined(NVG_FREE)
+#include <stdlib.h>
+#define NVG_MALLOC(sz)       malloc(sz)
+#define NVG_REALLOC(ptr, sz) realloc(ptr, sz)
+#define NVG_FREE(ptr)        free(ptr)
+#endif
+
 typedef struct NVGcolour
 {
     union
