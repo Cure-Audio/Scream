@@ -4096,7 +4096,11 @@ static void sgnvg__generateTriangleStripIndexes(uint32_t* indexes, int offset, i
 
 void nvgFill(NVGcontext* ctx)
 {
-    NVGstate*      state = &ctx->state;
+    NVGstate* state = &ctx->state;
+
+    if (ctx->ncommands == 0)
+        return;
+
     const NVGpath* path;
     NVGpaint       paint             = state->paint;
     float          expandFringeWidth = 0;
@@ -4230,12 +4234,16 @@ void nvgFill(NVGcontext* ctx)
 
 void nvgStroke(NVGcontext* ctx)
 {
-    NVGstate* state             = &ctx->state;
-    float     scale             = nvg__getAverageScale(state->xform);
-    float     strokeWidth       = nvg__clampf(state->strokeWidth * scale, 0.0f, 200.0f);
-    NVGpaint  paint             = state->paint;
-    float     expandFringeWidth = 0;
-    int       i;
+    NVGstate* state = &ctx->state;
+
+    if (ctx->ncommands == 0)
+        return;
+
+    float    scale             = nvg__getAverageScale(state->xform);
+    float    strokeWidth       = nvg__clampf(state->strokeWidth * scale, 0.0f, 200.0f);
+    NVGpaint paint             = state->paint;
+    float    expandFringeWidth = 0;
+    int      i;
 
     if (strokeWidth < ctx->fringeWidth)
     {

@@ -5,6 +5,7 @@
 #include <sokol_gfx.h>
 
 #include "libs/texteditor.h"
+#include "xhl/vector.h"
 
 typedef struct
 {
@@ -68,10 +69,15 @@ typedef struct GUI
     sg_buffer   knob_vbo;
     sg_buffer   knob_ibo;
 
-    sg_sampler logo_smp;
-    sg_image   logo_id;
-    int        logo_width;
-    int        logo_height;
+    sg_image logo_id;
+    int      logo_width;
+    int      logo_height;
+
+    bool    lfo_points_dirty;
+    bool    lfo_cached_path_dirty;
+    xvec2f* lfo_points;
+    xvec2f* lfo_skew_points;
+    xvec2f* lfo_cached_path;
 
     uint64_t frame_start_time;
     uint64_t frame_end_time;
