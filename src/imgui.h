@@ -1,4 +1,5 @@
 #pragma once
+#include "xhl/debug.h"
 #include <cplug_extensions/window.h>
 #include <math.h>
 #include <stdbool.h>
@@ -158,6 +159,24 @@ typedef struct imgui_context
 #endif
 } imgui_context;
 
+static void imgui_clear_widget(imgui_context* ctx)
+{
+    ctx->uid_last_frame_mouse_over = 0;
+    ctx->uid_last_frame_drag_over  = 0;
+    ctx->uid_mouse_over            = 0;
+    ctx->uid_drag_over             = 0;
+    ctx->uid_mouse_hold            = 0;
+    ctx->uid_drag                  = 0;
+    ctx->uid_touchpad              = 0;
+    ctx->left_click_counter        = 0;
+
+    ctx->frame.uid_mouse_down    = 0;
+    ctx->frame.uid_mouse_up      = 0;
+    ctx->frame.uid_drag_over_end = 0;
+    ctx->frame.uid_drag_end      = 0;
+    ctx->frame.uid_touchpad_end  = 0;
+}
+
 static unsigned imgui_hash(const char* str)
 {
     // MurmurHash. Apparently very fast with few collisions: https://stackoverflow.com/a/69812981
@@ -252,7 +271,7 @@ static unsigned _imgui_get_events(imgui_context* ctx, unsigned uid, bool hover, 
     const bool has_had_hover_stolen  = ctx->frame_id_mouse_over > 0 && ctx->frame_id_mouse_over < frame_id;
     bool       is_exiting            = !hover || has_had_hover_stolen;
     is_exiting                      &= ctx->uid_last_frame_mouse_over == uid; // was hovering
-    is_exiting                      &= ctx->uid_drag != uid;                  // is not being dragged
+    is_exiting                      &= ctx->uid_mouse_hold != uid;            // no mouse hold
 
     if (is_exiting)
     {
@@ -269,7 +288,9 @@ static unsigned _imgui_get_events(imgui_context* ctx, unsigned uid, bool hover, 
 
     // Mouse wheel & touchpad
     if (ctx->uid_mouse_over == uid && ctx->frame.delta_mouse_wheel)
+    {
         events |= IMGUI_EVENT_MOUSE_WHEEL;
+    }
 
     if (ctx->uid_mouse_over == uid && (ctx->frame.events & (1 << PW_EVENT_MOUSE_TOUCHPAD_BEGIN)))
     {
@@ -325,8 +346,9 @@ static unsigned _imgui_get_events(imgui_context* ctx, unsigned uid, bool hover, 
     // Mouse down
     bool incoming_mouse_down_event  = ctx->frame.type_mouse_down != IMGUI_MOUSE_BUTTON_NONE;
     incoming_mouse_down_event      &= (bool)(ctx->frame.events & IMGUI_FLAGS_PW_MOUSE_DOWN_EVENTS);
-    incoming_mouse_down_event      &= ctx->frame.uid_mouse_down != 0;
-    incoming_mouse_down_event      &= mouse_down;
+    // incoming_mouse_down_event      &= ctx->frame.uid_mouse_down != 0;
+    incoming_mouse_down_event &= ctx->frame.uid_mouse_down == uid;
+    incoming_mouse_down_event &= mouse_down;
 
     enum ImguiMouseButtonType handle_mouse_down = IMGUI_MOUSE_BUTTON_NONE;
     if (incoming_mouse_down_event)
@@ -423,6 +445,7 @@ static unsigned _imgui_get_events(imgui_context* ctx, unsigned uid, bool hover, 
     PW_ASSERT(
         (events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_DRAG_MOVE)) != (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_DRAG_MOVE));
     PW_ASSERT((events & (IMGUI_EVENT_DRAG_MOVE)) ? (ctx->mouse_hold_type != IMGUI_MOUSE_BUTTON_NONE) : true);
+    PW_ASSERT((events & (IMGUI_EVENT_MOUSE_EXIT)) ? (events & IMGUI_EVENT_MOUSE_HOVER) == 0 : true);
 
     return events;
 }

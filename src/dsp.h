@@ -12,7 +12,7 @@ static float softsine2(float x) { return xm_clampf(x, -1, 1) / (fabsf(x) + 1); }
 // a - skew amount between 0-1 where lower values push x closer to 0 and vice versa
 static inline float skewf(float v, float a)
 {
-    // va/(1-a-x+va)
+    // va/(1-a-v+2va)
     if (a <= 0)
         return 0;
     else if (a >= 1.0f)

@@ -73,11 +73,18 @@ typedef struct GUI
     int      logo_width;
     int      logo_height;
 
-    bool    lfo_points_dirty;
-    bool    lfo_cached_path_dirty;
-    xvec2f* lfo_points;
-    xvec2f* lfo_skew_points;
-    xvec2f* lfo_cached_path;
+    bool      lfo_points_dirty;
+    imgui_pt* lfo_points;
+    imgui_pt* lfo_skew_points;
+    // TODO: rather than cache a line of points, cache the vertices from NanoVG.
+    // This will require some editing of NanoVG.
+    bool      lfo_cached_path_dirty;
+    imgui_pt* lfo_cached_path;
+
+    imgui_pt  selection_start;
+    imgui_pt  selection_end;
+    int*      selected_point_indexes;
+    imgui_pt* points_copy;
 
     uint64_t frame_start_time;
     uint64_t frame_end_time;
