@@ -1209,6 +1209,7 @@ void draw_lfo_section(GUI* gui)
     const int pattern_idx = 0;
 
     const float pattern_length = (float)gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
+    const int   num_grid_x     = pattern_length;
 
     enum
     {
@@ -1375,9 +1376,18 @@ void draw_lfo_section(GUI* gui)
                     imgui_pt target_pos = {0};
                     if (snap_to_grid)
                     {
-                        // TODO snap to grid
-                        target_pos = im->pos_mouse_move;
-                        xassert(false);
+                        target_pos  = im->pos_mouse_move;
+                        float x_inc = grid_w / num_grid_x;
+                        for (int j = 0; j < num_grid_x; j++)
+                        {
+                            float x = grid_x + j * x_inc;
+                            if (x - LFO_POINT_CLICK_RADIUS <= target_pos.x &&
+                                target_pos.x <= x + LFO_POINT_CLICK_RADIUS)
+                            {
+                                target_pos.x = x;
+                                break;
+                            }
+                        }
                     }
                     else
                     {
@@ -1410,8 +1420,6 @@ void draw_lfo_section(GUI* gui)
 
             pt_hover_idx      = -1;
             pt_hover_skew_idx = -1;
-
-            println("delete: %d", delete_pt_idx);
         }
     }
 
@@ -1552,6 +1560,22 @@ void draw_lfo_section(GUI* gui)
         xarr_header(gui->lfo_cached_path)->length = npoints;
     }
 
+    // Draw grid X
+    if (num_grid_x)
+    {
+        nvgBeginPath(nvg);
+        float x_inc = grid_w / num_grid_x;
+        for (int i = 1; i < num_grid_x; i++)
+        {
+            float x = grid_x + x_inc * i;
+            x       = floorf(x) + 0.5f;
+            nvgMoveTo(nvg, x, grid_y + 1);
+            nvgLineTo(nvg, x, grid_b - 1);
+        }
+        nvgSetStrokeWidth(nvg, 0.5f);
+        nvgStroke(nvg);
+    }
+
     // Draw path
     {
         const imgui_pt* it  = gui->lfo_cached_path;
@@ -1588,7 +1612,7 @@ void draw_lfo_section(GUI* gui)
         for (int i = 0; i < xarr_len(gui->lfo_skew_points); i++)
         {
             imgui_pt pt = gui->lfo_skew_points[i];
-            nvgCircle(nvg, pt.x, pt.y, 4);
+            nvgCircle(nvg, pt.x, pt.y, LFO_POINT_RADIUS);
         }
         nvgSetColour(nvg, nvgHexColour(0xffff00ff));
         nvgFill(nvg);
@@ -1597,7 +1621,7 @@ void draw_lfo_section(GUI* gui)
         for (int i = 0; i < xarr_len(gui->lfo_points); i++)
         {
             imgui_pt pt = gui->lfo_points[i];
-            nvgCircle(nvg, pt.x, pt.y, 4);
+            nvgCircle(nvg, pt.x, pt.y, LFO_POINT_RADIUS);
         }
         nvgSetColour(nvg, nvgHexColour(0xff0000ff));
         nvgFill(nvg);
