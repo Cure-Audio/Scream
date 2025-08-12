@@ -18,9 +18,8 @@ typedef enum ParamID
     PARAM_INPUT_GAIN,
     PARAM_WET,
 
-    // TODO: uncomment this
-    // PARAM_PATTERN_LFO_1,
-    // PARAM_PATTERN_LFO_2,
+    PARAM_PATTERN_LFO_1,
+    PARAM_PATTERN_LFO_2,
 } ParamID;
 
 #define RANGE_INPUT_GAIN_MIN -72.0
@@ -29,7 +28,7 @@ typedef enum ParamID
 enum
 {
     NUM_AUTOMATABLE_PARAMS = PARAM_WET + 1,
-    NUM_PARAMS             = PARAM_WET + 1,
+    NUM_PARAMS             = PARAM_PATTERN_LFO_2 + 1,
 
     NUM_LFO_PATTERNS = 8,
 
@@ -202,6 +201,8 @@ static const char* PARAM_STR[] = {
     "PARAM_RESONANCE",
     "PARAM_INPUT_GAIN",
     "PARAM_WET",
+    "PARAM_PATTERN_LFO_1",
+    "PARAM_PATTERN_LFO_2",
 };
 _Static_assert(ARRLEN(PARAM_STR) == NUM_PARAMS, "");
 #endif

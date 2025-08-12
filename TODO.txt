@@ -11,7 +11,7 @@
 
 - Create API for batch drawing shapes ie. functions that accept arrays of data with the same fill colours
 
+- add ability to assign/unassign lfo mods & change amounts
 - make shape drawing work
 - make lfo look better
-- make pattern selection work
 - save LFO state

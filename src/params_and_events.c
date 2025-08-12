@@ -224,6 +224,12 @@ void main_dequeue_events(Plugin* p)
             main_set_param(p, event->parameter.id, event->parameter.value);
             if (event->type == EVENT_SET_PARAMETER_NOTIFYING_HOST)
                 main_notify_host_param_change(p, event->parameter.id, event->parameter.value);
+
+            if (p->gui)
+            {
+                extern void gui_handle_param_change(void* gui, ParamID paramid);
+                gui_handle_param_change(p->gui, event->parameter.id);
+            }
             break;
 
         default:
@@ -257,6 +263,11 @@ bool param_string_to_value(uint32_t param_id, const char* str, double* val)
         if ((ok = sscanf(str, "%lfdB", val)))
             *val = xm_normd(*val, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
         break;
+    case PARAM_PATTERN_LFO_1:
+    case PARAM_PATTERN_LFO_2:
+        if ((ok = sscanf(str, "%lf", val)))
+            *val = xm_normd(*val, 1, NUM_LFO_PATTERNS);
+        break;
     }
     if (ok)
         *val = xm_clampd(*val, 0, 1);
@@ -273,7 +284,7 @@ uint32_t cplug_getParameterFlags(void* p, uint32_t paramId) { return CPLUG_FLAG_
 void cplug_getParameterName(void*, uint32_t paramId, char* buf, size_t buflen)
 {
     const char*        str     = "";
-    static const char* NAMES[] = {"Cutoff", "Scream", "Resonance", "Input", "Wet"};
+    static const char* NAMES[] = {"Cutoff", "Scream", "Resonance", "Input", "Wet", "LFO 1 Pattern", "LFO 2 Pattern"};
     _Static_assert(ARRLEN(NAMES) == NUM_PARAMS);
     if (paramId < NUM_PARAMS)
     {
@@ -308,6 +319,10 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
         break;
     case PARAM_WET:
         v = 1;
+        break;
+    case PARAM_PATTERN_LFO_1:
+    case PARAM_PATTERN_LFO_2:
+        // v = 0;
         break;
     }
     return v;
@@ -394,6 +409,13 @@ void cplug_parameterValueToString(void*, uint32_t paramId, char* buf, size_t buf
     {
         double dB = xm_lerpd(value, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
         snprintf(buf, bufsize, "%.2fdB", dB);
+        break;
+    }
+    case PARAM_PATTERN_LFO_1:
+    case PARAM_PATTERN_LFO_2:
+    {
+        int num = xm_droundi(xm_lerpd(value, 1, NUM_LFO_PATTERNS));
+        snprintf(buf, bufsize, "%d", num);
         break;
     }
     }

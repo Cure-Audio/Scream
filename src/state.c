@@ -25,8 +25,13 @@ typedef struct PluginStatev0_0_3
 typedef struct PluginStatev0_0_4
 {
     double params[5];
+} PluginStatev0_0_4;
+
+typedef struct PluginStatev0_2_0
+{
+    double params[7];
 } PluginState;
-_Static_assert(NUM_PARAMS == 5, "If params change, update state");
+_Static_assert(NUM_PARAMS == 7, "If params change, update state");
 
 plugin_version get_plugin_version()
 {

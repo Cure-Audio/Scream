@@ -160,7 +160,7 @@ void cplug_setSampleRateAndBlockSize(void* _p, double sampleRate, uint32_t maxBl
     {
         struct FilterState* s = &p->state[ch];
 
-        for (int i = 0; i < ARRLEN(p->audio_params); i++)
+        for (int i = 0; i < ARRLEN(s->values); i++)
             smoothvalue_reset(&s->values[i], p->audio_params[i]);
     }
 }
@@ -181,17 +181,18 @@ const float g_release_ms = 5.0;
 // float g_hp_Q = XM_SQRT2f;
 #endif
 
-void render_lfo(Plugin* p, int num_samples, int channel)
+void render_lfo(Plugin* p, int num_samples, int lfo_idx)
 {
-    xassert(channel >= 0 && channel < ARRLEN(p->lfos));
+    xassert(lfo_idx >= 0 && lfo_idx < ARRLEN(p->lfos));
 
-    LFO*    lfo    = p->lfos + channel;
+    LFO*    lfo    = p->lfos + lfo_idx;
     xvec2f* buffer = p->mod_buffer;
 
     // Inspect in debugger
     xvec2f(*buffer_view)[512] = (void*)buffer;
 
-    const int pattern_idx = 0;
+    const double pattern_v   = p->audio_params[PARAM_PATTERN_LFO_1 + lfo_idx];
+    const int    pattern_idx = xm_droundi(pattern_v * (NUM_LFO_PATTERNS - 1));
 
     xassert(num_samples > 0 && num_samples <= xarr_len(buffer));
 
@@ -248,7 +249,7 @@ void render_lfo(Plugin* p, int num_samples, int channel)
             xassert(v >= 0 && v <= 1);
         }
 
-        buffer[i].data[channel] = v;
+        buffer[i].data[lfo_idx] = v;
 
         beat_position += beat_inc;
 
@@ -549,7 +550,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 const float* const end = output[ch] + event.processAudio.endFrame;
                 struct FilterState s   = p->state[ch];
 
-                for (int i = 0; i < ARRLEN(p->audio_params); i++)
+                for (int i = 0; i < ARRLEN(s.values); i++)
                     smoothvalue_set_target(&s.values[i], p->audio_params[i], param_smoothing_time);
 
                 float lp_cutoff = s.values[PARAM_CUTOFF].current;

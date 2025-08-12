@@ -35,7 +35,7 @@ typedef struct LayoutMetrics
     float top_content_bottom;
 
     // Params
-    float param_positions_cx[NUM_PARAMS];
+    float param_positions_cx[NUM_AUTOMATABLE_PARAMS];
     float param_scale;
 
     imgui_pt knobs_pos[3]; // cx/cy

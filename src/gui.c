@@ -27,6 +27,23 @@
 
 #include <knob.glsl.h>
 
+extern double main_get_param(Plugin* p, ParamID id);
+
+static inline int main_get_lfo_pattern_idx(Plugin* p)
+{
+    int    lfo_idx  = p->selected_lfo_idx;
+    double v        = main_get_param(p, PARAM_PATTERN_LFO_1 + lfo_idx);
+    v              *= NUM_LFO_PATTERNS - 1;
+    return xm_droundi(v);
+}
+
+void gui_handle_param_change(void* _gui, ParamID param_id)
+{
+    GUI* gui = _gui;
+    if (param_id == PARAM_PATTERN_LFO_1 || param_id == PARAM_PATTERN_LFO_2)
+        gui->lfo_points_dirty = true;
+}
+
 static void my_sg_logger(
     const char* tag,              // always "sapp"
     uint32_t    log_level,        // 0=panic, 1=error, 2=warning, 3=info
@@ -649,7 +666,7 @@ static inline double snap_point(double x)
 void send_points_to_lfo(GUI* gui, const imgui_rect* area)
 {
     const int lfo_idx     = gui->plugin->selected_lfo_idx;
-    const int pattern_idx = 0;
+    const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
 
     const int pattern_length = gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
 
@@ -738,7 +755,7 @@ void update_skew_point(GUI* gui, int i, float skew)
     }
 
     const int lfo_idx     = gui->plugin->selected_lfo_idx;
-    const int pattern_idx = 0;
+    const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
     LFOPoint* lfo_points  = gui->plugin->lfos[lfo_idx].points[pattern_idx];
     lfo_points[i].skew    = skew;
 
@@ -749,7 +766,7 @@ void update_skew_point(GUI* gui, int i, float skew)
 void update_lfo_point(GUI* gui, const imgui_rect* area, imgui_pt pos, int idx)
 {
     const int lfo_idx     = gui->plugin->selected_lfo_idx;
-    const int pattern_idx = 0;
+    const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
 
     const LFOPoint* lfopoints  = gui->plugin->lfos[lfo_idx].points[pattern_idx];
     const size_t    num_points = xarr_len(gui->lfo_points);
@@ -1183,12 +1200,72 @@ void draw_lfo_section(GUI* gui)
     float pattern_cy = shape_y + SHAPES_WIDTH * 0.5f;
     float pattern_b  = display_b - CONTENT_PADDING_Y;
     {
-        const imgui_rect rect   = {pattern_x, shape_y, pattern_r, pattern_b};
-        const unsigned   events = imgui_get_events_rect(im, 'lptn', &rect);
-        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        const imgui_rect rect     = {pattern_x, shape_y, pattern_r, pattern_b};
+        const ParamID    param_id = PARAM_PATTERN_LFO_1 + gui->plugin->selected_lfo_idx;
+        const unsigned   uid      = 'prm' + param_id;
+        const unsigned   events   = imgui_get_events_rect(im, uid, &rect);
+
+        double value_d = gui->plugin->main_params[param_id];
+        float  value_f = value_d;
+
+        float next_value = value_f;
+
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_WE);
+
+        if (events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_TOUCHPAD_BEGIN))
         {
-            println("TODO: handle changing patterns");
+            param_change_begin(gui->plugin, param_id);
         }
+        if (events & IMGUI_EVENT_DRAG_MOVE)
+            imgui_drag_value(im, &next_value, 0, 1, PATTERN_WIDTH, IMGUI_DRAG_HORIZONTAL);
+
+        if (events & IMGUI_EVENT_TOUCHPAD_MOVE)
+        {
+            float delta = im->frame.delta_touchpad.y / PATTERN_WIDTH;
+            if (im->frame.modifiers_touchpad & PW_MOD_INVERTED_SCROLL)
+                delta = -delta;
+            if (im->frame.modifiers_touchpad & PW_MOD_PLATFORM_KEY_CTRL)
+                delta *= 0.1f;
+            if (im->frame.modifiers_touchpad & PW_MOD_KEY_SHIFT)
+                delta *= 0.1f;
+
+            next_value = xm_clampf(value_f + delta, 0, 1);
+        }
+        bool changed = value_f != next_value;
+        if (changed)
+        {
+            value_d = value_f = next_value;
+
+            param_change_update(gui->plugin, param_id, value_d);
+            gui->lfo_points_dirty = true;
+        }
+
+        if (events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
+        {
+            int vi  = xm_droundi(xm_lerpd(value_d, 1, NUM_LFO_PATTERNS));
+            value_f = value_d = xm_normd(vi, 1, NUM_LFO_PATTERNS);
+
+            param_change_update(gui->plugin, param_id, value_d);
+            param_change_end(gui->plugin, param_id);
+            gui->lfo_points_dirty = true;
+        }
+
+        if (events & IMGUI_EVENT_MOUSE_WHEEL)
+        {
+            int vi  = xm_droundi(xm_lerpd(value_d, 1, NUM_LFO_PATTERNS));
+            vi     += im->frame.delta_mouse_wheel;
+            vi      = xm_clampi(vi, 1, NUM_LFO_PATTERNS);
+
+            value_f = value_d = xm_normd(vi, 1, NUM_LFO_PATTERNS);
+
+            if (events & IMGUI_EVENT_MOUSE_WHEEL)
+                param_set(gui->plugin, param_id, value_d);
+            gui->lfo_points_dirty = true;
+        }
+
+        int vi  = xm_droundi(xm_lerpd(value_d, 1, NUM_LFO_PATTERNS));
+        value_f = value_d = xm_normd(vi, 1, NUM_LFO_PATTERNS);
 
         nvgSetTextAlign(nvg, NVG_ALIGN_BC);
         nvgSetColour(nvg, COLOUR_TEXT);
@@ -1208,8 +1285,7 @@ void draw_lfo_section(GUI* gui)
         nvgSetColour(nvg, COLOUR_TEXT);
         nvgStroke(nvg);
 
-        const int   pattern_num   = 1;
-        const float pattern_pos_x = xm_mapf(pattern_num, 1, 8, pattern_line_x, pattern_line_r);
+        const float pattern_pos_x = xm_lerpf(value_f, pattern_line_x, pattern_line_r);
 
         float tri_b = ceilf(pattern_line_y - 4);
         float tri_y = tri_b - PATTERN_TRIANGLE_HEIGHT;
@@ -1233,7 +1309,7 @@ void draw_lfo_section(GUI* gui)
     imgui_rect grid_bg = {grid_x, grid_y, grid_r, grid_b};
 
     const int lfo_idx     = gui->plugin->selected_lfo_idx;
-    const int pattern_idx = 0;
+    const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
 
     const float pattern_length = (float)gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
     const int   num_grid_x     = pattern_length;
@@ -2716,6 +2792,9 @@ void pw_tick(void* _gui)
                 }
                 break;
             }
+            default:
+                xassert(false);
+                break;
             }
         }
 
@@ -2729,7 +2808,7 @@ void pw_tick(void* _gui)
         const float label_b     = content_cy + text_offset;
 
         static const char* NAMES[] = {"CUTOFF", "SCREAM", "RESONANCE", "INPUT", "WET"};
-        _Static_assert(ARRLEN(NAMES) == NUM_PARAMS);
+        _Static_assert(ARRLEN(NAMES) == ARRLEN(lm->param_positions_cx));
         for (int i = 0; i < ARRLEN(lm->param_positions_cx); i++)
         {
             const ParamID param_id = i;
@@ -2738,8 +2817,6 @@ void pw_tick(void* _gui)
             nvgSetTextAlign(nvg, NVG_ALIGN_BC);
             nvgSetColour(nvg, COLOUR_TEXT);
             nvgText(nvg, param_cx, label_b, NAMES[param_id], NULL);
-
-            extern double main_get_param(Plugin * p, ParamID id);
 
             imgui_rect rect;
             rect.x = param_cx - 50;
