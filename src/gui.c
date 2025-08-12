@@ -6,7 +6,7 @@
 
 #include "dsp.h"
 #include "imgui.h"
-#include "libs/sort.h"
+#include "sort.h"
 #include "widgets.h"
 
 #include <xhl/array.h>
@@ -245,7 +245,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
             .usage.vertex_buffer = true,
             .usage.stream_update = true,
             .size                = sizeof(vertex_t) * 4 * 3,
-            .label               = NVG_LABEL(knob vertices)};
+            .label               = NVG_LABEL("knob vertices")};
         gui->knob_vbo = sg_make_buffer(&knob_vbo_desc);
 
         // clang-format off
@@ -262,7 +262,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
             .usage.immutable    = true,
             .data               = SG_RANGE(KNOB_INDICES),
             .size               = sizeof(KNOB_INDICES),
-            .label              = NVG_LABEL(knob indices)};
+            .label              = NVG_LABEL("knob indices")};
         gui->knob_ibo = sg_make_buffer(&knob_ibo_desc);
 
         sg_shader              shd      = sg_make_shader(knob_shader_desc(sg_query_backend()));
@@ -283,7 +283,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
                          .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                          .dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                      }},
-            .label = NVG_LABEL(knob pipeline)};
+            .label = NVG_LABEL("knob pipeline")};
         gui->knob_pip = sg_make_pipeline(&pip_desc);
     }
 
@@ -1848,7 +1848,7 @@ void pw_tick(void* _gui)
         gui->lfo_toggle_button = lfo_btn;
 
         snvgDestroyFramebuffer(nvg, &gui->main_framebuffer);
-        gui->main_framebuffer = snvgCreateFramebuffer(nvg, lm->width, lm->height, lm->devicePixelRatio);
+        gui->main_framebuffer = snvgCreateFramebuffer(nvg, lm->width, lm->height);
 
         gui->lfo_points_dirty = true;
     }
@@ -1880,12 +1880,12 @@ void pw_tick(void* _gui)
         &(sg_pass){
             .action      = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
             .attachments = gui->main_framebuffer.att,
-            .label       = NVG_LABEL(main_framebuffer),
+            .label       = NVG_LABEL("main_framebuffer"),
         },
         gui->main_framebuffer.width,
         gui->main_framebuffer.height,
-        NVG_LABEL(main framebuffer begin pass));
-    snvg_command_draw_nvg(nvg, NVG_LABEL(main framebuffer));
+        NVG_LABEL("main framebuffer begin pass"));
+    snvg_command_draw_nvg(nvg, NVG_LABEL("main framebuffer"));
 
     // Background
     {
@@ -1913,7 +1913,7 @@ void pw_tick(void* _gui)
         x         = lm->width - 16 - w;
         nvgBeginPath(nvg);
         nvgRect(nvg, x, y, w, h);
-        nvgSetPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_id.id, 1, nvg->sampler_linear));
+        nvgSetPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_id, 1, nvg->sampler_linear));
         nvgFill(nvg);
     }
 
@@ -2640,7 +2640,7 @@ void pw_tick(void* _gui)
         }
     }
 
-    snvg_command_custom(nvg, gui, do_knob_shader, NVG_LABEL(Knob shader));
+    snvg_command_custom(nvg, gui, do_knob_shader, NVG_LABEL("Knob shader"));
 
     /*
     const float peak_gain = gui->plugin->gui_output_peak_gain;
@@ -2686,7 +2686,7 @@ void pw_tick(void* _gui)
 
     // LFO toggle button
     imgui_rect rect = gui->lfo_toggle_button;
-    snvg_command_draw_nvg(nvg, NVG_LABEL(ayy lmao));
+    snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
     nvgBeginPath(nvg);
     // nvgRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y);
     // nvgSetColour(nvg, nvgHexColour(0xff0000ff));
@@ -2699,21 +2699,21 @@ void pw_tick(void* _gui)
         draw_lfo_section(gui);
     }
 
-    snvg_command_end_pass(nvg, NVG_LABEL(end main framebuffer));
+    snvg_command_end_pass(nvg, NVG_LABEL("end main framebuffer"));
 
     snvg_command_begin_pass(
         gui->nvg,
         &(sg_pass){
             .action    = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
             .swapchain = gui->swapchain,
-            .label     = NVG_LABEL(swapchain / main),
+            .label     = NVG_LABEL("swapchain / main"),
         },
         lm->width,
         lm->height,
         0);
-    snvg_command_draw_nvg(nvg, NVG_LABEL(swapchain));
+    snvg_command_draw_nvg(nvg, NVG_LABEL("swapchain"));
 
-    int bgimg = gui->main_framebuffer.img.id;
+    sg_image bgimg = gui->main_framebuffer.img;
     nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, bgimg, 1, nvg->sampler_nearest));
     nvgBeginPath(nvg);
     nvgRect(nvg, 0, 0, lm->width, lm->height);
@@ -2793,7 +2793,7 @@ void pw_tick(void* _gui)
         pw_set_mouse_cursor(gui->pw, PW_CURSOR_DEFAULT);
     }
 
-    snvg_command_end_pass(nvg, NVG_LABEL(end swapchain));
+    snvg_command_end_pass(nvg, NVG_LABEL("end swapchain"));
     nvgEndFrame(gui->nvg);
     sg_commit();
     sg_set_global(NULL);

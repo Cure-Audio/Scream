@@ -7,3 +7,6 @@
 [submodule "modules/sokol_gfx_multiinstance"]
 	path = modules/sokol_gfx_multiinstance
 	url = https://github.com/Tremus/sokol_gfx_multiinstance
+[submodule "modules/wip_libs"]
+	path = modules/wip_libs
+	url = https://github.com/Tremus/wip_libs

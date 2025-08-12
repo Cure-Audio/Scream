@@ -109,16 +109,17 @@ set(PLUGIN_DEFINITIONS
 set(PLUGIN_SOURCES
     src/plugin.c
     src/gui.c
-
-    src/libs/linked_arena.c
     src/libs/texteditor.c
-    src/libs/nanovg2.c
+
+    modules/wip_libs/src/nanovg2.c
+    modules/wip_libs/src/linked_arena.c
     )
 
 set(PLUGIN_INCLUDE
     modules/xhl/include
     modules/CPLUG/src/
     modules/sokol_gfx_multiinstance
+    modules/wip_libs/src/
 
     src/libs
     src/shaders/

@@ -10,3 +10,11 @@
   This would make NVG only really useful for complex polygon fills & stroke expansion
 
 - Create API for batch drawing shapes ie. functions that accept arrays of data with the same fill colours
+
+- Make adding/removing/updating LFO points thread safe
+- draw multiselect
+- make multiselect work
+- make shape drawing work
+- make lfo look better
+- LFO tabs (1 & 2)
+- make pattern selection work
