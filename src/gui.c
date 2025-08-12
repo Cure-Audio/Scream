@@ -648,7 +648,7 @@ static inline double snap_point(double x)
 
 void send_points_to_lfo(GUI* gui, const imgui_rect* area)
 {
-    const int lfo_idx     = 0;
+    const int lfo_idx     = gui->plugin->selected_lfo_idx;
     const int pattern_idx = 0;
 
     const int pattern_length = gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
@@ -737,8 +737,7 @@ void update_skew_point(GUI* gui, int i, float skew)
         gui->lfo_skew_points[i].y = y;
     }
 
-    // TODO: make more thread safe way of updating point
-    const int lfo_idx     = 0;
+    const int lfo_idx     = gui->plugin->selected_lfo_idx;
     const int pattern_idx = 0;
     LFOPoint* lfo_points  = gui->plugin->lfos[lfo_idx].points[pattern_idx];
     lfo_points[i].skew    = skew;
@@ -749,7 +748,7 @@ void update_skew_point(GUI* gui, int i, float skew)
 // Clamps target_pos to boundaries. Updates relevant skew points. Updates LFO points on audio thread
 void update_lfo_point(GUI* gui, const imgui_rect* area, imgui_pt pos, int idx)
 {
-    const int lfo_idx     = 0;
+    const int lfo_idx     = gui->plugin->selected_lfo_idx;
     const int pattern_idx = 0;
 
     const LFOPoint* lfopoints  = gui->plugin->lfos[lfo_idx].points[pattern_idx];
@@ -881,8 +880,6 @@ void draw_lfo_section(GUI* gui)
         lfo_tabs[0].b = lfo_tabs[0].y + LFO_TAB_HEIGHT;
         lfo_tabs[1].b = lfo_tabs[1].y + LFO_TAB_HEIGHT;
 
-        static int active_lfo_idx = 0;
-
         for (int i = 0; i < ARRLEN(lfo_tabs); i++)
         {
             const imgui_rect* rect   = &lfo_tabs[i];
@@ -891,12 +888,12 @@ void draw_lfo_section(GUI* gui)
 
             if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
             {
-                println("TODO: LFO TAB %d", i);
-                active_lfo_idx = i;
+                gui->plugin->selected_lfo_idx = i;
+                gui->lfo_points_dirty         = true;
             }
 
             NVGcolour  col1, col2;
-            const bool is_active = active_lfo_idx == i;
+            const bool is_active = gui->plugin->selected_lfo_idx == i;
             if (is_active)
             {
                 col1 = c_light_blue;
@@ -1235,7 +1232,7 @@ void draw_lfo_section(GUI* gui)
 
     imgui_rect grid_bg = {grid_x, grid_y, grid_r, grid_b};
 
-    const int lfo_idx     = 0;
+    const int lfo_idx     = gui->plugin->selected_lfo_idx;
     const int pattern_idx = 0;
 
     const float pattern_length = (float)gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
@@ -1264,6 +1261,8 @@ void draw_lfo_section(GUI* gui)
     {
         gui->lfo_points_dirty      = false;
         gui->lfo_cached_path_dirty = true;
+
+        xarr_setlen(gui->selected_point_indexes, 0);
 
         LFOPoint* const lfo_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
 

@@ -13,6 +13,5 @@
 
 - make shape drawing work
 - make lfo look better
-- LFO tabs (1 & 2)
 - make pattern selection work
 - save LFO state
