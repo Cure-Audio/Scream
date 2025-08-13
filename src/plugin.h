@@ -44,6 +44,20 @@ enum
     EVENT_QUEUE_MASK = 255,
 };
 
+enum ShapeButtonType
+{
+    SHAPE_FLAT,
+    SHAPE_LINEAR_ASC,
+    SHAPE_LINEAR_DESC,
+    SHAPE_CONVEX_ASC,
+    SHAPE_CONCAVE_DESC,
+    SHAPE_CONCAVE_ASC,
+    SHAPE_CONVEX_DESC,
+    SHAPE_TRIANGLE_UP,
+    SHAPE_TRIANGLE_DOWN,
+    SHAPE_COUNT,
+};
+
 typedef enum EventType
 {
     EVENT_SET_PARAMETER = 16,
@@ -106,10 +120,11 @@ typedef struct Plugin
     CplugHostContext* cplug_ctx;
 
     // Retained data for GUI
-    void*   gui;
-    int     width, height;
-    bool    lfo_section_open;
-    uint8_t selected_lfo_idx;
+    void*                gui;
+    int                  width, height;
+    bool                 lfo_section_open;
+    uint8_t              selected_lfo_idx;
+    enum ShapeButtonType lfo_shape_idx;
 
     // two floats, stored as a u64
     xt_atomic_uint64_t gui_input_peak_gain;

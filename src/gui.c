@@ -847,7 +847,8 @@ void draw_lfo_section(GUI* gui)
         GRID_BUTTON_BUTTON_GAP = 8,
         GRID_BUTTON_TEXT_GAP   = 16,
 
-        SHAPES_WIDTH = 40, // LFO shape buttons are square
+        SHAPES_WIDTH         = 40, // LFO shape buttons are square
+        SHAPES_INNER_PADDING = 8,
 
         CONTENT_PADDING_X = 32,
         CONTENT_PADDING_Y = 16,
@@ -924,7 +925,7 @@ void draw_lfo_section(GUI* gui)
 
             if (is_active)
             {
-                NVGcolour glow_icol = nvgHexColour(0x459DB5FF);
+                NVGcolour glow_icol = COLOUR_BLUE_SECONDARY;
                 NVGcolour glow_ocol = glow_icol;
                 glow_ocol.a         = 0;
                 float width         = rect->r - rect->x;
@@ -1099,100 +1100,98 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
-    enum ShapeButtonType
+    float shape_x = content_x;
+    float shape_y = display_b - CONTENT_PADDING_Y - SHAPES_WIDTH;
+
     {
-        SHAPE_FLAT,
-        SHAPE_LINEAR_ASC,
-        SHAPE_LINEAR_DESC,
-        SHAPE_CONVEX_ASC,
-        SHAPE_CONCAVE_DESC,
-        SHAPE_CONCAVE_ASC,
-        SHAPE_CONVEX_DESC,
-        SHAPE_TRIANGLE_UP,
-        SHAPE_TRIANGLE_DOWN,
-        SHAPE_COUNT,
-    };
+        imgui_rect buttons[SHAPE_COUNT];
 
-    float shape_x       = content_x;
-    float shape_y       = display_b - CONTENT_PADDING_Y - SHAPES_WIDTH;
-    float shape_inner_y = shape_y + 8;
-    float shape_inner_b = shape_y + SHAPES_WIDTH - 8;
-    float shape_inner_x = shape_x + 8;
-    float shape_inner_r = shape_x + SHAPES_WIDTH - 8;
-
-    nvgBeginPath(nvg);
-    for (int i = 0; i < SHAPE_COUNT; i++)
-    {
-        imgui_rect rect = {shape_x, shape_y, shape_x + SHAPES_WIDTH, shape_y + SHAPES_WIDTH};
-
-        unsigned wid    = 'lshp' + i;
-        unsigned events = imgui_get_events_rect(im, wid, &rect);
-
-        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        for (int i = 0; i < ARRLEN(buttons); i++)
         {
-            println("TODO: handle changing draw LFO shapes: %d", i);
+            imgui_rect* rect = buttons + i;
+            rect->x          = content_x + i * SHAPES_WIDTH;
+            rect->y          = shape_y;
+            rect->r          = content_x + (i + 1) * SHAPES_WIDTH;
+            rect->b          = shape_y + SHAPES_WIDTH;
+
+            unsigned wid    = 'lshp' + i;
+            unsigned events = imgui_get_events_rect(im, wid, rect);
+
+            if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+            {
+                gui->plugin->lfo_shape_idx = i;
+            }
         }
 
-        // nvgBeginPath(nvg);
-        // nvgSetColour(nvg, COLOUR_BG_LIGHT);
-        // nvgRect(nvg, shape_x, shape_y, SHAPES_WIDTH, SHAPES_WIDTH);
-        // nvgFill(nvg);
+        imgui_rect* active_area = buttons + gui->plugin->lfo_shape_idx;
+        nvgBeginPath(nvg);
+        nvgSetColour(nvg, COLOUR_BLUE_SECONDARY);
+        nvgRect2(nvg, active_area->x, active_area->y, active_area->r, active_area->b);
+        nvgFill(nvg);
 
-        const enum ShapeButtonType type = i;
-        switch (type)
+        nvgBeginPath(nvg);
+        for (int i = 0; i < ARRLEN(buttons); i++)
         {
-        case SHAPE_FLAT:
-        {
-            float cy = floorf(shape_y + SHAPES_WIDTH * 0.5f) + 0.5f;
-            nvgMoveTo(nvg, shape_inner_x, cy);
-            nvgLineTo(nvg, shape_inner_r, cy);
-            break;
-        }
-        case SHAPE_LINEAR_ASC:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
-            nvgLineTo(nvg, shape_inner_r, shape_inner_y);
-            break;
-        case SHAPE_LINEAR_DESC:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
-            nvgLineTo(nvg, shape_inner_r, shape_inner_b);
-            break;
-        case SHAPE_CONCAVE_ASC:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
-            nvgQuadTo(nvg, shape_inner_r, shape_inner_b, shape_inner_r, shape_inner_y);
-            break;
-        case SHAPE_CONVEX_ASC:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
-            nvgQuadTo(nvg, shape_inner_x, shape_inner_y, shape_inner_r, shape_inner_y);
-            break;
-        case SHAPE_CONCAVE_DESC:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
-            nvgQuadTo(nvg, shape_inner_x, shape_inner_b, shape_inner_r, shape_inner_b);
-            break;
-        case SHAPE_CONVEX_DESC:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
-            nvgQuadTo(nvg, shape_inner_r, shape_inner_y, shape_inner_r, shape_inner_b);
-            break;
-        case SHAPE_TRIANGLE_UP:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_b);
-            nvgLineTo(nvg, shape_x + SHAPES_WIDTH * 0.5f, shape_inner_y);
-            nvgLineTo(nvg, shape_inner_r, shape_inner_b);
-            break;
-        case SHAPE_TRIANGLE_DOWN:
-            nvgMoveTo(nvg, shape_inner_x, shape_inner_y);
-            nvgLineTo(nvg, shape_x + SHAPES_WIDTH * 0.5f, shape_inner_b);
-            nvgLineTo(nvg, shape_inner_r, shape_inner_y);
-            break;
-        case SHAPE_COUNT:
-            break;
-        }
+            const imgui_rect* rect = buttons + i;
 
-        shape_x       += SHAPES_WIDTH;
-        shape_inner_x += SHAPES_WIDTH;
-        shape_inner_r += SHAPES_WIDTH;
+            imgui_rect inner  = *rect;
+            inner.x          += SHAPES_INNER_PADDING;
+            inner.y          += SHAPES_INNER_PADDING;
+            inner.r          -= SHAPES_INNER_PADDING;
+            inner.b          -= SHAPES_INNER_PADDING;
+
+            const enum ShapeButtonType type = i;
+            switch (type)
+            {
+            case SHAPE_FLAT:
+            {
+                float cy = floorf(shape_y + SHAPES_WIDTH * 0.5f) + 0.5f;
+                nvgMoveTo(nvg, inner.x, cy);
+                nvgLineTo(nvg, inner.r, cy);
+                break;
+            }
+            case SHAPE_LINEAR_ASC:
+                nvgMoveTo(nvg, inner.x, inner.b);
+                nvgLineTo(nvg, inner.r, inner.y);
+                break;
+            case SHAPE_LINEAR_DESC:
+                nvgMoveTo(nvg, inner.x, inner.y);
+                nvgLineTo(nvg, inner.r, inner.b);
+                break;
+            case SHAPE_CONCAVE_ASC:
+                nvgMoveTo(nvg, inner.x, inner.b);
+                nvgQuadTo(nvg, inner.r, inner.b, inner.r, inner.y);
+                break;
+            case SHAPE_CONVEX_ASC:
+                nvgMoveTo(nvg, inner.x, inner.b);
+                nvgQuadTo(nvg, inner.x, inner.y, inner.r, inner.y);
+                break;
+            case SHAPE_CONCAVE_DESC:
+                nvgMoveTo(nvg, inner.x, inner.y);
+                nvgQuadTo(nvg, inner.x, inner.b, inner.r, inner.b);
+                break;
+            case SHAPE_CONVEX_DESC:
+                nvgMoveTo(nvg, inner.x, inner.y);
+                nvgQuadTo(nvg, inner.r, inner.y, inner.r, inner.b);
+                break;
+            case SHAPE_TRIANGLE_UP:
+                nvgMoveTo(nvg, inner.x, inner.b);
+                nvgLineTo(nvg, (inner.x + inner.r) * 0.5f, inner.y);
+                nvgLineTo(nvg, inner.r, inner.b);
+                break;
+            case SHAPE_TRIANGLE_DOWN:
+                nvgMoveTo(nvg, inner.x, inner.y);
+                nvgLineTo(nvg, (inner.x + inner.r) * 0.5f, inner.b);
+                nvgLineTo(nvg, inner.r, inner.y);
+                break;
+            case SHAPE_COUNT:
+                break;
+            }
+        }
+        nvgSetColour(nvg, COLOUR_WHITE);
+        nvgSetStrokeWidth(nvg, 1.2f);
+        nvgStroke(nvg);
     }
-    nvgSetColour(nvg, nvgHexColour(0xffffffff));
-    nvgSetStrokeWidth(nvg, 1.2f);
-    nvgStroke(nvg);
 
     float pattern_r  = content_r;
     float pattern_x  = xm_maxf(pattern_r - PATTERN_WIDTH, shape_x);
@@ -2581,7 +2580,7 @@ void pw_tick(void* _gui)
                     }
                     if (has_peaks)
                     {
-                        nvgSetColour(nvg, nvgHexColour(0x459DB5FF));
+                        nvgSetColour(nvg, COLOUR_BLUE_SECONDARY);
                         nvgFill(nvg);
                     }
 
