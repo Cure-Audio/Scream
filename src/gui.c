@@ -884,7 +884,6 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
     const float area_width  = area->r - area->x;
     const float area_height = area->b - area->y;
 
-    // TODO: replace this with better grid
     const int lfo_grid_x = pattern_length * gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
     const int lfo_grid_y = gui->plugin->lfos[lfo_idx].grid_y[pattern_idx];
 
@@ -900,7 +899,6 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
     float      y            = pos.y;
     if (snap_to_grid)
     {
-        // TODO: snap to Y grid
         for (int j = 0; j <= lfo_grid_y; j++)
         {
             float snap_y = area->y + j * y_inc;
@@ -940,7 +938,7 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
         pt_y_right = area->y;
         break;
     case SHAPE_COUNT:
-        xassert(false); // TODO!
+        xassert(false);
         break;
     }
 
@@ -1235,8 +1233,6 @@ void draw_lfo_section(GUI* gui)
                 nvgSetColour(nvg, col2);
                 nvgStroke(nvg, 1.1); // rounded edges looks better when stroke width >1
             }
-
-            // TODO: draw text and icon
 
             // snap half pixel
             float icon_x = floorf(rect->x + LFO_TAB_ICON_PADDING) + 0.5f;
