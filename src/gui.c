@@ -737,19 +737,9 @@ void update_skew_point(GUI* gui, int i, float skew)
         // x is always halfway between points
         gui->lfo_skew_points[i].x = (gui->lfo_points[i].x + gui->lfo_points[i + 1].x) * 0.5f;
         // skew amount controls y coord
-        float y;
-        if (gui->lfo_points[i].y == gui->lfo_points[i + 1].y)
-            y = gui->lfo_points[i].y;
-        else
-        {
-            float skewpos;
-            float skewAmt = 1 - skew;
-            if (gui->lfo_points[i].y < gui->lfo_points[i + 1].y)
-                skewpos = skewf(0.5f, skewAmt);
-            else
-                skewpos = 1.0f - skewf(0.5f, skewAmt);
-            y = xm_lerpf(skewpos, gui->lfo_points[i].y, gui->lfo_points[i + 1].y);
-        }
+        const imgui_pt* pt1 = gui->lfo_points + i;
+        const imgui_pt* pt2 = gui->lfo_points + i + 1;
+        const float     y   = interp_points(0.5f, 1 - skew, pt1->y, pt2->y);
 
         gui->lfo_skew_points[i].y = y;
     }
@@ -827,6 +817,225 @@ static void insert_lfo_point(GUI* gui, imgui_pt pos, int idx, const imgui_rect* 
         update_skew_point(gui, idx, 0.5f);
 
     gui->lfo_cached_path_dirty = true;
+}
+
+static void delete_lfo_point(GUI* gui, int idx)
+{
+    xassert(idx > 0);
+    xassert(idx != xarr_len(gui->lfo_skew_points));
+    xassert(xarr_len(gui->lfo_skew_points) == (xarr_len(gui->lfo_points) - 1));
+
+    xarr_delete(gui->lfo_points, idx);
+    xarr_delete(gui->lfo_skew_points, idx - 1);
+    // when user clears the "last point", reset neighbouring skew amounts
+    update_skew_point(gui, idx - 1, 0.5f);
+}
+
+// First draft for painting shapes on the LFO grid.
+void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
+{
+    gui->selection_start.u64 = 0;
+    gui->selection_end.u64   = 0;
+    xarr_setlen(gui->selected_point_indexes, 0);
+
+    const enum ShapeButtonType shape_type = gui->plugin->lfo_shape_idx;
+    xassert(shape_type >= 0 && shape_type < SHAPE_COUNT);
+
+    const int lfo_idx     = gui->plugin->selected_lfo_idx;
+    const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
+
+    const float pattern_length = (float)gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
+
+    const float area_width  = area->r - area->x;
+    const float area_height = area->b - area->y;
+
+    // TODO: replace this with better grid
+    const int lfo_grid_x = pattern_length;
+    const int lfo_grid_y = 1;
+
+    const float x_inc = area_width / (float)lfo_grid_x;
+    const float y_inc = area_height / (float)lfo_grid_y;
+
+    int grid_idx_left    = (int)((pos.x - area->x) / x_inc);
+    grid_idx_left        = xm_clampi(grid_idx_left, 0, lfo_grid_x - 1);
+    float boundary_left  = area->x + grid_idx_left * x_inc;
+    float boundary_right = area->x + (grid_idx_left + 1) * x_inc;
+
+    const bool snap_to_grid = gui->imgui.frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_ALT;
+    float      y            = pos.y;
+    if (snap_to_grid)
+    {
+        // TODO: snap to Y grid
+    }
+
+    y = xm_clampf(y, area->y, area->r);
+
+    // New points at grid boundary
+    float pt_y_left = y, pt_y_right = y;
+    switch (shape_type)
+    {
+    case SHAPE_FLAT:
+        break;
+    case SHAPE_LINEAR_ASC:
+    case SHAPE_CONVEX_ASC:
+    case SHAPE_CONCAVE_ASC:
+        pt_y_left = area->b;
+        break;
+    case SHAPE_LINEAR_DESC:
+    case SHAPE_CONVEX_DESC:
+    case SHAPE_CONCAVE_DESC:
+        pt_y_right = area->b;
+        break;
+
+    case SHAPE_TRIANGLE_UP:
+    case SHAPE_TRIANGLE_DOWN:
+        pt_y_left  = area->b;
+        pt_y_right = area->b;
+        break;
+    case SHAPE_COUNT:
+        xassert(false); // TODO!
+        break;
+    }
+
+    // Delete points inside boundary range
+    {
+        const int num_points =
+            xarr_len(gui->lfo_points); // note, len(gui->lfo_points) is the same as len(lfo->skew_points) + 1
+        for (int i = num_points - 1; i-- != 1;)
+        {
+            xassert(i > 0);
+            bool between  = boundary_left < gui->lfo_points[i].x;
+            between      &= gui->lfo_points[i].x < boundary_right;
+
+            if (between)
+                delete_lfo_point(gui, i);
+        }
+    }
+
+    // Count points at boundaries
+    int num_points                   = xarr_len(gui->lfo_points);
+    int right_idx                    = -1;
+    int num_points_at_right_boundary = 0;
+    int left_idx                     = -1;
+    int num_points_at_left_boundary  = 0;
+
+    // Count right
+    {
+        for (int i = num_points; i-- != 0;)
+        {
+            if (gui->lfo_points[i].x == boundary_right)
+            {
+                num_points_at_right_boundary++;
+            }
+            if (gui->lfo_points[i].x < boundary_right)
+            {
+                right_idx = i + 1;
+                break;
+            }
+        }
+        xassert(right_idx >= 0);
+    }
+
+    // Count left
+    {
+        for (int i = 0; i < num_points; i++)
+        {
+            if (gui->lfo_points[i].x == boundary_left)
+            {
+                num_points_at_left_boundary++;
+            }
+            if (gui->lfo_points[i].x > boundary_left)
+            {
+                left_idx = i - 1;
+                break;
+            }
+        }
+        xassert(left_idx >= 0);
+    }
+
+    // If there are no points at the left & right boundaries, calculate the existing Y values at those points and insert
+    // them as points
+    {
+        float interp_y_right = 0, interp_y_left = 0;
+        if (num_points_at_right_boundary == 0)
+        {
+            float skew = calculate_point_skew(gui, right_idx - 1);
+
+            const imgui_pt* pt      = gui->lfo_points + right_idx - 1;
+            const imgui_pt* next_pt = gui->lfo_points + right_idx;
+            const imgui_pt* skew_pt = gui->lfo_skew_points + right_idx - 1;
+
+            float amt      = xm_normf(boundary_right, pt->x, next_pt->x);
+            interp_y_right = interp_points(amt, 1 - skew, pt->y, next_pt->y);
+        }
+
+        if (num_points_at_left_boundary == 0)
+        {
+            float skew = calculate_point_skew(gui, left_idx);
+
+            const imgui_pt* pt      = gui->lfo_points + left_idx;
+            const imgui_pt* next_pt = gui->lfo_points + left_idx + 1;
+            const imgui_pt* skew_pt = gui->lfo_skew_points + left_idx;
+
+            float amt     = xm_normf(boundary_left, pt->x, next_pt->x);
+            interp_y_left = interp_points(amt, 1 - skew, pt->y, next_pt->y);
+        }
+
+        if (num_points_at_right_boundary == 0)
+        {
+            imgui_pt pt = {boundary_right, interp_y_right};
+            insert_lfo_point(gui, pt, right_idx, area);
+            num_points++;
+            num_points_at_right_boundary++;
+        }
+        if (num_points_at_left_boundary == 0)
+        {
+            imgui_pt pt = {boundary_left, interp_y_left};
+            insert_lfo_point(gui, pt, left_idx + 1, area);
+            num_points++;
+            num_points_at_left_boundary++;
+            left_idx++;
+            right_idx++;
+        }
+    }
+
+    if (num_points_at_right_boundary == 1)
+    {
+        imgui_pt pt = {boundary_right, pt_y_right};
+        insert_lfo_point(gui, pt, right_idx, area);
+        num_points++;
+        num_points_at_right_boundary++;
+    }
+    else
+    {
+        xassert(num_points_at_right_boundary >= 2);
+        imgui_pt pt = {boundary_right, pt_y_right};
+        update_lfo_point(gui, area, pt, right_idx);
+    }
+
+    if (num_points_at_left_boundary == 1)
+    {
+        imgui_pt prev_pt = gui->lfo_points[left_idx];
+        imgui_pt pt      = {boundary_left, pt_y_left};
+        if (prev_pt.x != pt.x || prev_pt.y != pt.y)
+        {
+            insert_lfo_point(gui, pt, left_idx + 1, area);
+            num_points++;
+            num_points_at_left_boundary++;
+            left_idx++;
+        }
+    }
+    else
+    {
+        xassert(num_points_at_left_boundary >= 2);
+        imgui_pt pt = {boundary_left, pt_y_left};
+        update_lfo_point(gui, area, pt, left_idx);
+    }
+    xassert(num_points_at_right_boundary == 2);
+    xassert(left_idx > 0 ? num_points_at_left_boundary == 2 : num_points_at_left_boundary >= 1);
+
+    send_points_to_lfo(gui, area);
+    gui->lfo_points_dirty = true;
 }
 
 void draw_lfo_section(GUI* gui)
@@ -1315,7 +1524,7 @@ void draw_lfo_section(GUI* gui)
 
     enum
     {
-        LFO_POINT_CLICK_RADIUS = 12,
+        LFO_POINT_CLICK_RADIUS = 15,
         LFO_POINT_RADIUS       = 4,
         LFO_SKEW_POINT_RADIUS  = 3,
         LFO_SKEW_DRAG_RANGE    = 250,
@@ -1382,19 +1591,7 @@ void draw_lfo_section(GUI* gui)
             }
             else
             {
-                float y;
-                if (p->y == next_p->y)
-                    y = p->y;
-                else
-                {
-                    float pos;
-                    float skew_amt = it->skew;
-                    if (p->y < next_p->y)
-                        pos = skewf(0.5, skew_amt);
-                    else
-                        pos = 1.0f - skewf(0.5f, skew_amt);
-                    y = xm_lerpf(pos, p->y, next_p->y);
-                }
+                float y = interp_points(0.5f, it->skew, p->y, next_p->y);
 
                 // x is always halfway between points
                 sp->x = (p->x + next_p->x) * 0.5f;
@@ -1543,14 +1740,7 @@ void draw_lfo_section(GUI* gui)
 
         if (delete_pt_idx > 0)
         {
-            xassert(delete_pt_idx != 0);
-            xassert(delete_pt_idx != xarr_len(gui->lfo_skew_points));
-            xassert(xarr_len(gui->lfo_skew_points) == (xarr_len(gui->lfo_points) - 1));
-
-            xarr_delete(gui->lfo_points, delete_pt_idx);
-            xarr_delete(gui->lfo_skew_points, delete_pt_idx - 1);
-            // when user clears the "last point", reset neighbouring skew amounts
-            update_skew_point(gui, delete_pt_idx - 1, 0.5f);
+            delete_lfo_point(gui, delete_pt_idx);
 
             pt_hover_idx      = -1;
             pt_hover_skew_idx = -1;
@@ -1622,7 +1812,17 @@ void draw_lfo_section(GUI* gui)
     const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &grid_bg);
     if (grid_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
     {
-        if (im->left_click_counter == 1)
+        imgui_pt pos;
+        pos.x = floorf(im->pos_mouse_down.x);
+        pos.y = floorf(im->pos_mouse_down.y);
+
+        bool should_draw_shape = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_CTRL;
+        if (should_draw_shape)
+        {
+            im->left_click_counter = 0;
+            drag_and_draw_lfo_points(gui, pos, &grid_bg);
+        }
+        else if (im->left_click_counter == 1)
         {
             bool shift_click = (PW_MOD_KEY_SHIFT | PW_MOD_LEFT_BUTTON) == im->frame.modifiers_mouse_down;
             if (shift_click == false)
@@ -1630,8 +1830,8 @@ void draw_lfo_section(GUI* gui)
                 xarr_setlen(gui->selected_point_indexes, 0);
             }
 
-            gui->selection_start.x = floorf(im->pos_mouse_down.x);
-            gui->selection_start.y = floorf(im->pos_mouse_down.y);
+            gui->selection_start.x = pos.x;
+            gui->selection_start.y = pos.y;
             gui->selection_end.u64 = gui->selection_start.u64;
         }
         else if (im->left_click_counter == 2)
@@ -1644,11 +1844,11 @@ void draw_lfo_section(GUI* gui)
             {
                 if (mouse_down.x >= gui->lfo_points[i].x)
                 {
-                    imgui_pt pos;
-                    pos.x = xm_clampf(mouse_down.x, grid_bg.x, grid_bg.r);
-                    pos.y = xm_clampf(mouse_down.y, grid_bg.y, grid_bg.b);
+                    imgui_pt pt;
+                    pt.x = xm_clampf(mouse_down.x, grid_bg.x, grid_bg.r);
+                    pt.y = xm_clampf(mouse_down.y, grid_bg.y, grid_bg.b);
 
-                    insert_lfo_point(gui, pos, i + 1, &grid_bg);
+                    insert_lfo_point(gui, pt, i + 1, &grid_bg);
                     send_points_to_lfo(gui, &grid_bg);
 
                     pt_hover_idx = i + 1;
@@ -1664,28 +1864,37 @@ void draw_lfo_section(GUI* gui)
     }
     if (grid_events & IMGUI_EVENT_DRAG_MOVE)
     {
+        bool     should_draw_shape = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_CTRL;
         imgui_pt pos;
-        pos.x                = floorf(im->pos_mouse_move.x);
-        pos.y                = floorf(im->pos_mouse_move.y);
-        gui->selection_end.x = xm_clampf(pos.x, grid_x, grid_r);
-        gui->selection_end.y = xm_clampf(pos.y, grid_y, grid_b);
+        pos.x = floorf(im->pos_mouse_move.x);
+        pos.y = floorf(im->pos_mouse_move.y);
 
-        if (gui->selection_start.u64 != 0 && gui->selection_start.u64 != gui->selection_end.u64)
+        if (should_draw_shape)
         {
-            const imgui_rect area = {
-                xm_minf(gui->selection_start.x, gui->selection_end.x),
-                xm_minf(gui->selection_start.y, gui->selection_end.y),
-                xm_maxf(gui->selection_start.x, gui->selection_end.x) + 1,
-                xm_maxf(gui->selection_start.y, gui->selection_end.y) + 1};
+            drag_and_draw_lfo_points(gui, pos, &grid_bg);
+        }
+        else
+        {
+            gui->selection_end.x = xm_clampf(pos.x, grid_x, grid_r);
+            gui->selection_end.y = xm_clampf(pos.y, grid_y, grid_b);
 
-            const int N = xarr_len(gui->lfo_points);
-            xarr_setcap(gui->selected_point_indexes, N);
-
-            for (int i = 0; i < N; i++)
+            if (gui->selection_start.u64 != 0 && gui->selection_start.u64 != gui->selection_end.u64)
             {
-                const imgui_pt pt = gui->lfo_points[i];
-                if (imgui_hittest_rect(pt, &area))
-                    lfo_points_add_selected(gui, i);
+                const imgui_rect area = {
+                    xm_minf(gui->selection_start.x, gui->selection_end.x),
+                    xm_minf(gui->selection_start.y, gui->selection_end.y),
+                    xm_maxf(gui->selection_start.x, gui->selection_end.x) + 1,
+                    xm_maxf(gui->selection_start.y, gui->selection_end.y) + 1};
+
+                const int N = xarr_len(gui->lfo_points);
+                xarr_setcap(gui->selected_point_indexes, N);
+
+                for (int i = 0; i < N; i++)
+                {
+                    const imgui_pt pt = gui->lfo_points[i];
+                    if (imgui_hittest_rect(pt, &area))
+                        lfo_points_add_selected(gui, i);
+                }
             }
         }
     }
@@ -1710,6 +1919,8 @@ void draw_lfo_section(GUI* gui)
         const imgui_pt* next_pt = gui->lfo_points + 1;
         const imgui_pt* end     = gui->lfo_points + xarr_len(gui->lfo_points) - 1;
         const imgui_pt* skew_pt = gui->lfo_skew_points;
+
+        points[npoints++] = *pt;
         while (pt != end)
         {
             if (pos.x >= next_pt->x)
@@ -1729,19 +1940,9 @@ void draw_lfo_section(GUI* gui)
 
                 float norm_pos = xm_normf(pos.x, pt->x, next_pt->x);
 
-                if (pt->y == next_pt->y)
-                    pos.y = pt->y;
-                else
-                {
-                    // A smart person could turn this into a bezier curve with only a few points (destination point +
-                    // control points). I am not a smart person who can do that.
-                    float skewPos;
-                    if (pt->y < next_pt->y)
-                        skewPos = skewf(norm_pos, skew_amt);
-                    else
-                        skewPos = 1.0f - skewf(1.0f - norm_pos, skew_amt);
-                    pos.y = xm_lerpf(skewPos, pt->y, next_pt->y);
-                }
+                // A smart person could turn this into a bezier curve with only a few points (destination point +
+                // control points). I am not a smart person who can do that.
+                pos.y = interp_points(norm_pos, skew_amt, pt->y, next_pt->y);
 
                 points[npoints++] = pos;
 

@@ -236,18 +236,7 @@ void render_lfo(Plugin* p, int num_samples, int lfo_idx)
         rel_position       /= pt2.x - pt1.x;
 
         // Calc LFO value
-        float v;
-        if (pt1.x == pt2.x)
-        {
-            v = pt1.y;
-        }
-        else
-        {
-            float skewPos = pt1.y < pt2.y ? skewf(rel_position, pt1.skew) : 1.0f - skewf(1.0f - rel_position, pt1.skew);
-
-            v = xm_lerpf(skewPos, pt1.y, pt2.y);
-            xassert(v >= 0 && v <= 1);
-        }
+        float v = interp_points(rel_position, pt1.skew, pt1.y, pt2.y);
 
         buffer[i].data[lfo_idx] = v;
 
