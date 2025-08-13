@@ -1291,22 +1291,16 @@ void draw_lfo_section(GUI* gui)
                             {
                                 gui->lfo_points[npoints++] = *p2;
 
-                                // Clamp dragged point to nearby point
-                                if (p2->x >= range_l && p2->x <= clamp_range_l)
-                                {
+                                if (p2->x >= range_l) // Clamp dragged point to nearby point
                                     drag_pos.x = xm_maxf(p2->x, drag_pos.x);
-                                    xassert(drag_pos.x >= p2->x);
-                                }
+                                xassert(drag_pos.x >= p2->x);
                             }
                             else if (j > sel_idx && p2->x >= clamp_range_r)
                             {
                                 gui->lfo_points[npoints++] = *p2;
-                                // Clamp dragged point to nearby point
-                                if (p2->x >= clamp_range_r && p2->x <= range_r)
-                                {
+                                if (p2->x <= range_r) // Clamp dragged point to nearby point
                                     drag_pos.x = xm_minf(p2->x, drag_pos.x);
-                                    xassert(drag_pos.x <= p2->x);
-                                }
+                                xassert(drag_pos.x <= p2->x);
                             }
                             else
                             {
