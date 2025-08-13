@@ -83,6 +83,9 @@ typedef struct LFO
 
     // Length in beats
     int pattern_length[NUM_LFO_PATTERNS];
+
+    int grid_x[NUM_LFO_PATTERNS];
+    int grid_y[NUM_LFO_PATTERNS];
 } LFO;
 
 typedef union LFOEvent

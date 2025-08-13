@@ -13,6 +13,5 @@
 
 - add ability to assign/unassign lfo mods & change amounts
 - display modulated paramters
-- make shape drawing work
 - make lfo look better
 - save LFO state (DAW project load/save)

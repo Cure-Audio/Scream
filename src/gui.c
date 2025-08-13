@@ -27,6 +27,14 @@
 
 #include <knob.glsl.h>
 
+enum
+{
+    LFO_POINT_CLICK_RADIUS = 12,
+    LFO_POINT_RADIUS       = 4,
+    LFO_SKEW_POINT_RADIUS  = 3,
+    LFO_SKEW_DRAG_RANGE    = 250,
+};
+
 extern double main_get_param(Plugin* p, ParamID id);
 
 static inline int main_get_lfo_pattern_idx(Plugin* p)
@@ -851,8 +859,8 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
     const float area_height = area->b - area->y;
 
     // TODO: replace this with better grid
-    const int lfo_grid_x = pattern_length;
-    const int lfo_grid_y = 1;
+    const int lfo_grid_x = pattern_length * gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
+    const int lfo_grid_y = gui->plugin->lfos[lfo_idx].grid_y[pattern_idx];
 
     const float x_inc = area_width / (float)lfo_grid_x;
     const float y_inc = area_height / (float)lfo_grid_y;
@@ -863,13 +871,22 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
     float boundary_right = area->x + (grid_idx_left + 1) * x_inc;
 
     const bool snap_to_grid = gui->imgui.frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_ALT;
-    float      y            = xm_clampf(pos.y, area->y, area->b);
+    float      y            = pos.y;
     if (snap_to_grid)
     {
         // TODO: snap to Y grid
+        for (int j = 0; j < lfo_grid_y; j++)
+        {
+            float snap_y = area->y + j * y_inc;
+            if (snap_y - LFO_POINT_CLICK_RADIUS <= pos.y && pos.y <= snap_y + LFO_POINT_CLICK_RADIUS)
+            {
+                y = snap_y;
+                break;
+            }
+        }
     }
 
-    y = xm_clampf(y, area->y, area->r);
+    y = xm_clampf(y, area->y, area->b);
 
     // New points at grid boundary
     float pt_y_left = y, pt_y_right = y;
@@ -1037,6 +1054,10 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
     }
     xassert(num_points_at_right_boundary == 2);
 
+    if (shape_type == SHAPE_LINEAR_ASC || shape_type == SHAPE_LINEAR_DESC)
+    {
+        update_skew_point(gui, left_idx, 0.5);
+    }
     if (shape_type == SHAPE_CONVEX_ASC || shape_type == SHAPE_CONVEX_DESC)
     {
         update_skew_point(gui, left_idx, 0.85);
@@ -1275,20 +1296,20 @@ void draw_lfo_section(GUI* gui)
         const float button_bottom = top_text_cy + GRID_BUTTON_HEIGHT * 0.5f;
         enum
         {
-            BUTTON_GRID_HALF,
-            BUTTON_GRID_DOUBLE,
+            BUTTON_GRID_DEC,
+            BUTTON_GRID_INC,
             BUTTON_LENGTH_HALF,
             BUTTON_LENGTH_DOUBLE,
             BUTTON_COUNT,
         };
         imgui_rect buttons[BUTTON_COUNT];
 
-        buttons[BUTTON_GRID_HALF].x     = content_x + label_grid_width + GRID_BUTTON_TEXT_GAP;
-        buttons[BUTTON_GRID_DOUBLE].x   = buttons[BUTTON_GRID_HALF].x + GRID_BUTTON_WIDTH + GRID_BUTTON_BUTTON_GAP;
+        buttons[BUTTON_GRID_DEC].x      = content_x + label_grid_width + GRID_BUTTON_TEXT_GAP;
+        buttons[BUTTON_GRID_INC].x      = buttons[BUTTON_GRID_DEC].x + GRID_BUTTON_WIDTH + GRID_BUTTON_BUTTON_GAP;
         buttons[BUTTON_LENGTH_HALF].x   = content_r - 2 * GRID_BUTTON_WIDTH - GRID_BUTTON_BUTTON_GAP;
         buttons[BUTTON_LENGTH_DOUBLE].x = content_r - GRID_BUTTON_WIDTH;
 
-        static const char* btn_labels[] = {"÷2", "×2"};
+        static const char* btn_labels[] = {"-1", "+1", "÷2", "×2"};
 
         for (int btn_idx = 0; btn_idx < BUTTON_COUNT; btn_idx++)
         {
@@ -1303,13 +1324,23 @@ void draw_lfo_section(GUI* gui)
 
             if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
             {
-                println("CLICKED BUTTON: %d", btn_idx);
+                int lfo_idx     = gui->plugin->selected_lfo_idx;
+                int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
+
+                if (btn_idx == BUTTON_GRID_DEC || btn_idx == BUTTON_GRID_INC)
+                {
+                    int ngrid = gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
+                    if (btn_idx == BUTTON_GRID_DEC)
+                        ngrid--;
+                    if (btn_idx == BUTTON_GRID_INC)
+                        ngrid++;
+                    ngrid = xm_clampi(ngrid, 1, 8);
+
+                    gui->plugin->lfos[lfo_idx].grid_x[pattern_idx] = ngrid;
+                }
 
                 if (btn_idx == BUTTON_LENGTH_HALF || btn_idx == BUTTON_LENGTH_DOUBLE)
                 {
-                    int lfo_idx     = gui->plugin->selected_lfo_idx;
-                    int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
-
                     int pattern_length = gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
 
                     if (btn_idx == BUTTON_LENGTH_HALF)
@@ -1399,12 +1430,12 @@ void draw_lfo_section(GUI* gui)
             nvgFill(nvg);
 
             nvgSetColour(nvg, COLOUR_GREY_1);
-            int txt_idx = btn_idx & 1;
             nvgSetTextAlign(nvg, NVG_ALIGN_CC);
-            nvgText(nvg, btn_cx, text_cy, btn_labels[txt_idx], NULL);
+            nvgText(nvg, btn_cx, text_cy, btn_labels[btn_idx], NULL);
         }
     }
 
+    // LFO Draw shapes
     float shape_x = content_x;
     float shape_y = display_b - CONTENT_PADDING_Y - SHAPES_WIDTH;
 
@@ -1504,6 +1535,7 @@ void draw_lfo_section(GUI* gui)
         nvgStroke(nvg, 1.2f);
     }
 
+    // LFO pattern selector
     float pattern_r  = content_r;
     float pattern_x  = xm_maxf(pattern_r - PATTERN_WIDTH, shape_x);
     float pattern_cx = 0.5f * (pattern_x + pattern_r);
@@ -1623,16 +1655,8 @@ void draw_lfo_section(GUI* gui)
 
     const float pattern_length =
         next_pattern_length ? next_pattern_length : (float)gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
-    const int num_grid_x = pattern_length;
-    const int num_grid_y = 4;
-
-    enum
-    {
-        LFO_POINT_CLICK_RADIUS = 15,
-        LFO_POINT_RADIUS       = 4,
-        LFO_SKEW_POINT_RADIUS  = 3,
-        LFO_SKEW_DRAG_RANGE    = 250,
-    };
+    const int num_grid_x = pattern_length * gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
+    const int num_grid_y = gui->plugin->lfos[lfo_idx].grid_y[pattern_idx];
 
     if (gui->lfo_points_dirty || next_lfo_points)
     {
@@ -1789,6 +1813,7 @@ void draw_lfo_section(GUI* gui)
                     {
                         target_pos  = im->pos_mouse_move;
                         float x_inc = grid_w / num_grid_x;
+                        float y_inc = (grid_b - grid_y) / num_grid_y;
                         for (int j = 0; j < num_grid_x; j++)
                         {
                             float x = grid_x + j * x_inc;
@@ -1796,6 +1821,16 @@ void draw_lfo_section(GUI* gui)
                                 target_pos.x <= x + LFO_POINT_CLICK_RADIUS)
                             {
                                 target_pos.x = x;
+                                break;
+                            }
+                        }
+                        for (int j = 0; j < num_grid_y; j++)
+                        {
+                            float y = grid_y + j * y_inc;
+                            if (y - LFO_POINT_CLICK_RADIUS <= target_pos.y &&
+                                target_pos.y <= y + LFO_POINT_CLICK_RADIUS)
+                            {
+                                target_pos.y = y;
                                 break;
                             }
                         }
@@ -1909,7 +1944,6 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
-    // TODO: handle click events
     const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &grid_bg);
     if (grid_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
     {
@@ -2090,7 +2124,7 @@ void draw_lfo_section(GUI* gui)
         nvgBeginPath(nvg);
         for (int i = 1; i < pattern_length; i++)
         {
-            float x = xm_mapf(i, 0, num_grid_x, grid_x, grid_r);
+            float x = xm_mapf(i, 0, pattern_length, grid_x, grid_r);
             x       = floorf(x) + 0.5f;
             nvgMoveTo(nvg, x, grid_y + 1);
             nvgLineTo(nvg, x, grid_b - 1);
