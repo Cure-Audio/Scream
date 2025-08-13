@@ -33,6 +33,8 @@ enum
     LFO_POINT_RADIUS       = 4,
     LFO_SKEW_POINT_RADIUS  = 3,
     LFO_SKEW_DRAG_RANGE    = 250,
+
+    LFO_POINT_DRAG_ERASE_DISTANCE = 24,
 };
 
 extern double main_get_param(Plugin* p, ParamID id);
@@ -391,6 +393,7 @@ void pw_destroy_gui(void* _gui)
     xarr_free(gui->lfo_cached_path);
     xarr_free(gui->selected_point_indexes);
     xarr_free(gui->points_copy);
+    xarr_free(gui->skew_points_copy);
 
     sg_set_global(gui->sg);
 
@@ -727,6 +730,10 @@ void lfo_points_add_selected(GUI* gui, int idx)
 
         int num_selected_pts = xarr_len(gui->selected_point_indexes);
         xassert(num_selected_pts > 0);
+        if (num_selected_pts == 1)
+            gui->selected_point_idx = idx;
+        else
+            gui->selected_point_idx = -1;
     }
 }
 
@@ -840,12 +847,31 @@ static void delete_lfo_point(GUI* gui, int idx)
     update_skew_point(gui, idx - 1, 0.5f);
 }
 
+static void copy_points(GUI* gui)
+{
+    int N = xarr_len(gui->lfo_points);
+    xarr_setlen(gui->points_copy, N);
+    memcpy(gui->points_copy, gui->lfo_points, N * sizeof(*gui->points_copy));
+}
+static void copy_skew_points(GUI* gui)
+{
+    int N = xarr_len(gui->lfo_skew_points);
+    xarr_setlen(gui->skew_points_copy, N);
+    memcpy(gui->skew_points_copy, gui->lfo_skew_points, N * sizeof(*gui->skew_points_copy));
+}
+
+static void clear_selection(GUI* gui)
+{
+    xarr_setlen(gui->selected_point_indexes, 0);
+    gui->selected_point_idx = -1;
+}
+
 // First draft for painting shapes on the LFO grid.
 void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
 {
     gui->selection_start.u64 = 0;
     gui->selection_end.u64   = 0;
-    xarr_setlen(gui->selected_point_indexes, 0);
+    clear_selection(gui);
 
     const enum ShapeButtonType shape_type = gui->plugin->lfo_shape_idx;
     xassert(shape_type >= 0 && shape_type < SHAPE_COUNT);
@@ -875,7 +901,7 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
     if (snap_to_grid)
     {
         // TODO: snap to Y grid
-        for (int j = 0; j < lfo_grid_y; j++)
+        for (int j = 0; j <= lfo_grid_y; j++)
         {
             float snap_y = area->y + j * y_inc;
             if (snap_y - LFO_POINT_CLICK_RADIUS <= pos.y && pos.y <= snap_y + LFO_POINT_CLICK_RADIUS)
@@ -1074,6 +1100,9 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
         num_points++;
         left_idx++;
     }
+
+    copy_points(gui);
+    copy_skew_points(gui);
 
     send_points_to_lfo(gui, area);
     gui->lfo_cached_path_dirty = true;
@@ -1663,21 +1692,17 @@ void draw_lfo_section(GUI* gui)
         gui->lfo_points_dirty      = false;
         gui->lfo_cached_path_dirty = true;
 
-        xarr_setlen(gui->selected_point_indexes, 0);
+        clear_selection(gui);
 
         const LFOPoint* lfo_points = next_lfo_points;
         if (!lfo_points)
             lfo_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
         xassert(lfo_points);
 
-        int N = xarr_len(lfo_points);
+        const int N = xarr_len(lfo_points);
 
         const LFOPoint* it  = lfo_points;
         const LFOPoint* end = it + N;
-        // for (int i = 0; i < N && it[i].x <= pattern_length; i++, end++)
-        // {
-        // }
-        // N = end - it;
 
         xarr_setlen(gui->lfo_points, (N + 1));
         xarr_setlen(gui->lfo_skew_points, N);
@@ -1727,6 +1752,11 @@ void draw_lfo_section(GUI* gui)
             p++;
             sp++;
         }
+
+        xarr_setlen(gui->points_copy, (N + 1));
+        xarr_setlen(gui->skew_points_copy, N);
+        memcpy(gui->points_copy, gui->lfo_points, sizeof(*gui->lfo_points) * (N + 1));
+        memcpy(gui->skew_points_copy, gui->lfo_skew_points, sizeof(*gui->skew_points_copy) * N);
     }
 
     int pt_hover_idx      = -1;
@@ -1735,12 +1765,13 @@ void draw_lfo_section(GUI* gui)
 
     // Point events
     {
-        const int num_points = xarr_len(gui->lfo_points);
+        const int num_points    = xarr_len(gui->points_copy);
+        bool      backup_points = false;
 
         for (int pt_idx = 0; pt_idx < num_points; pt_idx++)
         {
             unsigned       uid       = 'lfop' + pt_idx;
-            const imgui_pt pt        = gui->lfo_points[pt_idx];
+            const imgui_pt pt        = gui->points_copy[pt_idx];
             const unsigned pt_events = imgui_get_events_circle(im, uid, pt, LFO_POINT_CLICK_RADIUS);
 
             if (pt_events == 0)
@@ -1749,6 +1780,8 @@ void draw_lfo_section(GUI* gui)
             if (pt_events & IMGUI_EVENT_MOUSE_HOVER)
             {
                 pt_hover_idx = pt_idx;
+                if (gui->selected_point_idx != -1)
+                    pt_hover_idx = gui->selected_point_idx;
             }
 
             if (pt_events & IMGUI_EVENT_MOUSE_ENTER)
@@ -1776,7 +1809,7 @@ void draw_lfo_section(GUI* gui)
                     }
                     if (shift_click == false && idx_is_selected == false)
                     {
-                        xarr_setlen(gui->selected_point_indexes, 0);
+                        clear_selection(gui);
                     }
 
                     lfo_points_add_selected(gui, select_idx);
@@ -1793,83 +1826,180 @@ void draw_lfo_section(GUI* gui)
             if (pt_events & IMGUI_EVENT_DRAG_BEGIN)
             {
                 xarr_setlen(gui->points_copy, num_points);
-                memcpy(gui->points_copy, gui->lfo_points, sizeof(*gui->lfo_points) * num_points);
+                xarr_setlen(gui->skew_points_copy, (num_points - 1));
+                xassert(0 == memcmp(gui->points_copy, gui->lfo_points, sizeof(*gui->points_copy) * num_points));
+                xassert(
+                    0 == memcmp(
+                             gui->skew_points_copy,
+                             gui->lfo_skew_points,
+                             sizeof(*gui->skew_points_copy) * (num_points - 1)));
             }
             if (pt_events & IMGUI_EVENT_DRAG_MOVE)
             {
-                const xvec2f delta = {
-                    im->pos_mouse_move.x - im->pos_mouse_down.x,
-                    im->pos_mouse_move.y - im->pos_mouse_down.y};
+                const int num_selected = xarr_len(gui->selected_point_indexes);
 
-                const int  num_selected = xarr_len(gui->selected_point_indexes);
-                const bool alt_drag     = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_ALT;
-                const bool snap_to_grid = alt_drag && (num_selected == 1);
-
-                for (int i = 0; i < num_selected; i++)
+                if (num_selected == 1)
                 {
-                    int      idx        = gui->selected_point_indexes[i];
-                    imgui_pt target_pos = {0};
+                    const bool alt_drag     = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_ALT;
+                    const bool snap_to_grid = alt_drag && (num_selected == 1);
+
+                    imgui_pt drag_pos = im->pos_mouse_move;
+                    drag_pos.y        = xm_clampf(drag_pos.y, grid_y, grid_b);
                     if (snap_to_grid)
                     {
-                        target_pos  = im->pos_mouse_move;
                         float x_inc = grid_w / num_grid_x;
                         float y_inc = (grid_b - grid_y) / num_grid_y;
-                        for (int j = 0; j < num_grid_x; j++)
+                        for (int j = 0; j <= num_grid_x; j++)
                         {
                             float x = grid_x + j * x_inc;
-                            if (x - LFO_POINT_CLICK_RADIUS <= target_pos.x &&
-                                target_pos.x <= x + LFO_POINT_CLICK_RADIUS)
+                            if (x - LFO_POINT_CLICK_RADIUS <= drag_pos.x && drag_pos.x <= x + LFO_POINT_CLICK_RADIUS)
                             {
-                                target_pos.x = x;
+                                drag_pos.x = x;
                                 break;
                             }
                         }
-                        for (int j = 0; j < num_grid_y; j++)
+                        for (int j = 0; j <= num_grid_y; j++)
                         {
                             float y = grid_y + j * y_inc;
-                            if (y - LFO_POINT_CLICK_RADIUS <= target_pos.y &&
-                                target_pos.y <= y + LFO_POINT_CLICK_RADIUS)
+                            if (y - LFO_POINT_CLICK_RADIUS <= drag_pos.y && drag_pos.y <= y + LFO_POINT_CLICK_RADIUS)
                             {
-                                target_pos.y = y;
+                                drag_pos.y = y;
                                 break;
                             }
                         }
+                    }
+
+                    // Points on edges cannot be dragged past other points
+                    const int sel_idx = gui->selected_point_indexes[0];
+                    if (sel_idx == 0 || sel_idx == num_points - 1)
+                    {
+                        update_lfo_point(gui, &grid_bg, drag_pos, sel_idx);
                     }
                     else
                     {
-                        target_pos    = gui->points_copy[idx];
-                        target_pos.x += delta.x;
-                        target_pos.y += delta.y;
+                        // Rebuid points array, skipping any points between the beginning and current drag position
+                        float range_l = xm_minf(drag_pos.x, im->pos_mouse_down.x);
+                        float range_r = xm_maxf(drag_pos.x, im->pos_mouse_down.x);
+
+                        range_l = xm_maxf(range_l, grid_x);
+                        range_r = xm_minf(range_r, grid_r);
+
+                        float* skew_amts = linked_arena_alloc(gui->arena, sizeof(*skew_amts) * num_points);
+
+                        int npoints                = 0;
+                        gui->lfo_points[npoints++] = gui->points_copy[0];
+                        gui->selected_point_idx    = -1;
+                        for (int j = 1; j < num_points; j++)
+                        {
+                            float skew = 0.5f;
+                            // Calc skew amount from cached points
+                            const imgui_pt* p1 = gui->points_copy + j - 1;
+                            const imgui_pt* p2 = gui->points_copy + j;
+                            const imgui_pt* sp = gui->skew_points_copy + j - 1;
+                            if (p1->y != p2->y)
+                                skew = xm_normf(sp->y, p2->y, p1->y);
+                            if (p1->y > p2->y)
+                                skew = 1 - skew;
+
+                            // Update displayed points
+                            if (j == sel_idx)
+                            {
+                                // Defer adding this point so we can give it an opportunity to get clamped
+                                gui->selected_point_idx = npoints;
+                                npoints++;
+                            }
+                            else if (
+                                p2->x <= (range_l + LFO_POINT_DRAG_ERASE_DISTANCE) ||
+                                p2->x >= (range_r - LFO_POINT_DRAG_ERASE_DISTANCE))
+                            {
+                                gui->lfo_points[npoints++] = *p2;
+
+                                // Clamp dragged point to nearby point
+                                if (p2->x >= range_l && p2->x <= (range_l + LFO_POINT_DRAG_ERASE_DISTANCE))
+                                    drag_pos.x = p2->x;
+                                else if (p2->x >= (range_r - LFO_POINT_DRAG_ERASE_DISTANCE) && p2->x <= range_r)
+                                    drag_pos.x = p2->x;
+                            }
+                            else
+                            {
+                                continue;
+                            }
+
+                            xassert((npoints - 2) >= 0);
+                            skew_amts[npoints - 2] = skew;
+                        }
+                        xassert(gui->selected_point_idx != -1);
+                        if (gui->selected_point_indexes >= 0)
+                        {
+                            pt_hover_idx = gui->selected_point_idx;
+
+                            gui->lfo_points[gui->selected_point_idx] = drag_pos;
+                        }
+
+                        // Update displayed skew point
+                        for (int j = 0; j < npoints - 1; j++)
+                        {
+                            xassert((j + 1) < npoints);
+                            const imgui_pt* p1   = gui->lfo_points + j;
+                            const imgui_pt* p2   = gui->lfo_points + j + 1;
+                            imgui_pt*       sp   = gui->lfo_skew_points + j;
+                            float           skew = skew_amts[j];
+
+                            if (p1->x == p2->x) // the line between point & next_p is vertical
+                            {
+                                sp->x = p1->x;
+                                // display skew point vertically, halfway between points
+                                // skew amount not considered
+                                sp->y = (p1->y + p2->y) * 0.5f;
+                            }
+                            else
+                            {
+                                float y = interp_points(0.5f, 1 - skew, p1->y, p2->y);
+
+                                // x is always halfway between points
+                                sp->x = (p1->x + p2->x) * 0.5f;
+                                // skew amount controls y coord
+                                sp->y = y;
+                            }
+                        }
+
+                        xarr_header(gui->lfo_points)->length      = npoints;
+                        xarr_header(gui->lfo_skew_points)->length = npoints - 1;
+
+                        imgui_pt(*view_pts)[512]      = (void*)gui->lfo_points;
+                        imgui_pt(*view_skew_pts)[512] = (void*)gui->lfo_skew_points;
+
+                        linked_arena_release(gui->arena, skew_amts);
+                        send_points_to_lfo(gui, &grid_bg);
+                        gui->lfo_cached_path_dirty = true;
                     }
-
-                    update_lfo_point(gui, &grid_bg, target_pos, idx);
                 }
+                else if (num_selected > 1)
+                {
+                    const xvec2f delta = {
+                        im->pos_mouse_move.x - im->pos_mouse_down.x,
+                        im->pos_mouse_move.y - im->pos_mouse_down.y};
+
+                    for (int i = 0; i < num_selected; i++)
+                    {
+                        int idx = gui->selected_point_indexes[i];
+
+                        imgui_pt translate_pos  = gui->points_copy[idx];
+                        translate_pos.x        += delta.x;
+                        translate_pos.y        += delta.y;
+
+                        update_lfo_point(gui, &grid_bg, translate_pos, idx);
+                    }
+                }
+
+                send_points_to_lfo(gui, &grid_bg);
                 gui->lfo_cached_path_dirty = true;
-
-                if (num_selected > 1)
-                {
-                    send_points_to_lfo(gui, &grid_bg);
-                }
-                else if (num_selected == 1)
-                {
-                    int sel_idx = gui->selected_point_indexes[0];
-                    xassert(sel_idx >= 0 && sel_idx < xarr_len(gui->lfo_points));
-                    const imgui_pt* sel_pt = gui->lfo_points + sel_idx;
-
-                    LFOEvent e;
-                    e.set_xy.type        = EVENT_SET_LFO_XY;
-                    e.set_xy.lfo_idx     = lfo_idx;
-                    e.set_xy.pattern_idx = pattern_idx;
-                    e.set_xy.point_idx   = sel_idx;
-                    e.set_xy.x           = pattern_length * snap_point(xm_normd(sel_pt->x, grid_x, grid_r));
-                    e.set_xy.y           = snap_point(xm_normd(sel_pt->y, grid_b, grid_y));
-                    send_to_audio_event_queue(gui->plugin, (const CplugEvent*)&e);
-                }
             }
 
             if (pt_events & IMGUI_EVENT_MOUSE_LEFT_UP)
             {
                 pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_DRAGGABLE);
+                backup_points = true;
             }
         }
 
@@ -1879,9 +2009,16 @@ void draw_lfo_section(GUI* gui)
 
             pt_hover_idx      = -1;
             pt_hover_skew_idx = -1;
-            xarr_setlen(gui->selected_point_indexes, 0);
+            clear_selection(gui);
 
             send_points_to_lfo(gui, &grid_bg);
+            backup_points = true;
+        }
+
+        if (backup_points)
+        {
+            copy_points(gui);
+            copy_skew_points(gui);
         }
     }
 
@@ -1906,6 +2043,8 @@ void draw_lfo_section(GUI* gui)
 
             if (pt_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
             {
+                clear_selection(gui);
+
                 const bool ctrl = im->frame.modifiers_mouse_down & PW_MOD_PLATFORM_KEY_CTRL;
                 if (im->left_click_counter == 2 && !ctrl)
                 {
@@ -1941,6 +2080,10 @@ void draw_lfo_section(GUI* gui)
                 e.set_skew.skew        = next_skew;
                 send_to_audio_event_queue(gui->plugin, (const CplugEvent*)&e);
             }
+            if (pt_events & IMGUI_EVENT_MOUSE_LEFT_UP)
+            {
+                copy_skew_points(gui);
+            }
         }
     }
 
@@ -1962,7 +2105,7 @@ void draw_lfo_section(GUI* gui)
             bool shift_click = (PW_MOD_KEY_SHIFT | PW_MOD_LEFT_BUTTON) == im->frame.modifiers_mouse_down;
             if (shift_click == false)
             {
-                xarr_setlen(gui->selected_point_indexes, 0);
+                clear_selection(gui);
             }
 
             gui->selection_start.x = pos.x;
@@ -1985,6 +2128,12 @@ void draw_lfo_section(GUI* gui)
 
                     insert_lfo_point(gui, pt, i + 1, &grid_bg);
                     send_points_to_lfo(gui, &grid_bg);
+
+                    copy_points(gui);
+                    copy_skew_points(gui);
+
+                    clear_selection(gui);
+                    lfo_points_add_selected(gui, i + 1);
 
                     pt_hover_idx = i + 1;
                     break;
@@ -2236,12 +2385,21 @@ void draw_lfo_section(GUI* gui)
         nvgSetColour(nvg, COLOUR_LFO_LINE);
         nvgStroke(nvg, 1.5);
         // regular points
-        uint64_t selected_points_flags = 0;
-        for (int i = 0; i < xarr_len(gui->selected_point_indexes); i++)
+        uint64_t  selected_points_flags = 0;
+        const int num_slected_points    = xarr_len(gui->selected_point_indexes);
+        if (num_slected_points == 1)
         {
-            uint64_t idx = gui->selected_point_indexes[i];
-            if (idx < 64)
-                selected_points_flags |= 1llu << idx;
+            xassert(gui->selected_point_idx >= 0 && gui->selected_point_idx < xarr_len(gui->lfo_points));
+            selected_points_flags |= 1llu << ((uint64_t)gui->selected_point_idx);
+        }
+        else
+        {
+            for (int i = 0; i < num_slected_points; i++)
+            {
+                uint64_t idx = gui->selected_point_indexes[i];
+                if (idx < 64)
+                    selected_points_flags |= 1llu << idx;
+            }
         }
 
         static const NVGcolour col_normal   = COLOUR_LFO_LINE;
