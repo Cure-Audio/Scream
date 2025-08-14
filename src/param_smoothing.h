@@ -1,5 +1,5 @@
 #include <math.h>
-#include <xhl/maths.h>
+#include <xhl/debug.h>
 
 typedef struct SmoothedValue
 {
@@ -16,17 +16,12 @@ static inline void smoothvalue_reset(SmoothedValue* sv, float newValue)
     sv->remaining            = 0;
 }
 
+// Produces very few instructions
 static inline float smoothvalue_tick(SmoothedValue* sv)
 {
     float v = sv->current;
-    xassert(sv->remaining >= 0);
-    if (sv->remaining)
-    {
-        sv->remaining--;
+    if (sv->remaining-- > 0)
         sv->current += sv->inc;
-        // xassert(sv->current >= 0 && sv->current <= 1);
-    }
-
     return v;
 }
 

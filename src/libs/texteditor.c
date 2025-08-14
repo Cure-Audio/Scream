@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <utf8.h>
 #include <xhl/array.h>
+#include <xhl/maths.h>
 #include <xhl/time.h>
 
 enum
