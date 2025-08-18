@@ -1,7 +1,7 @@
 #include "dsp.h"
 #include "gui.h"
-#include "xhl/debug.h"
 
+#include <layout.h>
 #include <sort.h>
 
 enum
@@ -840,16 +840,14 @@ void draw_lfo_section(GUI* gui)
     float shape_y = display_b - CONTENT_PADDING_Y - SHAPES_WIDTH;
 
     {
-        imgui_rect buttons[SHAPE_COUNT];
+        imgui_rect btns[SHAPE_COUNT];
         unsigned   events[SHAPE_COUNT];
 
-        for (int i = 0; i < ARRLEN(buttons); i++)
+        layout_uniform_horizontal(btns, ARRLEN(btns), content_x, shape_y, SHAPES_WIDTH, SHAPES_WIDTH, LAYOUT_START, 0);
+
+        for (int i = 0; i < ARRLEN(btns); i++)
         {
-            imgui_rect* rect = buttons + i;
-            rect->x          = content_x + i * SHAPES_WIDTH;
-            rect->y          = shape_y;
-            rect->r          = content_x + (i + 1) * SHAPES_WIDTH;
-            rect->b          = shape_y + SHAPES_WIDTH;
+            imgui_rect* rect = btns + i;
 
             unsigned wid = 'lshp' + i;
             events[i]    = imgui_get_events_rect(im, wid, rect);
@@ -866,16 +864,16 @@ void draw_lfo_section(GUI* gui)
             }
         }
 
-        imgui_rect* active_area = buttons + gui->plugin->lfo_shape_idx;
+        imgui_rect* active_area = btns + gui->plugin->lfo_shape_idx;
         nvgBeginPath(nvg);
         nvgSetColour(nvg, COLOUR_GREY_3);
         nvgRoundedRect2(nvg, active_area->x, active_area->y, active_area->r, active_area->b, 4);
         nvgFill(nvg);
 
         nvgBeginPath(nvg);
-        for (int i = 0; i < ARRLEN(buttons); i++)
+        for (int i = 0; i < ARRLEN(btns); i++)
         {
-            const imgui_rect* rect = buttons + i;
+            const imgui_rect* rect = btns + i;
 
             imgui_rect inner  = *rect;
             inner.x          += SHAPES_INNER_PADDING;

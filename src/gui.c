@@ -5,7 +5,6 @@
 #include "plugin.h"
 
 #include "dsp.h"
-#include "imgui.h"
 #include "widgets.h"
 
 #include <stdint.h>
@@ -19,6 +18,9 @@
 #include <cplug_extensions/window.h>
 #include <nanovg2.h>
 #include <stb_image.h>
+
+#include <imgui.h>
+#include <layout.h>
 
 #include <math.h>
 #include <stdio.h>
@@ -811,20 +813,26 @@ void pw_tick(void* _gui)
         const float veritcal_slider_width = snapf(VERTICAL_SLIDER_WIDTH * lm->param_scale, 2);
         const float knob_diameter         = snapf(ROTARY_PARAM_DIAMETER * lm->param_scale, 2);
 
-        const float total_param_width = veritcal_slider_width * 2 + knob_diameter * 3;
-        const float param_padding     = (PARAMS_WIDTH - total_param_width) / 4;
+        {
+            _Static_assert(
+                ARRLEN(lm->param_positions_cx) == 5,
+                "You've changed the number of params and we assumed there were only 5");
+            imgui_rect rects[ARRLEN(lm->param_positions_cx)] = {0};
 
-        _Static_assert(
-            ARRLEN(lm->param_positions_cx) == 5,
-            "You've changed the number of params and we assumed there were only 5");
-        lm->param_positions_cx[PARAM_INPUT_GAIN] = param_boundary_left + veritcal_slider_width * 0.5f;
-        lm->param_positions_cx[PARAM_CUTOFF] =
-            param_boundary_left + veritcal_slider_width + param_padding + knob_diameter * 0.5f;
-        lm->param_positions_cx[PARAM_SCREAM] =
-            param_boundary_left + veritcal_slider_width + param_padding * 2 + knob_diameter * 1.5f;
-        lm->param_positions_cx[PARAM_RESONANCE] =
-            param_boundary_left + veritcal_slider_width + param_padding * 3 + knob_diameter * 2.5f;
-        lm->param_positions_cx[PARAM_WET] = param_boundary_right - veritcal_slider_width * 0.5f;
+            rects[0].r = veritcal_slider_width;
+            rects[1].r = knob_diameter;
+            rects[2].r = knob_diameter;
+            rects[3].r = knob_diameter;
+            rects[4].r = veritcal_slider_width;
+            layout_horizontal_fill(
+                rects,
+                ARRLEN(rects),
+                LAYOUT_SPACE_BETWEEN,
+                &(imgui_rect){param_boundary_left, 0, param_boundary_right, 0});
+            for (int i = 0; i < ARRLEN(lm->param_positions_cx); i++)
+                lm->param_positions_cx[i] = 0.5f * (rects[i].x + rects[i].r);
+            xassert(lm->param_positions_cx[4] < param_boundary_right);
+        }
 
         lm->knob_radius = knob_diameter * 0.5f;
 
@@ -833,7 +841,7 @@ void pw_tick(void* _gui)
             "You've changed the number of rotary params and we assumed there were only 3");
         for (int i = 0; i < ARRLEN(lm->knobs_pos); i++)
         {
-            lm->knobs_pos[i].x = lm->param_positions_cx[i];
+            lm->knobs_pos[i].x = lm->param_positions_cx[i + 1];
             lm->knobs_pos[i].y = roundf(lm->content_y + lm->top_content_height * 0.5f);
         }
 
@@ -991,9 +999,11 @@ void pw_tick(void* _gui)
 
     // Params
     {
+        static const ParamID param_ids[] = {PARAM_INPUT_GAIN, PARAM_CUTOFF, PARAM_SCREAM, PARAM_RESONANCE, PARAM_WET};
+        _Static_assert(ARRLEN(param_ids) == ARRLEN(lm->param_positions_cx), "");
         for (int i = 0; i < ARRLEN(lm->param_positions_cx); i++)
         {
-            const ParamID  param_id = i;
+            const ParamID  param_id = param_ids[i];
             const float    param_cx = lm->param_positions_cx[i];
             const unsigned wid      = 'prm' + i;
 
@@ -1015,7 +1025,7 @@ void pw_tick(void* _gui)
                 imgui_pt pt = lm->knobs_pos[param_id];
 
                 uint32_t events  = imgui_get_events_circle(im, wid, pt, lm->knob_radius);
-                double   value_d = handle_param_events(gui, i, events, 300);
+                double   value_d = handle_param_events(gui, param_id, events, 300);
 
                 // Inlet
                 {
@@ -1567,16 +1577,16 @@ void pw_tick(void* _gui)
         const float value_y     = content_cy - text_offset;
         const float label_b     = content_cy + text_offset;
 
-        static const char* NAMES[] = {"CUTOFF", "SCREAM", "RESONANCE", "INPUT", "WET"};
+        static const char* NAMES[] = {"INPUT", "CUTOFF", "SCREAM", "RESONANCE", "WET"};
         _Static_assert(ARRLEN(NAMES) == ARRLEN(lm->param_positions_cx));
         for (int i = 0; i < ARRLEN(lm->param_positions_cx); i++)
         {
-            const ParamID param_id = i;
+            const ParamID param_id = param_ids[i];
             const float   param_cx = lm->param_positions_cx[i];
 
             nvgSetTextAlign(nvg, NVG_ALIGN_BC);
             nvgSetColour(nvg, COLOUR_TEXT);
-            nvgText(nvg, param_cx, label_b, NAMES[param_id], NULL);
+            nvgText(nvg, param_cx, label_b, NAMES[i], NULL);
 
             imgui_rect rect;
             rect.x = param_cx - 50;
@@ -1591,7 +1601,7 @@ void pw_tick(void* _gui)
                 pw_set_mouse_cursor(gui->pw, PW_CURSOR_IBEAM);
 
             // Handle events
-            if (gui->texteditor.active_param == i)
+            if (gui->texteditor.active_param == param_id)
             {
                 TextEditor* ted = &gui->texteditor;
                 // Text editor stuff
@@ -1612,12 +1622,12 @@ void pw_tick(void* _gui)
                 {
                     xvec4f dimensions = {rect.x, rect.y, rect.r - rect.x, rect.b - rect.y};
                     xvec2f pos        = {im->pos_mouse_down.x, im->pos_mouse_down.y};
-                    ted_activate(&gui->texteditor, dimensions, pos, param_font_size, i);
+                    ted_activate(&gui->texteditor, dimensions, pos, param_font_size, param_id);
                 }
             }
 
             // Draw
-            if (gui->texteditor.active_param == i)
+            if (gui->texteditor.active_param == param_id)
             {
                 ted_draw(&gui->texteditor);
             }
