@@ -90,7 +90,7 @@ sg_image sg_make_image_with_mipmaps(const sg_image_desc* desc_)
         w /= 2;
         h /= 2;
 
-        if (w < 1 && h < 1)
+        if (w < 1 || h < 1)
             break;
 
         total_size += (w * h * num_channels);
