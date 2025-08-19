@@ -212,13 +212,13 @@ void* pw_create_gui(void* _plugin, void* _pw)
     });
 
     gui->nvg = nvgCreateContext(NVG_ANTIALIAS);
-    CPLUG_LOG_ASSERT(gui->nvg);
+    xassert(gui->nvg);
 
     // Load font
     {
         char path[1024];
-        xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_APPDATA);
-        int         len = strlen(path);
+        int  len = xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_APPDATA);
+
         const char* cat = XFILES_DIR_STR "Cure Audio" XFILES_DIR_STR "Scream" XFILES_DIR_STR "Tomorrow-SemiBold.ttf";
         snprintf(path + len, sizeof(path) - len, "%s", cat);
 
@@ -231,19 +231,19 @@ void* pw_create_gui(void* _plugin, void* _pw)
 #endif
         };
 
-        int font_id = -1;
-        int i       = 0;
+        int font_id  = -1;
+        int font_idx = 0;
 
         do
         {
-            font_id = nvgCreateFont(gui->nvg, "default", font_paths[i]);
+            font_id = nvgCreateFont(gui->nvg, "default", font_paths[font_idx]);
             if (font_id == -1)
             {
                 println("[CRITICAL] Failed to open fallback font at path %s", path);
             }
-            i++;
+            font_idx++;
         }
-        while (font_id == -1 && i < ARRLEN(font_paths));
+        while (font_id == -1 && font_idx < ARRLEN(font_paths));
 
         gui->font_id = font_id;
     }
