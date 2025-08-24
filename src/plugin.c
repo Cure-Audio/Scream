@@ -449,9 +449,12 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
         case CPLUG_EVENT_MIDI:
         {
-            if (event.midi.status == 144)
-                g_osc_midi = event.midi.data1;
-            else if (event.midi.status == 128 && event.midi.data1 == g_osc_midi)
+            if (event.midi.status == 144) // Note on
+            {
+                g_osc_midi       = event.midi.data1;
+                p->beat_position = 0; // Retrigger LFO on key press
+            }
+            else if (event.midi.status == 128 && event.midi.data1 == g_osc_midi) // Note off
                 g_osc_midi = -1;
             break;
         }
