@@ -91,6 +91,10 @@ void send_points_to_lfo(GUI* gui, const imgui_rect* area)
 
 void lfo_points_add_selected(GUI* gui, int idx)
 {
+    int num_points = xarr_len(gui->lfo_points);
+    if (idx == num_points - 1)
+        idx = 0;
+
     int       i;
     const int N = xarr_len(gui->selected_point_indexes);
     for (i = 0; i < N; i++)
@@ -1172,7 +1176,7 @@ void draw_lfo_section(GUI* gui)
                     bool idx_is_selected = false;
                     for (int i = 0; i < xarr_len(gui->selected_point_indexes); i++)
                     {
-                        if (pt_idx == gui->selected_point_indexes[i])
+                        if (select_idx == gui->selected_point_indexes[i])
                         {
                             idx_is_selected = true;
                             break;
@@ -1361,9 +1365,19 @@ void draw_lfo_section(GUI* gui)
                         im->pos_mouse_move.x - im->pos_mouse_down.x,
                         im->pos_mouse_move.y - im->pos_mouse_down.y};
 
+                    bool has_moved_first_point = false;
+
                     for (int i = 0; i < num_selected; i++)
                     {
                         int idx = gui->selected_point_indexes[i];
+
+                        xassert(idx != (num_points - 1));
+
+                        bool is_first_point = idx == 0 || idx == (num_points - 1);
+                        if (is_first_point && has_moved_first_point)
+                            continue;
+
+                        has_moved_first_point |= is_first_point;
 
                         imgui_pt translate_pos  = gui->points_copy[idx];
                         translate_pos.x        += delta.x;
@@ -1468,7 +1482,9 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
-    const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &grid_bg);
+    const imgui_rect selection_area =
+        {lm->content_x + 16, display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT, lm->content_r - 16, shape_y};
+    const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &selection_area);
     if (grid_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
     {
         imgui_pt pos;
@@ -1540,8 +1556,8 @@ void draw_lfo_section(GUI* gui)
         }
         else
         {
-            gui->selection_end.x = xm_clampf(pos.x, grid_x, grid_r);
-            gui->selection_end.y = xm_clampf(pos.y, grid_y, grid_b);
+            gui->selection_end.x = xm_clampf(pos.x, selection_area.x, selection_area.r);
+            gui->selection_end.y = xm_clampf(pos.y, selection_area.y, selection_area.b);
 
             if (gui->selection_start.u64 != 0 && gui->selection_start.u64 != gui->selection_end.u64)
             {
@@ -1785,13 +1801,19 @@ void draw_lfo_section(GUI* gui)
 
         static const NVGcolour col_normal   = COLOUR_LFO_LINE;
         static const NVGcolour col_selected = nvgHexColour(0xffff00ff);
-        for (uint64_t i = 0; i < xarr_len(gui->lfo_points); i++)
+        size_t                 num_points   = xarr_len(gui->lfo_points);
+        for (uint64_t i = 0; i < num_points; i++)
         {
             imgui_pt pt = gui->lfo_points[i];
 
+            // First and last point are the same. Show both as selected
+            uint64_t pt_idx = i;
+            if (i == num_points - 1)
+                pt_idx = 0;
+
             nvgBeginPath(nvg);
             nvgCircle(nvg, pt.x, pt.y, LFO_POINT_RADIUS);
-            if (selected_points_flags & (1llu << i))
+            if (selected_points_flags & (1llu << pt_idx))
                 nvgSetColour(nvg, col_selected);
             else
                 nvgSetColour(nvg, col_normal);

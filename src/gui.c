@@ -1807,7 +1807,7 @@ void pw_tick(void* _gui)
     snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
     nvgBeginPath(nvg);
     // nvgRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y);
-    // nvgSetColour(nvg, nvgHexColour(0xff0000ff));
+    nvgSetColour(nvg, COLOUR_TEXT);
     // nvgFill(nvg);
     nvgSetTextAlign(nvg, NVG_ALIGN_CC);
     nvgText(nvg, (rect.x + rect.r) * 0.5f, (rect.y + rect.b) * 0.5f, "LFO", 0);
