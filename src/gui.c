@@ -1811,14 +1811,35 @@ void pw_tick(void* _gui)
     */
 
     // LFO toggle button
-    imgui_rect rect = gui->lfo_toggle_button;
-    snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
-    nvgBeginPath(nvg);
-    // nvgRect(nvg, rect.x, rect.y, rect.r - rect.x, rect.b - rect.y);
-    nvgSetColour(nvg, COLOUR_TEXT);
-    // nvgFill(nvg);
-    nvgSetTextAlign(nvg, NVG_ALIGN_CC);
-    nvgText(nvg, (rect.x + rect.r) * 0.5f, (rect.y + rect.b) * 0.5f, "LFO", 0);
+    {
+        imgui_rect rect = gui->lfo_toggle_button;
+        snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
+        nvgBeginPath(nvg);
+        nvgSetColour(nvg, COLOUR_TEXT);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CC);
+        float cx = (rect.x + rect.r) * 0.5f - 10;
+        float cy = (rect.y + rect.b) * 0.5f;
+        nvgText(nvg, cx, cy, "LFO", 0);
+
+        float y1 = cy + 2;
+        float y2 = cy - 4;
+        if (gui->plugin->lfo_section_open)
+        {
+            float tmp = y1;
+            y1        = y2;
+            y2        = tmp;
+        }
+        nvgSetLineCap(nvg, NVG_ROUND);
+        nvgBeginPath(nvg);
+        nvgMoveTo(nvg, cx + 22, y1);
+        nvgLineTo(nvg, cx + 28, y2);
+        nvgLineTo(nvg, cx + 34, y1);
+        nvgStroke(nvg, 2.5);
+        nvgSetLineCap(nvg, NVG_BUTT);
+        unsigned events = imgui_get_events_rect(im, 'lopn', &rect);
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+    }
 
     if (gui->plugin->lfo_section_open)
     {
