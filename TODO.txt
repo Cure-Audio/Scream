@@ -12,7 +12,7 @@
 - Create API for batch drawing shapes ie. functions that accept arrays of data with the same fill colours
 
 x More visable grid lines
-- display modulated paramters on input & wet params
+- display modulated parameters on input & wet params
 - display LFO range on the mod amount parameter
 - display pattern 1-8 better. Try adding each number
 - Make grid buttons a slider

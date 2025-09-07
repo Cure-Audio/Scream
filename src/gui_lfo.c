@@ -572,18 +572,18 @@ void draw_lfo_section(GUI* gui)
             const bool is_active = gui->plugin->selected_lfo_idx == i;
             if (is_active)
             {
-                col1 = COLOUR_LFO_LINE;
-                col2 = COLOUR_BG_LFO;
+                col1 = C_LIGHT_BLUE_2;
+                col2 = C_BG_LFO;
             }
             else
             {
-                col1 = COLOUR_BG_LFO;
-                col2 = COLOUR_LFO_LINE;
+                col1 = C_BG_LFO;
+                col2 = C_LIGHT_BLUE_2;
             }
 
             if (is_active)
             {
-                NVGcolour glow_icol = COLOUR_BLUE_SECONDARY;
+                NVGcolour glow_icol = C_DARK_BLUE;
                 NVGcolour glow_ocol = glow_icol;
                 glow_ocol.a         = 0;
                 float width         = rect->r - rect->x;
@@ -679,8 +679,8 @@ void draw_lfo_section(GUI* gui)
 
         NVGglyphPosition glyphs[label_length_len];
 
-        nvgSetFontSize(nvg, 14);
-        nvgSetColour(nvg, COLOUR_TEXT);
+        nvgSetFontSize(nvg, lm->content_scale * 14);
+        nvgSetColour(nvg, C_TEXT);
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
 
         nvgTextGlyphPositions(nvg, 0, 0, label_grid, label_grid + label_grid_len, glyphs, label_length_len);
@@ -832,10 +832,10 @@ void draw_lfo_section(GUI* gui)
             }
             nvgBeginPath(nvg);
             nvgRoundedRect(nvg, rect->x, btn_y, rect->r - rect->x, rect->b - rect->y, 2);
-            nvgSetColour(nvg, COLOUR_GREY_3);
+            nvgSetColour(nvg, C_GREY_3);
             nvgFill(nvg);
 
-            nvgSetColour(nvg, COLOUR_GREY_1);
+            nvgSetColour(nvg, C_GREY_1);
             nvgSetTextAlign(nvg, NVG_ALIGN_CC);
             nvgText(nvg, btn_cx, text_cy, btn_labels[btn_idx], NULL);
         }
@@ -872,7 +872,7 @@ void draw_lfo_section(GUI* gui)
 
         imgui_rect* active_area = btns + gui->plugin->lfo_shape_idx;
         nvgBeginPath(nvg);
-        nvgSetColour(nvg, COLOUR_GREY_3);
+        nvgSetColour(nvg, C_GREY_3);
         nvgRoundedRect2(nvg, active_area->x, active_area->y, active_area->r, active_area->b, 4);
         nvgFill(nvg);
 
@@ -935,7 +935,7 @@ void draw_lfo_section(GUI* gui)
                 break;
             }
         }
-        nvgSetColour(nvg, COLOUR_WHITE);
+        nvgSetColour(nvg, C_WHITE);
         nvgStroke(nvg, 1.2f);
     }
 
@@ -1014,7 +1014,7 @@ void draw_lfo_section(GUI* gui)
         value_f = value_d = xm_normd(vi, 1, NUM_LFO_PATTERNS);
 
         nvgSetTextAlign(nvg, NVG_ALIGN_BC);
-        nvgSetColour(nvg, COLOUR_TEXT);
+        nvgSetColour(nvg, C_TEXT);
         nvgText(nvg, pattern_cx, pattern_b, "PATTERN", NULL);
 
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
@@ -1028,7 +1028,7 @@ void draw_lfo_section(GUI* gui)
         nvgBeginPath(nvg);
         nvgMoveTo(nvg, pattern_line_x, pattern_line_y);
         nvgLineTo(nvg, pattern_line_r, pattern_line_y);
-        nvgSetColour(nvg, COLOUR_TEXT);
+        nvgSetColour(nvg, C_TEXT);
         nvgStroke(nvg, 1);
 
         const float pattern_pos_x = xm_lerpf(value_f, pattern_line_x, pattern_line_r);
@@ -1742,7 +1742,7 @@ void draw_lfo_section(GUI* gui)
         while (++it != end)
             nvgLineTo(nvg, it->x, it->y);
 
-        nvgSetColour(nvg, COLOUR_LFO_LINE);
+        nvgSetColour(nvg, C_LIGHT_BLUE_2);
         nvgStroke(nvg, 2);
     }
 
@@ -1770,7 +1770,7 @@ void draw_lfo_section(GUI* gui)
             imgui_pt pt = gui->lfo_skew_points[i];
             nvgCircle(nvg, pt.x, pt.y, LFO_SKEW_POINT_RADIUS);
         }
-        nvgSetColour(nvg, COLOUR_BG_LFO);
+        nvgSetColour(nvg, C_BG_LFO);
         nvgFill(nvg);
 
         nvgBeginPath(nvg);
@@ -1779,7 +1779,7 @@ void draw_lfo_section(GUI* gui)
             imgui_pt pt = gui->lfo_skew_points[i];
             nvgCircle(nvg, pt.x, pt.y, LFO_SKEW_POINT_RADIUS);
         }
-        nvgSetColour(nvg, COLOUR_LFO_LINE);
+        nvgSetColour(nvg, C_LIGHT_BLUE_2);
         nvgStroke(nvg, 1.5);
         // regular points
         uint64_t  selected_points_flags = 0;
@@ -1799,7 +1799,7 @@ void draw_lfo_section(GUI* gui)
             }
         }
 
-        static const NVGcolour col_normal   = COLOUR_LFO_LINE;
+        static const NVGcolour col_normal   = C_LIGHT_BLUE_2;
         static const NVGcolour col_selected = nvgHexColour(0xffff00ff);
         size_t                 num_points   = xarr_len(gui->lfo_points);
         for (uint64_t i = 0; i < num_points; i++)
@@ -1830,7 +1830,7 @@ void draw_lfo_section(GUI* gui)
         nvgBeginPath(nvg);
         nvgMoveTo(nvg, x, grid_y + 1);
         nvgLineTo(nvg, x, grid_b - 1);
-        nvgSetColour(nvg, COLOUR_WHITE);
+        nvgSetColour(nvg, C_WHITE);
         nvgStroke(nvg, 1);
     }
 

@@ -978,7 +978,7 @@ void ted_draw(TextEditor* ted)
         }
 
         nvgSetTextAlign(nvg, TED_TEXT_ALIGN);
-        nvgSetColour(nvg, COLOUR_TEXT);
+        nvgSetColour(nvg, C_TEXT);
         nvgText(nvg, d->x + d->width * 0.5 + ted->text_offset, d->y, text, NULL);
     }
 

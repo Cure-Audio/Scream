@@ -106,21 +106,20 @@ typedef struct GUI
     SGNVGframebuffer main_framebuffer;
 } GUI;
 
-static const NVGcolour COLOUR_TEXT = nvgHexColour(0x707880FF);
+static const NVGcolour C_WHITE = nvgHexColour(0xffffffff);
+static const NVGcolour C_TEXT  = nvgHexColour(0x707880FF);
 
-static const NVGcolour COLOUR_BG_LIGHT = nvgHexColour(0xC9D3DDFF);
-static const NVGcolour COLOUR_BG_DARK  = nvgHexColour(0x151B32FF);
+static const NVGcolour C_BG_LIGHT = nvgHexColour(0xC9D3DDFF);
+static const NVGcolour C_BG_DARK  = nvgHexColour(0x151B32FF);
+static const NVGcolour C_BG_LFO   = nvgHexColour(0x090E20FF);
 
-static const NVGcolour COLOUR_GREY_1 = nvgHexColour(0xB5BEC7FF);
-static const NVGcolour COLOUR_GREY_2 = nvgHexColour(0x636A78FF);
-static const NVGcolour COLOUR_GREY_3 = nvgHexColour(0x353940FF);
+static const NVGcolour C_GREY_1 = nvgHexColour(0xB5BEC7FF);
+static const NVGcolour C_GREY_2 = nvgHexColour(0x636A78FF);
+static const NVGcolour C_GREY_3 = nvgHexColour(0x353940FF);
 
-static const NVGcolour COLOUR_WHITE = nvgHexColour(0xffffffff);
-
-static const NVGcolour COLOUR_BLUE_SECONDARY = nvgHexColour(0x459DB5FF);
-
-static const NVGcolour COLOUR_BG_LFO   = nvgHexColour(0x090E20FF);
-static const NVGcolour COLOUR_LFO_LINE = nvgHexColour(0x97E6FCFF);
+static const NVGcolour C_DARK_BLUE    = nvgHexColour(0x459CB4FF);
+static const NVGcolour C_LIGHT_BLUE   = nvgHexColour(0xACDEECFF);
+static const NVGcolour C_LIGHT_BLUE_2 = nvgHexColour(0x97E6FCFF);
 
 static const NVGcolour C_GRID_PRIMARY   = nvgHexColour(0x7E8795FF);
 static const NVGcolour C_GRID_SECONDARY = nvgHexColour(0x3E434CFF);

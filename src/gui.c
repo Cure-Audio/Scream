@@ -905,7 +905,7 @@ void pw_tick(void* _gui)
     // Header
     {
         nvgSetFontSize(nvg, lm->content_scale * 24);
-        nvgSetColour(nvg, COLOUR_BG_LIGHT);
+        nvgSetColour(nvg, C_BG_LIGHT);
         nvgSetTextAlign(nvg, NVG_ALIGN_CC);
         nvgText(nvg, lm->width * 0.5f, lm->height_header * 0.5f + 4, "SCREAM", NULL);
 
@@ -927,7 +927,7 @@ void pw_tick(void* _gui)
         float height = lm->content_b - lm->content_y;
         nvgBeginPath(nvg);
         nvgRoundedRect(nvg, 8, lm->content_y, lm->width - 16, height, 8);
-        nvgSetColour(nvg, COLOUR_BG_LIGHT);
+        nvgSetColour(nvg, C_BG_LIGHT);
         nvgFill(nvg);
 
         // Inner shadows
@@ -1003,7 +1003,7 @@ void pw_tick(void* _gui)
         _Static_assert(ARRLEN(param_ids) == ARRLEN(lm->param_positions_cx), "");
 
         // Param labels
-        nvgSetColour(nvg, COLOUR_TEXT);
+        nvgSetColour(nvg, C_TEXT);
         const float param_font_size = 14 * lm->content_scale;
         nvgSetFontSize(nvg, param_font_size);
 
@@ -1020,7 +1020,7 @@ void pw_tick(void* _gui)
             const float   param_cx = lm->param_positions_cx[i];
 
             nvgSetTextAlign(nvg, NVG_ALIGN_BC);
-            nvgSetColour(nvg, COLOUR_TEXT);
+            nvgSetColour(nvg, C_TEXT);
             nvgText(nvg, param_cx, label_b, NAMES[i], NULL);
 
             imgui_rect rect;
@@ -1074,7 +1074,7 @@ void pw_tick(void* _gui)
                 double value = main_get_param(gui->plugin, param_id);
                 cplug_parameterValueToString(gui->plugin, param_id, label, sizeof(label), value);
 
-                nvgSetColour(nvg, COLOUR_TEXT);
+                nvgSetColour(nvg, C_TEXT);
                 nvgSetTextAlign(nvg, NVG_ALIGN_TC);
                 nvgText(nvg, param_cx, value_y, label, NULL);
             }
@@ -1143,7 +1143,7 @@ void pw_tick(void* _gui)
                 char  label  = '1';
                 label       += j;
                 nvgSetTextAlign(nvg, NVG_ALIGN_CC);
-                nvgSetColour(nvg, COLOUR_TEXT);
+                nvgSetColour(nvg, C_TEXT);
                 nvgText(nvg, tx, ty + 1, &label, &label + 1);
             }
         }
@@ -1310,11 +1310,11 @@ void pw_tick(void* _gui)
                 {
                     const bool is_modulated = fabsf(modamts.data[lfo_idx]) != 0;
 
-                    NVGcolour col = COLOUR_GREY_1;
+                    NVGcolour col = C_GREY_1;
                     col.a         = 0.4f;
                     nvgBeginPath(nvg);
                     nvgArc(nvg, pt.x, pt.y, arc_radius[lfo_idx], SLIDER_START_RAD, SLIDER_END_RAD, NVG_CW);
-                    nvgSetColour(nvg, is_modulated ? COLOUR_BG_LFO : col);
+                    nvgSetColour(nvg, is_modulated ? C_BG_LFO : col);
                     nvgStroke(nvg, stroke_w);
 
                     if (is_modulated)
@@ -1333,7 +1333,7 @@ void pw_tick(void* _gui)
 
                             nvgBeginPath(nvg);
                             nvgArc(nvg, pt.x, pt.y, arc_radius[lfo_idx], angle_start, angle_end, NVG_CW);
-                            nvgSetColour(nvg, COLOUR_BLUE_SECONDARY);
+                            nvgSetColour(nvg, C_DARK_BLUE);
                             nvgStroke(nvg, stroke_w * 1.3);
                         }
                         float mod_value_norm        = value_norm + modamts.data[lfo_idx] * lfo_amt.data[lfo_idx];
@@ -1345,7 +1345,7 @@ void pw_tick(void* _gui)
 
                         nvgBeginPath(nvg);
                         nvgArc(nvg, pt.x, pt.y, arc_radius[lfo_idx], angle_start, angle_end, NVG_CW);
-                        nvgSetColour(nvg, COLOUR_LFO_LINE);
+                        nvgSetColour(nvg, C_LIGHT_BLUE_2);
                         nvgStroke(nvg, stroke_w * 1.3);
                     }
                 }
@@ -1354,7 +1354,7 @@ void pw_tick(void* _gui)
                 {
                     nvgBeginPath(nvg);
                     nvgArc(nvg, pt.x, pt.y, arc_radius[0], SLIDER_START_RAD, angle_value, NVG_CW);
-                    nvgSetColour(nvg, COLOUR_GREY_2);
+                    nvgSetColour(nvg, C_GREY_2);
                     nvgStroke(nvg, stroke_w);
                 }
                 break;
@@ -1491,7 +1491,7 @@ void pw_tick(void* _gui)
                         nvgLineTo(nvg, icon_r, icon_y - 8);
                         nvgLineTo(nvg, icon_r, icon_y + 8);
                         nvgClosePath(nvg);
-                        nvgSetColour(nvg, COLOUR_GREY_2);
+                        nvgSetColour(nvg, C_GREY_2);
                         nvgFill(nvg);
                     }
 
@@ -1554,7 +1554,7 @@ void pw_tick(void* _gui)
                     }
                     if (has_peaks)
                     {
-                        nvgSetColour(nvg, COLOUR_BLUE_SECONDARY);
+                        nvgSetColour(nvg, C_DARK_BLUE);
                         nvgFill(nvg);
                     }
 
@@ -1633,7 +1633,7 @@ void pw_tick(void* _gui)
                     // BG colour
                     nvgBeginPath(nvg);
                     nvgRoundedRect(nvg, rect.x, rect.y, meter_width, meter_height, 4 * lm->param_scale);
-                    nvgSetColour(nvg, COLOUR_BG_LIGHT);
+                    nvgSetColour(nvg, C_BG_LIGHT);
                     nvgFill(nvg);
 
                     // Inner shadow
@@ -1695,7 +1695,7 @@ void pw_tick(void* _gui)
                     nvgMoveTo(nvg, notch_x, bot_y);
                     nvgLineTo(nvg, notch_r, bot_y);
 
-                    nvgSetColour(nvg, COLOUR_GREY_1);
+                    nvgSetColour(nvg, C_GREY_1);
                     nvgStroke(nvg, 1);
 
                     // Handle drop shadow
@@ -1817,7 +1817,7 @@ void pw_tick(void* _gui)
         imgui_rect rect = gui->lfo_toggle_button;
         snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
         nvgBeginPath(nvg);
-        nvgSetColour(nvg, COLOUR_TEXT);
+        nvgSetColour(nvg, C_TEXT);
         nvgSetTextAlign(nvg, NVG_ALIGN_CC);
         float cx = (rect.x + rect.r) * 0.5f - 10;
         float cy = (rect.y + rect.b) * 0.5f;
@@ -1890,7 +1890,7 @@ void pw_tick(void* _gui)
         double actual_fps        = 1000.0 / ((diff_last_frame >> 10) * 1024e-6);
 
         nvgSetFontSize(nvg, 12 * lm->content_scale);
-        NVGcolour footer_col = COLOUR_BG_LIGHT;
+        NVGcolour footer_col = C_BG_LIGHT;
         footer_col.a         = 0.5f;
         nvgSetColour(nvg, footer_col);
         char text[64] = {0};
