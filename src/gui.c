@@ -1490,9 +1490,8 @@ void pw_tick(void* _gui)
                     nvgSetPaint(nvg, bg_paint);
                     nvgFill(nvg);
 
-                    const float mod_amt_padding     = 4;
+                    const float mod_amt_padding     = 2;
                     const float mod_amt_strokewidth = 3;
-                    const float mod_amt_delta       = mod_amt_padding + mod_amt_strokewidth;
 
                     nvgBeginPath(nvg);
                     for (int j = 0; j < ARRLEN(modamts.data); j++)
@@ -1518,13 +1517,13 @@ void pw_tick(void* _gui)
                             float l, r;
                             if (j == 0)
                             {
-                                l = rect.x - mod_amt_padding - mod_amt_strokewidth;
-                                r = rect.x - mod_amt_padding;
+                                l = rect.x + mod_amt_padding;
+                                r = rect.x + mod_amt_padding + mod_amt_strokewidth;
                             }
                             else
                             {
-                                l = rect.r + mod_amt_padding;
-                                r = rect.r + mod_amt_padding + mod_amt_strokewidth;
+                                l = rect.r - mod_amt_padding - mod_amt_strokewidth;
+                                r = rect.r - mod_amt_padding;
                             }
 
                             nvgRect2(nvg, l, y_top, r, y_bot);
