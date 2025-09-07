@@ -3,6 +3,7 @@
 
 #include <layout.h>
 #include <sort.h>
+#include <stdio.h>
 
 enum
 {
@@ -668,14 +669,75 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
-    const float content_x = lm->content_x + CONTENT_PADDING_X;
-    const float content_r = lm->content_r - CONTENT_PADDING_X;
+    const float content_x     = lm->content_x + CONTENT_PADDING_X;
+    const float content_r     = lm->content_r - CONTENT_PADDING_X;
+    const float button_top    = top_text_cy - GRID_BUTTON_HEIGHT * 0.5f;
+    const float button_bottom = top_text_cy + GRID_BUTTON_HEIGHT * 0.5f;
 
-    // Grid labels & buttons
+    // Grid slider
     {
-        static const char   label_grid[]     = "GRID";
+        imgui_rect rect;
+        rect.x = content_x;
+        rect.r = ceilf(content_x + lm->content_scale * 80);
+        rect.y = button_top;
+        rect.b = button_bottom;
+
+        unsigned events = imgui_get_events_rect(im, 'grid', &rect);
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_NS);
+
+        int lfo_idx     = gui->plugin->selected_lfo_idx;
+        int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
+        int ngrid       = gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
+
+        if (events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_DRAG_MOVE))
+        {
+            static float last_drag_val = 0;
+            if (events & IMGUI_EVENT_DRAG_BEGIN)
+            {
+                last_drag_val = (float)ngrid;
+            }
+
+            imgui_drag_value(im, &last_drag_val, 1, 32, 200, IMGUI_DRAG_VERTICAL);
+            ngrid = (int)last_drag_val;
+
+            gui->plugin->lfos[lfo_idx].grid_x[pattern_idx] = ngrid;
+        }
+
+        const float font_size = lm->content_scale * 14;
+
+        nvgSetFontSize(nvg, font_size);
+        nvgSetColour(nvg, C_TEXT);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
+        nvgText(nvg, content_x, top_text_cy, "GRID", NULL);
+
+        // Up & down "buttons"
+        float btn_top = floor(top_text_cy - font_size * 0.4f);
+        float btn_bot = ceilf(top_text_cy + font_size * 0.35f);
+
+        nvgBeginPath(nvg);
+        nvgMoveTo(nvg, rect.r, btn_top + 3.8);
+        nvgLineTo(nvg, rect.r - 2.5, btn_top);
+        nvgLineTo(nvg, rect.r - 5, btn_top + 3.8);
+        nvgClosePath(nvg);
+
+        nvgMoveTo(nvg, rect.r, btn_bot - 3.8);
+        nvgLineTo(nvg, rect.r - 2.5, btn_bot);
+        nvgLineTo(nvg, rect.r - 5, btn_bot - 3.8);
+        nvgClosePath(nvg);
+
+        nvgSetColour(nvg, C_GREY_1);
+        nvgFill(nvg);
+
+        nvgSetTextAlign(nvg, NVG_ALIGN_CR);
+        char label[8];
+        snprintf(label, sizeof(label), "%d", ngrid);
+        nvgText(nvg, rect.r - 9, top_text_cy, label, 0);
+    }
+
+    // Pattern Length
+    {
         static const char   label_length[]   = "LENGTH";
-        static const size_t label_grid_len   = ARRLEN(label_grid) - 1;
         static const size_t label_length_len = ARRLEN(label_length) - 1;
 
         NVGglyphPosition glyphs[label_length_len];
@@ -684,14 +746,8 @@ void draw_lfo_section(GUI* gui)
         nvgSetColour(nvg, C_TEXT);
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
 
-        nvgTextGlyphPositions(nvg, 0, 0, label_grid, label_grid + label_grid_len, glyphs, label_length_len);
-        const float label_grid_width = glyphs[label_grid_len - 1].maxx;
-
         nvgTextGlyphPositions(nvg, 0, 0, label_length, label_length + label_length_len, glyphs, label_length_len);
         const float label_length_width = glyphs[label_length_len - 1].maxx;
-
-        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
-        nvgText(nvg, content_x, top_text_cy, label_grid, label_grid + label_grid_len);
 
         nvgSetTextAlign(nvg, NVG_ALIGN_CR);
         float label_length_r = content_r - GRID_BUTTON_WIDTH * 2 - GRID_BUTTON_BUTTON_GAP - GRID_BUTTON_TEXT_GAP;
@@ -699,24 +755,18 @@ void draw_lfo_section(GUI* gui)
 
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
 
-        const float button_top    = top_text_cy - GRID_BUTTON_HEIGHT * 0.5f;
-        const float button_bottom = top_text_cy + GRID_BUTTON_HEIGHT * 0.5f;
         enum
         {
-            BUTTON_GRID_DEC,
-            BUTTON_GRID_INC,
             BUTTON_LENGTH_HALF,
             BUTTON_LENGTH_DOUBLE,
             BUTTON_COUNT,
         };
         imgui_rect buttons[BUTTON_COUNT];
 
-        buttons[BUTTON_GRID_DEC].x      = content_x + label_grid_width + GRID_BUTTON_TEXT_GAP;
-        buttons[BUTTON_GRID_INC].x      = buttons[BUTTON_GRID_DEC].x + GRID_BUTTON_WIDTH + GRID_BUTTON_BUTTON_GAP;
         buttons[BUTTON_LENGTH_HALF].x   = content_r - 2 * GRID_BUTTON_WIDTH - GRID_BUTTON_BUTTON_GAP;
         buttons[BUTTON_LENGTH_DOUBLE].x = content_r - GRID_BUTTON_WIDTH;
 
-        static const char* btn_labels[] = {"-1", "+1", "÷2", "×2"};
+        static const char* btn_labels[] = {"÷2", "×2"};
 
         for (int btn_idx = 0; btn_idx < BUTTON_COUNT; btn_idx++)
         {
@@ -733,18 +783,6 @@ void draw_lfo_section(GUI* gui)
             {
                 int lfo_idx     = gui->plugin->selected_lfo_idx;
                 int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
-
-                if (btn_idx == BUTTON_GRID_DEC || btn_idx == BUTTON_GRID_INC)
-                {
-                    int ngrid = gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
-                    if (btn_idx == BUTTON_GRID_DEC)
-                        ngrid--;
-                    if (btn_idx == BUTTON_GRID_INC)
-                        ngrid++;
-                    ngrid = xm_clampi(ngrid, 1, 8);
-
-                    gui->plugin->lfos[lfo_idx].grid_x[pattern_idx] = ngrid;
-                }
 
                 if (btn_idx == BUTTON_LENGTH_HALF || btn_idx == BUTTON_LENGTH_DOUBLE)
                 {
