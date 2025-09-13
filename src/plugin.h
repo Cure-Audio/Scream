@@ -69,7 +69,7 @@ typedef enum EventType
     EVENT_SET_PARAMETER_NOTIFYING_HOST,
 } EventType;
 
-typedef enum LFORates
+typedef enum LFORate
 {
     LFO_RATE_4_BARS,
     LFO_RATE_2_BARS,
@@ -90,7 +90,7 @@ typedef enum LFORates
     LFO_RATE_1_48,
     LFO_RATE_1_64,
     LFO_RATE_COUNT,
-} LFORates;
+} LFORate;
 static const char* LFO_RATE_NAMES[] = {
     "4 Bars",
     "2 Bars",
@@ -127,6 +127,8 @@ typedef struct LFO
     // NOTE: the GUI will display a point on the right edge. This does not represent the final point in this array. We
     // calculate that point at runtime based off of the first point in these arrays
     LFOPoint* points[NUM_LFO_PATTERNS];
+
+    double phase;
 
     // Length in beats
     int pattern_length[NUM_LFO_PATTERNS];

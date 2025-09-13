@@ -1946,6 +1946,7 @@ void pw_tick(void* _gui)
         snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
         nvgBeginPath(nvg);
         nvgSetColour(nvg, C_TEXT);
+        nvgSetFontSize(nvg, lm->content_scale * 14);
         nvgSetTextAlign(nvg, NVG_ALIGN_CC);
         float cx = (rect.x + rect.r) * 0.5f - 10;
         float cy = (rect.y + rect.b) * 0.5f;

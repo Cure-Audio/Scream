@@ -89,6 +89,12 @@ void* cplug_createPlugin(CplugHostContext* ctx)
 
     for (int i = 0; i < ARRLEN(p->main_params); i++)
         p->main_params[i] = cplug_getDefaultParameterValue(p, i);
+#ifndef NDEBUG
+    p->main_params[PARAM_CUTOFF]    = 0.85;
+    p->main_params[PARAM_SCREAM]    = 0.465f;
+    p->main_params[PARAM_RESONANCE] = 1;
+#endif
+
     memcpy(p->audio_params, p->main_params, sizeof(p->main_params));
     _Static_assert(sizeof(p->main_params) == sizeof(p->audio_params));
 
@@ -99,20 +105,22 @@ void* cplug_createPlugin(CplugHostContext* ctx)
         {
             xarr_setcap(lfo->points[j], (4 * MAX_PATTERN_LENGTH_PATTERNS));
 
-            lfo->grid_x[j] = 1;
+            lfo->grid_x[j] = 4;
             lfo->grid_y[j] = 4;
 
-            lfo->pattern_length[j] = 4;
+            // lfo->pattern_length[j] = 4;
+            lfo->pattern_length[j] = 1;
 
-            for (int k = 0; k < lfo->pattern_length[j]; k++)
-            {
-                float    x1  = k;
-                float    x2  = x1 + 0.5;
-                LFOPoint pt1 = {x1, 0, 0.5};
-                LFOPoint pt2 = {x2, 1, 0.5};
-                xarr_push(lfo->points[j], pt1);
-                xarr_push(lfo->points[j], pt2);
-            }
+            // for (int k = 0; k < lfo->pattern_length[j]; k++)
+            // {
+            // float    x1  = k;
+            float    x1  = 0;
+            float    x2  = x1 + 0.5;
+            LFOPoint pt1 = {x1, 0, 0.5};
+            LFOPoint pt2 = {x2, 1, 0.5};
+            xarr_push(lfo->points[j], pt1);
+            xarr_push(lfo->points[j], pt2);
+            // }
             // LFOPoint(*points_view)[32] = (void*)(lfo->points[j]);
             // xassert(false);
         }
@@ -191,6 +199,48 @@ const float g_release_ms = 5.0;
 // float g_hp_Q = XM_SQRT2f;
 #endif
 
+// clang-format off
+const double SYNC_VALUES[] = {
+    // LFO_RATE_4_BARS,
+    1.0 / ((4.0) * 240),
+    // LFO_RATE_2_BARS,
+    1.0 / ((2.0) * 240),
+    // LFO_RATE_1_BAR,
+    1.0 / ((1.0) * 240),
+    // LFO_RATE_3_4,
+    1.0 / ((3.0 / 4.0) * 240),
+    // LFO_RATE_2_3,
+    1.0 / ((2.0 / 3.0) * 240),
+    // LFO_RATE_1_2,
+    1.0 / ((1.0 / 2.0) * 240),
+    // LFO_RATE_3_8,
+    1.0 / ((3.0 / 8.0) * 240),
+    // LFO_RATE_1_3,
+    1.0 / ((1.0 / 3.0) * 240),
+    // LFO_RATE_1_4,
+    1.0 / ((1.0 / 4.0) * 240),
+    // LFO_RATE_3_16,
+    1.0 / ((3.0 / 16.0) * 240),
+    // LFO_RATE_1_6,
+    1.0 / ((1.0 / 6.0) * 240),
+    // LFO_RATE_1_8,
+    1.0 / ((1.0 / 8.0) * 240),
+    // LFO_RATE_1_12,
+    1.0 / ((1.0 / 12.0) * 240),
+    // LFO_RATE_1_16,
+    1.0 / ((1.0 / 16.0) * 240),
+    // LFO_RATE_1_24,
+    1.0 / ((1.0 / 24.0) * 240),
+    // LFO_RATE_1_32,
+    1.0 / ((1.0 / 32.0) * 240),
+    // LFO_RATE_1_48,
+    1.0 / ((1.0 / 48.0) * 240),
+    // LFO_RATE_1_64,
+    1.0 / ((1.0 / 64.0) * 240),
+};
+_Static_assert(ARRLEN(SYNC_VALUES) == LFO_RATE_COUNT, "");
+// clang-format on
+
 void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
 {
     LINKED_ARENA_LEAK_DETECT_BEGIN(p->audio_arena);
@@ -207,8 +257,9 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
     // !!!
     xt_spinlock_lock(&lfo->spinlocks[pattern_idx]);
 
-    const int    num_points     = xarr_len(lfo->points[pattern_idx]);
-    const double pattern_length = xt_atomic_load_i32((xt_atomic_int32_t*)&lfo->pattern_length[pattern_idx]);
+    const int num_points = xarr_len(lfo->points[pattern_idx]);
+    // const double pattern_length = xt_atomic_load_i32((xt_atomic_int32_t*)&lfo->pattern_length[pattern_idx]);
+    const double pattern_length = 1;
     LFOPoint*    points         = linked_arena_alloc(p->audio_arena, num_points * sizeof(*points));
     memcpy(points, lfo->points[pattern_idx], num_points * sizeof(*points));
 
@@ -217,9 +268,17 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
     const LFOPoint* points_start = points;
     const LFOPoint* points_end   = points_start + num_points;
 
-    double beat_position = fmod(p->beat_position, pattern_length);
-    xassert(beat_position < pattern_length);
-    const double beat_inc = p->beat_inc;
+    // double beat_position = fmod(p->beat_position, pattern_length);
+    // xassert(beat_position < pattern_length);
+    // const double beat_inc = p->beat_inc;
+
+    ParamID       rate_param_idx = PARAM_RATE_LFO_1 + lfo_idx;
+    const LFORate lfo_rate_idx   = (int)p->audio_params[rate_param_idx];
+    xassert(lfo_rate_idx >= 0 && lfo_rate_idx < ARRLEN(SYNC_VALUES));
+    const double rate_hz  = p->bpm * SYNC_VALUES[lfo_rate_idx];
+    const double beat_inc = rate_hz / p->sample_rate;
+
+#define beat_position lfo->phase
 
     const LFOPoint* it = points_end;
     while (it-- != points_start)
@@ -285,6 +344,8 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
             }
         }
     }
+
+#undef beat_position
 
     linked_arena_release(p->audio_arena, points);
     LINKED_ARENA_LEAK_DETECT_END(p->audio_arena);

@@ -221,7 +221,8 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
     const int lfo_idx     = gui->plugin->selected_lfo_idx;
     const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
 
-    const float pattern_length = (float)gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
+    // const float pattern_length = (float)gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
+    const float pattern_length = 1;
 
     const float area_width  = area->r - area->x;
     const float area_height = area->b - area->y;
@@ -419,7 +420,7 @@ void drag_and_draw_lfo_points(GUI* gui, imgui_pt pos, const imgui_rect* area)
         imgui_pt pt = {boundary_left, pt_y_left};
         update_lfo_point(gui, area, pt, left_idx);
     }
-    xassert(num_points_at_right_boundary == 2);
+    // xassert(num_points_at_right_boundary == 2);
 
     if (shape_type == SHAPE_LINEAR_ASC || shape_type == SHAPE_LINEAR_DESC)
     {
@@ -918,6 +919,7 @@ void draw_lfo_section(GUI* gui)
             double next_val = xm_droundi(last_drag_val);
             val             = next_val;
             param_change_update(gui->plugin, param_id, val);
+            val += 0;
         }
         if (events & IMGUI_EVENT_DRAG_END)
             param_change_end(gui->plugin, param_id);
@@ -1185,7 +1187,8 @@ void draw_lfo_section(GUI* gui)
 
     // Display grid
 
-    const float grid_y = display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT + DISPLAY_PADDING_TOP;
+    // const float grid_y = display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT + DISPLAY_PADDING_TOP;
+    const float grid_y = button_bottom + CONTENT_PADDING_Y + LFO_TAB_HEIGHT;
     const float grid_b = shape_y - DISPLAY_PADDING_BOTTOM;
     const float grid_x = lm->content_x + CONTENT_PADDING_X;
     const float grid_r = lm->content_r - CONTENT_PADDING_X;
@@ -1196,9 +1199,11 @@ void draw_lfo_section(GUI* gui)
     const int lfo_idx     = gui->plugin->selected_lfo_idx;
     const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
 
-    const float pattern_length = gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
+    // const float pattern_length = gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx];
+    const float pattern_length = 1;
     const int   num_grid_x     = pattern_length * gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
-    const int   num_grid_y     = gui->plugin->lfos[lfo_idx].grid_y[pattern_idx];
+    // const int   num_grid_y     = gui->plugin->lfos[lfo_idx].grid_y[pattern_idx];
+    const int num_grid_y = num_grid_x;
 
     if (!gui->gui_lfo_points_valid)
     {
@@ -1737,6 +1742,7 @@ void draw_lfo_section(GUI* gui)
             xassert(p1->x >= 0 && p1->x <= pattern_length);
             xassert(p1->y >= 0 && p1->y <= 1);
             xassert(p1->skew >= 0 && p1->skew <= 1);
+            i += 0;
         }
         gui->main_lfo_points->x = 0;
 #ifndef NDEBUG
@@ -1832,26 +1838,32 @@ void draw_lfo_section(GUI* gui)
         nvgStroke(nvg, 1);
 
         // Horizontal subdivisions
-        nvgBeginPath(nvg);
-        for (int i = 1; i < num_grid_x; i++)
+        for (int k = 0; k < 2; k++)
         {
-            float x = xm_mapf(i, 0, num_grid_x, grid_x, grid_r);
-            x       = floorf(x) + 0.5f;
-            nvgMoveTo(nvg, x, grid_y + 1);
-            nvgLineTo(nvg, x, grid_b - 1);
-        }
-        // Vertical subdivisions
-        for (int i = 1; i < num_grid_y; i++)
-        {
-            float y = xm_mapf(i, 0, num_grid_y, grid_y, grid_b);
-            y       = floorf(y) + 0.5f;
-            nvgMoveTo(nvg, grid_x + 1, y);
-            nvgLineTo(nvg, grid_r - 1, y);
-        }
-        if (num_grid_x > 1 || num_grid_y > 1)
-        {
-            nvgSetColour(nvg, C_GRID_SECONDARY);
-            nvgStroke(nvg, 1);
+            nvgBeginPath(nvg);
+            for (int i = 1 + k; i < num_grid_x; i += 2)
+            {
+                float x = xm_mapf(i, 0, num_grid_x, grid_x, grid_r);
+                x       = floorf(x) + 0.5f;
+                nvgMoveTo(nvg, x, grid_y + 1);
+                nvgLineTo(nvg, x, grid_b - 1);
+            }
+            // Vertical subdivisions
+            for (int i = 1 + k; i < num_grid_y; i += 2)
+            {
+                float y = xm_mapf(i, 0, num_grid_y, grid_y, grid_b);
+                y       = floorf(y) + 0.5f;
+                nvgMoveTo(nvg, grid_x + 1, y);
+                nvgLineTo(nvg, grid_r - 1, y);
+            }
+            if (num_grid_x > 1 || num_grid_y > 1)
+            {
+                if (k == 0)
+                    nvgSetColour(nvg, C_GRID_TERTIARY);
+                else
+                    nvgSetColour(nvg, C_GRID_SECONDARY);
+                nvgStroke(nvg, 1);
+            }
         }
 
         // Horiztonal beats
@@ -2009,7 +2021,8 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
-    float playhead = (float)gui->plugin->beat_position;
+    // float playhead = (float)gui->plugin->beat_position;
+    float playhead = (float)gui->plugin->lfos[lfo_idx].phase;
     playhead       = fmodf(playhead, pattern_length);
     if (playhead < pattern_length)
     {
