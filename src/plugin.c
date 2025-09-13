@@ -202,41 +202,41 @@ const float g_release_ms = 5.0;
 // clang-format off
 const double SYNC_VALUES[] = {
     // LFO_RATE_4_BARS,
-    1.0 / ((4.0) * 240),
+    (4.0),
     // LFO_RATE_2_BARS,
-    1.0 / ((2.0) * 240),
+    (2.0),
     // LFO_RATE_1_BAR,
-    1.0 / ((1.0) * 240),
+    (1.0),
     // LFO_RATE_3_4,
-    1.0 / ((3.0 / 4.0) * 240),
+    (3.0 / 4.0),
     // LFO_RATE_2_3,
-    1.0 / ((2.0 / 3.0) * 240),
+    (2.0 / 3.0),
     // LFO_RATE_1_2,
-    1.0 / ((1.0 / 2.0) * 240),
+    (1.0 / 2.0),
     // LFO_RATE_3_8,
-    1.0 / ((3.0 / 8.0) * 240),
+    (3.0 / 8.0),
     // LFO_RATE_1_3,
-    1.0 / ((1.0 / 3.0) * 240),
+    (1.0 / 3.0),
     // LFO_RATE_1_4,
-    1.0 / ((1.0 / 4.0) * 240),
+    (1.0 / 4.0),
     // LFO_RATE_3_16,
-    1.0 / ((3.0 / 16.0) * 240),
+    (3.0 / 16.0),
     // LFO_RATE_1_6,
-    1.0 / ((1.0 / 6.0) * 240),
+    (1.0 / 6.0),
     // LFO_RATE_1_8,
-    1.0 / ((1.0 / 8.0) * 240),
+    (1.0 / 8.0),
     // LFO_RATE_1_12,
-    1.0 / ((1.0 / 12.0) * 240),
+    (1.0 / 12.0),
     // LFO_RATE_1_16,
-    1.0 / ((1.0 / 16.0) * 240),
+    (1.0 / 16.0),
     // LFO_RATE_1_24,
-    1.0 / ((1.0 / 24.0) * 240),
+    (1.0 / 24.0),
     // LFO_RATE_1_32,
-    1.0 / ((1.0 / 32.0) * 240),
+    (1.0 / 32.0),
     // LFO_RATE_1_48,
-    1.0 / ((1.0 / 48.0) * 240),
+    (1.0 / 48.0),
     // LFO_RATE_1_64,
-    1.0 / ((1.0 / 64.0) * 240),
+    (1.0 / 64.0),
 };
 _Static_assert(ARRLEN(SYNC_VALUES) == LFO_RATE_COUNT, "");
 // clang-format on
@@ -275,7 +275,7 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
     ParamID       rate_param_idx = PARAM_RATE_LFO_1 + lfo_idx;
     const LFORate lfo_rate_idx   = (int)p->audio_params[rate_param_idx];
     xassert(lfo_rate_idx >= 0 && lfo_rate_idx < ARRLEN(SYNC_VALUES));
-    const double rate_hz  = p->bpm * SYNC_VALUES[lfo_rate_idx];
+    const double rate_hz  = p->bpm / (SYNC_VALUES[lfo_rate_idx] * 240);
     const double beat_inc = rate_hz / p->sample_rate;
 
 #define beat_position lfo->phase
@@ -444,16 +444,45 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
     {
         p->bpm = ctx->bpm;
     }
-    bool has_beat_position = ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_PLAYHEAD_BEATS;
-    bool is_playing        = ctx->flags & CPLUG_FLAG_TRANSPORT_IS_PLAYING;
-    if (has_beat_position && is_playing)
-    {
-        p->beat_position = fmod(ctx->playheadBeats, MAX_PATTERN_LENGTH_PATTERNS);
-    }
 
     const double beats_per_second = p->bpm / 60.0;
     const double samples_per_beat = p->sample_rate / beats_per_second;
     p->beat_inc                   = 1.0 / samples_per_beat;
+
+    const bool has_playhead = ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_PLAYHEAD_BEATS;
+    const bool is_playing   = ctx->flags & CPLUG_FLAG_TRANSPORT_IS_PLAYING;
+    const bool is_looping   = (bool)(ctx->flags & CPLUG_FLAG_TRANSPORT_IS_LOOPING);
+
+    bool   did_loop            = false;
+    double next_playhead_beats = 0;
+
+    if (has_playhead)
+        next_playhead_beats = ctx->playheadBeats;
+
+    if (has_playhead && is_playing)
+        p->beat_position = fmod(ctx->playheadBeats, MAX_PATTERN_LENGTH_PATTERNS);
+
+    if (is_looping && has_playhead)
+        did_loop = next_playhead_beats < p->last_playhead_beats;
+
+    const bool started_playing = p->playhead_was_playing == false && is_playing == true;
+    p->playhead_was_playing    = is_playing;
+    p->last_playhead_beats     = next_playhead_beats;
+
+    if (p->bpm > 0 && (started_playing || did_loop))
+    {
+        for (int lfo_idx = 0; lfo_idx < ARRLEN(p->lfos); lfo_idx++)
+        {
+            ParamID rate_param_id = PARAM_RATE_LFO_1 + lfo_idx;
+            LFORate rate_idx      = p->audio_params[rate_param_id];
+            xassert(rate_idx >= 0 && rate_idx < ARRLEN(SYNC_VALUES));
+
+            double phase  = p->last_playhead_beats / SYNC_VALUES[rate_idx];
+            phase        -= (int)phase;
+
+            p->lfos[lfo_idx].phase = phase;
+        }
+    }
 
 #ifdef CPLUG_BUILD_STANDALONE
     float phase = g_osc_phase;

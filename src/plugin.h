@@ -197,6 +197,9 @@ typedef struct Plugin
     double   sample_rate;
     uint32_t max_block_size;
 
+    bool   playhead_was_playing;
+    double last_playhead_beats;
+
     LFO lfos[2];
 
     double bpm;
