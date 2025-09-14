@@ -58,6 +58,7 @@ void tooltip_draw(
     d.r              = d.x + width;
     d.y             -= tt_height + TOOLTIP_ARROW_LENGTH + TOOLTIP_GAP;
     d.b              = d.y + tt_height;
+    println("Height: %f", tt_height);
 
     const float boundary_padding = scale * 8;
     const float boundary_right   = gui_width - boundary_padding;
@@ -70,7 +71,7 @@ void tooltip_draw(
     }
     if (d.y < boundary_padding)
     {
-        float delta  = boundary_padding - d.x;
+        float delta  = boundary_padding - d.y;
         d.y         += delta;
         d.b         += delta;
 
@@ -79,6 +80,7 @@ void tooltip_draw(
         if (d.b > widget_top)
         {
             d.y = widget_bottom + TOOLTIP_ARROW_LENGTH + TOOLTIP_GAP;
+            d.b = d.y + tt_height;
         }
     }
     if (d.r > boundary_right)
@@ -93,6 +95,29 @@ void tooltip_draw(
         d.y         -= delta;
         d.b         -= delta;
     }
+
+    xassert(d.y >= 0);
+    xassert(d.b >= d.y);
+
+    imgui_rect shadow_area  = d;
+    shadow_area.x          += 2;
+    shadow_area.r          += 2;
+    shadow_area.y          += 4;
+    shadow_area.b          += 4;
+    nvgBeginPath(nvg);
+    nvgRect2(nvg, shadow_area.x, shadow_area.y, shadow_area.r, shadow_area.b);
+    NVGpaint shadow_paint = nvgBoxGradient(
+        nvg,
+        shadow_area.x,
+        shadow_area.y,
+        shadow_area.r - shadow_area.x,
+        shadow_area.b - shadow_area.y,
+        0,
+        4,
+        (NVGcolour){0, 0, 0, 0.25},
+        (NVGcolour){0, 0, 0, 0});
+    nvgSetPaint(nvg, shadow_paint);
+    nvgFill(nvg);
 
     nvgBeginPath(nvg);
     nvgMoveTo(nvg, d.x, d.y);
@@ -113,9 +138,9 @@ void tooltip_draw(
     }
     nvgClosePath(nvg);
 
-    static const NVGcolour TOOLTIP_BG_COLOUR     = nvgHexColour(0x000000ff);
-    static const NVGcolour TOOLTIP_BORDER_COLOUR = nvgHexColour(0xffffffff);
-    static const NVGcolour TOOLTIP_TEXT_COLOUR   = nvgHexColour(0xffffffff);
+    static const NVGcolour TOOLTIP_BG_COLOUR     = nvgHexColour(0xD4D7DEff);
+    static const NVGcolour TOOLTIP_BORDER_COLOUR = nvgHexColour(0x8A94A8ff);
+    static const NVGcolour TOOLTIP_TEXT_COLOUR   = nvgHexColour(0x5D636Aff);
 
     nvgSetColour(nvg, TOOLTIP_BG_COLOUR);
     nvgFill(nvg);

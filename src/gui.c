@@ -1469,7 +1469,14 @@ void pw_tick(void* _gui)
                     uint32_t events        = imgui_get_events_rect(im, wid, &rect);
                     rect.r                 = rect_r;
 
-                    tooltip_handle_events(&gui->tooltip, rect, "ayy,\nlmao...", gui->frame_start_time, events);
+                    static const char* input_gain_description =
+                        "Changing the input gain drastically changes the sound. It's recommended your try and keep the "
+                        "input gain close to 0dB.\n\n"
+                        "If your input is detected to be within a desirable range, the peak meter will show text in "
+                        "green. If the input too loud or too quiet, then the text will be red. As always, trust your "
+                        "ears first.";
+
+                    tooltip_handle_events(&gui->tooltip, rect, input_gain_description, gui->frame_start_time, events);
 
                     double value_d = handle_param_events(gui, PARAM_INPUT_GAIN, events, rect.b - rect.y);
 

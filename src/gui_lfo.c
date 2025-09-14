@@ -931,8 +931,6 @@ void draw_lfo_section(GUI* gui)
         if (events & IMGUI_EVENT_DRAG_END)
             param_change_end(gui->plugin, param_id);
 
-        println("%f", val);
-
         nvgSetFontSize(nvg, font_size);
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         nvgSetColour(nvg, C_TEXT);

@@ -17,11 +17,11 @@ x display modulated parameters on input & wet params
 x display LFO range on the mod amount parameter
 x display pattern 1-8 better. Try adding each number
 x Make grid buttons a slider
-- Add rate knob
+x Add rate knob
 - unsynced LFO, eg. ms or hz
 x Paintable sine shape in the LFO
 x Tooltips on complicated controls
-  - input
+  x input
   - cutoff
   - scream
   - resonance
