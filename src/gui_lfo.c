@@ -908,6 +908,8 @@ void draw_lfo_section(GUI* gui)
     }
     */
     // LFO Rate
+
+    // Rate
     {
         // content_r;
         const float font_size = lm->content_scale * 14;
@@ -923,6 +925,18 @@ void draw_lfo_section(GUI* gui)
         unsigned events = imgui_get_events_rect(im, 'rate', &rect);
         if (events & IMGUI_EVENT_MOUSE_ENTER)
             pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_NS);
+
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        {
+            if (im->left_click_counter >= 2)
+            {
+                im->left_click_counter = 0;
+
+                val = cplug_getDefaultParameterValue(gui->plugin, param_id);
+                param_set(gui->plugin, param_id, val);
+            }
+        }
+
         if (events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_DRAG_MOVE))
         {
             static float last_drag_val = 0;
