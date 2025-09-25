@@ -1537,13 +1537,31 @@ void pw_tick(void* _gui)
                         nvgFill(nvg);
                     }
 
+                    xvec2f peaks;
+                    peaks.u64 = xt_atomic_load_u64(&gui->plugin->gui_input_peak_gain);
+
+                    float ch_w = roundf(meter_width * (7.0f / 32.0f));
+
+                    const float peak_label_height = 16 * lm->content_scale;
+
+                    const float ch_y    = rect.y + peak_label_height;
+                    const float ch_b    = rect.b - 4;
+                    const float ch_h    = ch_b - ch_y;
+                    const float ch_x[2] = {
+                        roundf(rect.x + meter_width * (8.0f / 32.0f)),
+                        roundf(rect.r - meter_width * (8.0f / 32.0f)) - ch_w,
+                    };
+
                     // Value icon
                     {
                         float icon_x = icon_r - icon_width;
 
                         float shadow_radius = 8;
 
-                        float icon_y = xm_lerpf(value_d, rect.b, rect.y);
+                        // ch_y
+                        // ch_h
+
+                        float icon_y = xm_lerpf(value_d, ch_b, ch_y);
 
                         static const NVGcolour icol      = {0, 0, 0, 0.3};
                         static const NVGcolour ocol      = {0, 0, 0, 0};
@@ -1563,21 +1581,6 @@ void pw_tick(void* _gui)
                         nvgSetColour(nvg, C_GREY_2);
                         nvgFill(nvg);
                     }
-
-                    xvec2f peaks;
-                    peaks.u64 = xt_atomic_load_u64(&gui->plugin->gui_input_peak_gain);
-
-                    float ch_w = roundf(meter_width * (7.0f / 32.0f));
-
-                    const float peak_label_height = 16 * lm->content_scale;
-
-                    const float ch_y    = rect.y + peak_label_height;
-                    const float ch_b    = rect.b - 4;
-                    const float ch_h    = ch_b - ch_y;
-                    const float ch_x[2] = {
-                        roundf(rect.x + meter_width * (8.0f / 32.0f)),
-                        roundf(rect.r - meter_width * (8.0f / 32.0f)) - ch_w,
-                    };
 
                     // Background
                     nvgBeginPath(nvg);

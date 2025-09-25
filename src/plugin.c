@@ -188,10 +188,11 @@ char g_osc_midi = -1;
 // char  g_osc_midi  = 28; // E1
 float g_osc_phase = 0;
 
-float g_output_gain_dB = 0;
+// float g_output_gain_dB = 0;
 // float g_output_gain_dB = -6;
-const float g_attack_ms  = 5;
-const float g_release_ms = 5.0;
+float       g_output_gain_dB = -12;
+const float g_attack_ms      = 5;
+const float g_release_ms     = 5.0;
 
 // float g_lp_Q = XM_SQRT1_2f;
 // float g_lp_Q = XM_SQRT2f;
@@ -547,12 +548,58 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     // if (wave < -1)
                     //     wave = -2 - wave;
 
+                    // Simulate low input gain
+                    wave *= 0.1f;
+
                     output[0][i] = wave;
 
                     phase += inc;
                     if (phase >= 1)
                         phase -= 1;
                 }
+                // Autogain
+                const float attack  = convert_compressor_time(p->sample_rate * 0.001);
+                const float release = convert_compressor_time(p->sample_rate * 0.1);
+
+                static float last_peak          = 0;
+                float        block_highest_peak = 0;
+                for (int i = frame; i < event.processAudio.endFrame; i++)
+                {
+                    float x   = output[0][i];
+                    last_peak = detect_peak(fabsf(x), last_peak, attack, release);
+
+                    block_highest_peak = xm_maxf(block_highest_peak, last_peak);
+                }
+                static bool          init_autogain = false;
+                static SmoothedValue sv_autogain;
+
+                if (init_autogain == false)
+                {
+                    init_autogain = true;
+                    smoothvalue_reset(&sv_autogain, 1);
+                }
+
+                float in_peak_dB = xm_fast_gain_to_dB(block_highest_peak);
+                if (in_peak_dB < -48)
+                    in_peak_dB = -48;
+                // We want to bring the peak gain to approx. 0dB
+                float autogain_dB            = -in_peak_dB;
+                float autogain_gain          = xm_fast_dB_to_gain(autogain_dB);
+                int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.02);
+                smoothvalue_set_target(&sv_autogain, autogain_gain, smoothing_time_samples);
+
+                float out_peak = 0;
+                for (int i = frame; i < event.processAudio.endFrame; i++)
+                {
+                    float gain    = smoothvalue_tick(&sv_autogain);
+                    output[0][i] *= gain;
+
+                    if (output[0][i] > out_peak)
+                        out_peak = output[0][i];
+                }
+
+                // println("in_peak_dB: %.2fdB out_peak", in_peak_dB, xm_fast_gain_to_dB(out_peak));
+
                 memcpy(output[1] + frame, output[0] + frame, sizeof(float) * num_frames);
             }
             else
@@ -560,7 +607,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 memset(output[0] + frame, 0, sizeof(float) * num_frames);
                 memset(output[1] + frame, 0, sizeof(float) * num_frames);
             }
-#endif
+#endif // CPLUG_BUILD_STANDALONE
 
             // These flags represent active LFO modulations on parameters
             // The index of the set bit corresponds to the parameter idx that is being modulated

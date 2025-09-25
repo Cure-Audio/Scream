@@ -36,6 +36,9 @@ x Tooltips on complicated controls
 - make lfo look better
 - save LFO state (DAW project load/save)
 
-- it may be possible to create an intelligent 'auto gain' for the input by using some cleverly tuned peak detectors
+x it may be possible to create an intelligent 'auto gain' for the input by using some cleverly tuned peak detectors
   Use fast and slow peak detectors similar to what it used in the GUI to display and detect if the input gain is ideal or not
   Use that to calculate how much gain to apply, and then make sure there is a bit of an attack on the applied gain to stop any sharp pops
+- test autogain works on a variety of sound sources
+  - must be fast enough to not have awful ringing at the beginning and end of sounds
+  - must be slow enough not to have clicks
