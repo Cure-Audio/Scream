@@ -1,3 +1,4 @@
+// Note (Tre): The original lib was written in C++ but I rewrote it in C
 /*
 BSD 3-Clause License
 
@@ -30,7 +31,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #pragma once
-#define _USE_MATH_DEFINES
 #define ADAA_TOL 1.0e-5
 
 #include "polylogarithm_Li2.h"

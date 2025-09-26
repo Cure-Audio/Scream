@@ -25,6 +25,10 @@
 #include <xhl/thread.h>
 #include <xhl/time.h>
 
+#ifdef CPLUG_BUILD_STANDALONE
+#include <pffft.c>
+#endif
+
 static const UINT_PTR UNIQUE_INT_ID = (UINT_PTR)'CURE' | ((UINT_PTR)'SCRM' << 32);
 
 static UINT_PTR g_timer                 = 0;

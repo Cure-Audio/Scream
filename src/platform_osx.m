@@ -26,6 +26,10 @@
 #include <xhl/thread.h>
 #include <xhl/time.h>
 
+#ifdef CPLUG_BUILD_STANDALONE
+#include <pffft.c>
+#endif
+
 CFRunLoopTimerRef g_timer;
 int               g_platform_init_counter = 0;
 

@@ -44,6 +44,27 @@
 // getMidiNoteFromHertz(20000) - getMidiNoteFromHertz(20)
 #define MIDI_NOTE_NUM_RANGE 119.58941141594507f
 
+#ifdef CPLUG_BUILD_STANDALONE
+#include "libs/synth.h"
+
+char g_osc_midi = -1;
+// char  g_osc_midi  = 28; // E1
+float g_osc_phase = 0;
+
+// float g_output_gain_dB = 0;
+// float g_output_gain_dB = -6;
+float       g_output_gain_dB = -12;
+const float g_attack_ms      = 5;
+const float g_release_ms     = 5.0;
+
+// float g_lp_Q = XM_SQRT1_2f;
+// float g_lp_Q = XM_SQRT2f;
+// float g_hp_Q = XM_SQRT1_2f;
+// float g_hp_Q = XM_SQRT2f;
+
+Synth g_synth = {0};
+#endif // CPLUG_BUILD_STANDALONE
+
 XTHREAD_LOCAL bool g_is_main_thread = false;
 bool               is_main_thread() { return g_is_main_thread; }
 
@@ -131,6 +152,22 @@ void* cplug_createPlugin(CplugHostContext* ctx)
     // TODO: uncomment this
     p->lfo_mod_amounts[PARAM_CUTOFF].left = 0.25f;
 
+#ifdef CPLUG_BUILD_STANDALONE
+    synth_init(&g_synth, p->audio_arena);
+    // p->synth.params[kUnisonVoices] = 1;
+    g_synth.params[kUnisonVoices] = 1;
+    g_synth.params[kUnisonDetune] = 0.0;
+    g_synth.params[kEnvDecay]     = 0.5;
+    g_synth.params[kEnvRelease]   = 0.01;
+    g_synth.params[kEnvSustain]   = 1;
+    // g_synth.params[kFilterEnvDecay]  = 0.5;
+    // g_synth.params[kFilterCutoff]    = 7;
+    // g_synth.params[kFilterResonance] = 0.5;
+    // g_synth.params[kFilterEnvAmount] = 48;
+    // g_synth.params[kFilterEnvAmount] = 12 * 6;
+    g_synth.filter_on = false;
+#endif
+
     return p;
 }
 
@@ -147,6 +184,10 @@ void cplug_destroyPlugin(void* _p)
             xarr_free(lfo->points[j]);
         }
     }
+
+#ifdef CPLUG_BUILD_STANDALONE
+    synth_deinit(&g_synth);
+#endif
 
     library_unload_platform();
 
@@ -181,24 +222,11 @@ void cplug_setSampleRateAndBlockSize(void* _p, double sampleRate, uint32_t maxBl
         for (int i = 0; i < ARRLEN(s->values); i++)
             smoothvalue_reset(&s->values[i], p->audio_params[i]);
     }
-}
 
 #ifdef CPLUG_BUILD_STANDALONE
-char g_osc_midi = -1;
-// char  g_osc_midi  = 28; // E1
-float g_osc_phase = 0;
-
-// float g_output_gain_dB = 0;
-// float g_output_gain_dB = -6;
-float       g_output_gain_dB = -12;
-const float g_attack_ms      = 5;
-const float g_release_ms     = 5.0;
-
-// float g_lp_Q = XM_SQRT1_2f;
-// float g_lp_Q = XM_SQRT2f;
-// float g_hp_Q = XM_SQRT1_2f;
-// float g_hp_Q = XM_SQRT2f;
+    synth_prepare(&g_synth, sampleRate);
 #endif
+}
 
 // clang-format off
 const double SYNC_VALUES[] = {
@@ -512,6 +540,11 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             }
             else if (event.midi.status == 128 && event.midi.data1 == g_osc_midi) // Note off
                 g_osc_midi = -1;
+
+            if (event.midi.status == 128)
+                synth_note_off(&g_synth, event.midi.data1);
+            else if (event.midi.status == 144)
+                synth_note_on(&g_synth, p->sample_rate, event.midi.data1);
             break;
         }
 
@@ -530,83 +563,53 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
 #ifdef CPLUG_BUILD_STANDALONE
             // Saw wave oscillator for testing
-            if (g_osc_midi != -1)
+            memset(output[0] + frame, 0, num_frames * sizeof(float));
+            synth_process(&g_synth, output[0] + frame, num_frames);
+
+            // Autogain
+            const float attack  = convert_compressor_time(p->sample_rate * 0.001);
+            const float release = convert_compressor_time(p->sample_rate * 0.1);
+
+            static float last_peak          = 0;
+            float        block_highest_peak = 0;
+            for (int i = frame; i < event.processAudio.endFrame; i++)
             {
-                float       freq = xm_midi_to_Hz((float)g_osc_midi);
-                const float inc  = freq * fs_inv; // ~A1
-                for (int i = frame; i < event.processAudio.endFrame; i++)
-                {
-                    // Shabby attempt at recreating the default Saw wave
-                    float v    = 1 - (1 - phase) * (1 - phase);
-                    v          = xm_lerpf(0.85, phase, v);
-                    float wave = -1 + v * 2;
+                float x   = output[0][i];
+                last_peak = detect_peak(fabsf(x), last_peak, attack, release);
 
-                    // Tri
-                    // float wave = -1 + phase * 4;
-                    // if (wave > 1)
-                    //     wave = 2 - wave;
-                    // if (wave < -1)
-                    //     wave = -2 - wave;
-
-                    // Simulate low input gain
-                    wave *= 0.1f;
-
-                    output[0][i] = wave;
-
-                    phase += inc;
-                    if (phase >= 1)
-                        phase -= 1;
-                }
-                // Autogain
-                const float attack  = convert_compressor_time(p->sample_rate * 0.001);
-                const float release = convert_compressor_time(p->sample_rate * 0.1);
-
-                static float last_peak          = 0;
-                float        block_highest_peak = 0;
-                for (int i = frame; i < event.processAudio.endFrame; i++)
-                {
-                    float x   = output[0][i];
-                    last_peak = detect_peak(fabsf(x), last_peak, attack, release);
-
-                    block_highest_peak = xm_maxf(block_highest_peak, last_peak);
-                }
-                static bool          init_autogain = false;
-                static SmoothedValue sv_autogain;
-
-                if (init_autogain == false)
-                {
-                    init_autogain = true;
-                    smoothvalue_reset(&sv_autogain, 1);
-                }
-
-                float in_peak_dB = xm_fast_gain_to_dB(block_highest_peak);
-                if (in_peak_dB < -48)
-                    in_peak_dB = -48;
-                // We want to bring the peak gain to approx. 0dB
-                float autogain_dB            = -in_peak_dB;
-                float autogain_gain          = xm_fast_dB_to_gain(autogain_dB);
-                int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.02);
-                smoothvalue_set_target(&sv_autogain, autogain_gain, smoothing_time_samples);
-
-                float out_peak = 0;
-                for (int i = frame; i < event.processAudio.endFrame; i++)
-                {
-                    float gain    = smoothvalue_tick(&sv_autogain);
-                    output[0][i] *= gain;
-
-                    if (output[0][i] > out_peak)
-                        out_peak = output[0][i];
-                }
-
-                // println("in_peak_dB: %.2fdB out_peak", in_peak_dB, xm_fast_gain_to_dB(out_peak));
-
-                memcpy(output[1] + frame, output[0] + frame, sizeof(float) * num_frames);
+                block_highest_peak = xm_maxf(block_highest_peak, last_peak);
             }
-            else
+            static bool          init_autogain = false;
+            static SmoothedValue sv_autogain;
+
+            if (init_autogain == false)
             {
-                memset(output[0] + frame, 0, sizeof(float) * num_frames);
-                memset(output[1] + frame, 0, sizeof(float) * num_frames);
+                init_autogain = true;
+                smoothvalue_reset(&sv_autogain, 1);
             }
+
+            float in_peak_dB = xm_fast_gain_to_dB(block_highest_peak);
+            if (in_peak_dB < -48)
+                in_peak_dB = -48;
+            // We want to bring the peak gain to approx. 0dB
+            float autogain_dB            = -in_peak_dB;
+            float autogain_gain          = xm_fast_dB_to_gain(autogain_dB);
+            int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.02);
+            smoothvalue_set_target(&sv_autogain, autogain_gain, smoothing_time_samples);
+
+            float out_peak = 0;
+            for (int i = frame; i < event.processAudio.endFrame; i++)
+            {
+                float gain    = smoothvalue_tick(&sv_autogain);
+                output[0][i] *= gain;
+
+                if (output[0][i] > out_peak)
+                    out_peak = output[0][i];
+            }
+
+            // println("in_peak_dB: %.2fdB out_peak", in_peak_dB, xm_fast_gain_to_dB(out_peak));
+
+            memcpy(output[1] + frame, output[0] + frame, sizeof(float) * num_frames);
 #endif // CPLUG_BUILD_STANDALONE
 
             // These flags represent active LFO modulations on parameters
