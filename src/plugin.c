@@ -567,8 +567,10 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             synth_process(&g_synth, output[0] + frame, num_frames);
 
             // Autogain
-            const float attack  = convert_compressor_time(p->sample_rate * 0.001);
-            const float release = convert_compressor_time(p->sample_rate * 0.1);
+            // Setting a very slow release time helps to stop any noticeable oscillating effect caused by subtle changes
+            // in peak gain (most problematic with inputs containing lots of subbass)
+            const float attack  = convert_compressor_time(p->sample_rate * 0.005);
+            const float release = convert_compressor_time(p->sample_rate * 0.5);
 
             static float last_peak          = 0;
             float        block_highest_peak = 0;
@@ -582,25 +584,41 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             static bool          init_autogain = false;
             static SmoothedValue sv_autogain;
 
+            // An adsr or something similar could be used to trim the peaks off of any sudden increase in gain
+            // It may not be necessary since the signal is already getting rammed into a sigmoid function, and the end
+            // result is distorted anyway...
+            static ADSR adsr = {0};
+
             if (init_autogain == false)
             {
                 init_autogain = true;
-                smoothvalue_reset(&sv_autogain, 1);
+                adsr_set_params(&adsr, 0.020, 0.001, 1, 0.1, p->sample_rate);
+                adsr_set_stage(&adsr, ADSR_IDLE);
             }
 
             float in_peak_dB = xm_fast_gain_to_dB(block_highest_peak);
-            if (in_peak_dB < -48)
-                in_peak_dB = -48;
+            if (adsr.current_stage == ADSR_IDLE && in_peak_dB > -96)
+                adsr_set_stage(&adsr, ADSR_ATTACK);
+            if ((adsr.current_stage == ADSR_ATTACK || adsr.current_stage == ADSR_SUSTAIN) && in_peak_dB < -64)
+            {
+                adsr_set_stage(&adsr, ADSR_RELEASE);
+            }
+            float adsr_gain = adsr_tick(&adsr);
+
+            if (in_peak_dB < -24)
+                in_peak_dB = -24;
             // We want to bring the peak gain to approx. 0dB
-            float autogain_dB            = -in_peak_dB;
-            float autogain_gain          = xm_fast_dB_to_gain(autogain_dB);
-            int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.02);
-            smoothvalue_set_target(&sv_autogain, autogain_gain, smoothing_time_samples);
+            float autogain_dB = -in_peak_dB;
+            // float autogain_gain          = xm_fast_dB_to_gain(autogain_dB);
+            int smoothing_time_samples = xm_droundi(p->sample_rate * 0.005);
+            smoothvalue_set_target(&sv_autogain, autogain_dB, smoothing_time_samples);
 
             float out_peak = 0;
             for (int i = frame; i < event.processAudio.endFrame; i++)
             {
-                float gain    = smoothvalue_tick(&sv_autogain);
+                float gain_dB = smoothvalue_tick(&sv_autogain);
+                float gain    = xm_fast_dB_to_gain(gain_dB);
+                // gain          *= adsr_tick(&adsr);
                 output[0][i] *= gain;
 
                 if (output[0][i] > out_peak)
