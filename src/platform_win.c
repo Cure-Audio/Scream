@@ -55,15 +55,15 @@ void println(const char* const fmt, ...)
         OutputDebugStringA(buf);
         // fwrite(buf, 1, n, stderr);
 #else
-        static char path[1024] = {0};
-        if (strlen(path) == 0)
-        {
-            bool ok = xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_DESKTOP);
-            xassert(ok);
-            strcat(path, "\\log.txt");
-        }
-        bool ok = xfiles_append(path, buf, n);
-        xassert(ok);
+        // static char path[1024] = {0};
+        // if (strlen(path) == 0)
+        // {
+        //     bool ok = xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_DESKTOP);
+        //     xassert(ok);
+        //     strcat(path, "\\log.txt");
+        // }
+        // bool ok = xfiles_append(path, buf, n);
+        // xassert(ok);
 #endif
     }
 }
