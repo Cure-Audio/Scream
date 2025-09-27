@@ -7,6 +7,7 @@
 #include <xhl/thread.h>
 #include <xhl/vector.h>
 
+#include "libs/adsr.h"
 #include "param_smoothing.h"
 
 #include "libs/ADAA.h"
@@ -211,6 +212,14 @@ typedef struct Plugin
 
     struct FilterState
     {
+        float autogain_last_peak;  // used for peak detector. lazy way to smooth out the 'average volume' of a signal
+        SmoothedValue autogain_dB; // applied to signal
+        ADSR autogain_adsr; // rushed hackjob to help smooth out pops when new signals start playing at a low gain, but
+                            // then become loud. eg. a kick sound have a loud attack, but always has a few samples
+                            // before its at maximum volume. For an autogain looking to boost the "average loudness" of
+                            // signal, the average loudness will begin way too loud for signals like a kick. So we need
+                            // an "attack"
+
         SmoothedValue values[NUM_AUTOMATABLE_PARAMS];
 
         Tanh_ADAA2 tanh_1;
