@@ -381,7 +381,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
     ted_init(&gui->texteditor);
 
-    gui->gui_create_time = gui->frame_end_time = xtime_now_ns();
+    gui->gui_create_time = gui->last_frame_start_time = gui->frame_start_time = gui->frame_end_time = xtime_now_ns();
 
     gui->imgui.frame.events = 1 << PW_EVENT_RESIZE;
 
@@ -407,6 +407,7 @@ void pw_destroy_gui(void* _gui)
     xarr_free(gui->points_copy);
     xarr_free(gui->skew_points_copy);
     xarr_free(gui->lfo_ybuffer);
+    xarr_free(gui->lfo_playhead_trail);
 
     sg_set_global(gui->sg);
 
@@ -768,7 +769,8 @@ void pw_tick(void* _gui)
     LINKED_ARENA_LEAK_DETECT_BEGIN(gui->arena);
 
     // #ifndef NDEBUG
-    gui->frame_start_time = xtime_now_ns();
+    gui->last_frame_start_time = gui->frame_start_time;
+    gui->frame_start_time      = xtime_now_ns();
     // #endif
 
     NVGcontext*    nvg = gui->nvg;
@@ -896,18 +898,32 @@ void pw_tick(void* _gui)
         if (lm->width > lfo_buffer_cap)
         {
             lfo_buffer_cap = lm->width * 2;
-            xarr_setcap(gui->lfo_ybuffer, lfo_buffer_cap);
+            xarr_setlen(gui->lfo_ybuffer, lfo_buffer_cap);
+            xarr_setlen(gui->lfo_playhead_trail, lfo_buffer_cap);
+
+            memset(gui->lfo_playhead_trail, 0, sizeof(*gui->lfo_playhead_trail) * lfo_buffer_cap);
 
             if (gui->lfo_ybuffer_obj.id)
                 sg_destroy_buffer(gui->lfo_ybuffer_obj);
+            if (gui->lfo_playhead_trail_obj.id)
+                sg_destroy_buffer(gui->lfo_playhead_trail_obj);
 
-            gui->lfo_ybuffer_obj = sg_make_buffer(&(sg_buffer_desc){
+            gui->lfo_ybuffer_obj        = sg_make_buffer(&(sg_buffer_desc){
+                       .usage.storage_buffer = true,
+                       .usage.stream_update  = true,
+                       .size                 = lfo_buffer_cap * sizeof(*gui->lfo_ybuffer),
+                       .label                = "lfo_ybuffer",
+            });
+            gui->lfo_playhead_trail_obj = sg_make_buffer(&(sg_buffer_desc){
                 .usage.storage_buffer = true,
                 .usage.stream_update  = true,
-                .size                 = lfo_buffer_cap * sizeof(*gui->lfo_ybuffer),
-                .label                = "lfo_ybuffer",
+                .size                 = lfo_buffer_cap * sizeof(*gui->lfo_playhead_trail),
+                .label                = "lfo_playhead_trail",
             });
         }
+        const int lfo_idx        = gui->plugin->selected_lfo_idx;
+        float     playhead       = (float)gui->plugin->lfos[lfo_idx].phase;
+        lm->current_lfo_playhead = lm->last_lfo_playhead = playhead;
 
         imgui_rect lfo_btn;
         lfo_btn.x              = (lm->width / 2) - 20;

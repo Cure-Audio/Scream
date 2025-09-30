@@ -47,6 +47,9 @@ typedef struct LayoutMetrics
     float cy_param;
     float cy_param_mod_amount;
     float cy_param_title;
+
+    float last_lfo_playhead;
+    float current_lfo_playhead;
 } LayoutMetrics;
 
 typedef struct GUI
@@ -80,6 +83,8 @@ typedef struct GUI
     sg_buffer   lfo_vertical_grad_vbo;
     sg_buffer   lfo_ybuffer_obj;
     float*      lfo_ybuffer;
+    sg_buffer   lfo_playhead_trail_obj;
+    float*      lfo_playhead_trail;
     imgui_rect  lfo_grid_area;
 
     sg_image logo_id;
@@ -113,6 +118,7 @@ typedef struct GUI
 
     Tooltip tooltip;
 
+    uint64_t last_frame_start_time;
     uint64_t frame_start_time;
     uint64_t frame_end_time;
 

@@ -5,6 +5,7 @@
 #include <lfo.glsl.h>
 #include <sort.h>
 #include <stdio.h>
+#include <xhl/time.h>
 
 enum
 {
@@ -506,6 +507,60 @@ void do_lfo_shaders(void* uptr)
     GUI*           gui = uptr;
     LayoutMetrics* lm  = &gui->layout;
 
+    const size_t len = xarr_len(gui->lfo_ybuffer);
+    xassert(len > 0);
+
+    // Slow decay on the LFO playhead tail
+    // Scale in decibels
+    uint64_t time_delta_ns = gui->frame_start_time - gui->last_frame_start_time;
+    if (gui->last_frame_start_time == gui->gui_create_time)
+        time_delta_ns = 0;
+    double       time_delta_sec       = xtime_convert_ns_to_sec(time_delta_ns);
+    const double reduction_per_second = -48;
+    double       reduction_dB         = time_delta_sec * reduction_per_second;
+    float        scale                = xm_fast_dB_to_gain(reduction_dB);
+
+    for (int i = 0; i < len; i++)
+    {
+        float y = gui->lfo_playhead_trail[i] * scale;
+        if (y < 0.0001) // snap to 0
+            y = 0;
+        gui->lfo_playhead_trail[i] = y;
+    }
+
+    // Apply new trail
+    size_t last_playhead_idx    = lm->last_lfo_playhead * len;
+    size_t current_playhead_idx = lm->current_lfo_playhead * len;
+    last_playhead_idx           = xm_minull(last_playhead_idx, len - 1);
+    current_playhead_idx        = xm_minull(current_playhead_idx, len - 1);
+    if (current_playhead_idx < last_playhead_idx) // unwrap
+        current_playhead_idx += len;
+    xassert(current_playhead_idx >= last_playhead_idx);
+
+    // target playhead y is 1
+    float  target_playhead_y = 0.5f;
+    float  start_y           = gui->lfo_playhead_trail[last_playhead_idx];
+    size_t playhead_diff     = current_playhead_idx - last_playhead_idx;
+    float  inc               = (target_playhead_y - start_y) / (float)playhead_diff;
+
+    float(*view_trail)[512] = (void*)gui->lfo_playhead_trail;
+
+    view_trail += 0;
+
+    for (size_t i = 1; i <= playhead_diff; i++)
+    {
+        size_t idx = last_playhead_idx + i;
+        // wrap idx
+        if (idx >= len)
+            idx -= len;
+
+        float y = start_y + inc * i;
+        // float y = target_playhead_y;
+        if (y > 1)
+            y = 0;
+        gui->lfo_playhead_trail[idx] = y;
+    }
+
     // TODO: setup vertices here. Also setup the vertex layout in gui_create()
     // clang-format off
     vertex_t verts[] = {
@@ -545,22 +600,24 @@ void do_lfo_shaders(void* uptr)
     verts[5].x = left; // 3
     verts[5].y = bottom;
 
-    size_t len = xarr_len(gui->lfo_ybuffer);
-    xassert(len > 0);
-    sg_range range = {.ptr = gui->lfo_ybuffer, .size = len * sizeof(*gui->lfo_ybuffer)};
+    sg_range range_ybuf     = {.ptr = gui->lfo_ybuffer, .size = len * sizeof(*gui->lfo_ybuffer)};
+    sg_range range_playhead = {.ptr = gui->lfo_playhead_trail, .size = len * sizeof(*gui->lfo_playhead_trail)};
 
     sg_update_buffer(gui->lfo_vertical_grad_vbo, &SG_RANGE(verts));
-    sg_update_buffer(gui->lfo_ybuffer_obj, &range);
+    sg_update_buffer(gui->lfo_ybuffer_obj, &range_ybuf);
+    sg_update_buffer(gui->lfo_playhead_trail_obj, &range_playhead);
     sg_apply_pipeline(gui->lfo_vertical_grad_pip);
 
-    sg_bindings bind                              = {0};
-    bind.storage_buffers[SBUF_lfo_storage_buffer] = gui->lfo_ybuffer_obj;
-    bind.vertex_buffers[0]                        = gui->lfo_vertical_grad_vbo;
+    sg_bindings bind                                    = {0};
+    bind.storage_buffers[SBUF_lfo_line_storage_buffer]  = gui->lfo_ybuffer_obj;
+    bind.storage_buffers[SBUF_lfo_trail_storage_buffer] = gui->lfo_playhead_trail_obj;
+    bind.vertex_buffers[0]                              = gui->lfo_vertical_grad_vbo;
 
     lfo_vertical_grad_uniforms_t uniforms = {
-        .colour1    = hexcol(0xBDEBF754),
-        .colour2    = hexcol(0x92C6D400),
-        .buffer_len = len,
+        .colour1      = hexcol(0xBDEBF754),
+        .colour2      = hexcol(0x92C6D400),
+        .colour_trail = hexcol(0xACDEECFF),
+        .buffer_len   = len,
     };
 
     sg_apply_bindings(&bind);
@@ -610,6 +667,7 @@ void draw_lfo_section(GUI* gui)
     bool should_update_cached_path                          = false;
     bool should_update_gui_lfo_points_with_points           = false;
     bool should_update_audio_lfo_points_with_gui_lfo_points = false;
+    bool should_clear_lfo_trail                             = false;
     int  next_pattern_length                                = 0;
 
     float bot_content_height = lm->content_b - lm->top_content_bottom;
@@ -664,6 +722,7 @@ void draw_lfo_section(GUI* gui)
             {
                 gui->plugin->selected_lfo_idx = i;
                 gui->gui_lfo_points_valid     = false;
+                should_clear_lfo_trail        = true;
             }
 
             NVGcolour  col1, col2;
@@ -1263,6 +1322,7 @@ void draw_lfo_section(GUI* gui)
             value_f = next_value;
             param_change_update(gui->plugin, param_id, value_f);
             gui->gui_lfo_points_valid = false;
+            should_clear_lfo_trail    = true;
         }
 
         if (events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
@@ -2178,6 +2238,19 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
+    float playhead = (float)gui->plugin->lfos[lfo_idx].phase;
+    playhead       = fmodf(playhead, pattern_length);
+
+    lm->last_lfo_playhead    = lm->current_lfo_playhead;
+    lm->current_lfo_playhead = playhead;
+
+    if (should_clear_lfo_trail)
+    {
+        size_t cap = xarr_cap(gui->lfo_playhead_trail);
+        xassert(cap);
+        memset(gui->lfo_playhead_trail, 0, cap * sizeof(*gui->lfo_playhead_trail));
+    }
+
     snvg_command_custom(nvg, gui, do_lfo_shaders, NVG_LABEL("LFO shaders"));
     snvg_command_draw_nvg(nvg, NVG_LABEL("LFO path"));
 
@@ -2270,19 +2343,17 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
-    // float playhead = (float)gui->plugin->beat_position;
-    float playhead = (float)gui->plugin->lfos[lfo_idx].phase;
-    playhead       = fmodf(playhead, pattern_length);
-    if (playhead < pattern_length)
-    {
-        float x = xm_mapf(playhead, 0, pattern_length, grid_x, grid_r);
-        x       = floorf(x) + 0.5f;
-        nvgBeginPath(nvg);
-        nvgMoveTo(nvg, x, grid_y + 1);
-        nvgLineTo(nvg, x, grid_b - 1);
-        nvgSetColour(nvg, C_WHITE);
-        nvgStroke(nvg, 1);
-    }
+    // Todo: make this a white line that follows the LFO path
+    // if (playhead < pattern_length)
+    // {
+    //     float x = xm_mapf(playhead, 0, pattern_length, grid_x, grid_r);
+    //     x       = floorf(x) + 0.5f;
+    //     nvgBeginPath(nvg);
+    //     nvgMoveTo(nvg, x, grid_y + 1);
+    //     nvgLineTo(nvg, x, grid_b - 1);
+    //     nvgSetColour(nvg, C_WHITE);
+    //     nvgStroke(nvg, 1);
+    // }
 
     if (gui->selection_start.u64 != 0 && gui->selection_end.u64 != 0)
     {
