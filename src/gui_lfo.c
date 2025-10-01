@@ -2255,6 +2255,7 @@ void draw_lfo_section(GUI* gui)
     lm->last_lfo_playhead    = lm->current_lfo_playhead;
     lm->current_lfo_playhead = playhead;
 
+    should_clear_lfo_trail |= !!(im->frame.events & (1 << PW_EVENT_RESIZE));
     if (should_clear_lfo_trail)
     {
         size_t cap = xarr_cap(gui->lfo_playhead_trail);
