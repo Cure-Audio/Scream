@@ -108,11 +108,10 @@ void* cplug_createPlugin(CplugHostContext* ctx)
 
     for (int i = 0; i < ARRLEN(p->main_params); i++)
         p->main_params[i] = cplug_getDefaultParameterValue(p, i);
-#ifndef NDEBUG
+
     p->main_params[PARAM_CUTOFF]    = 0.85;
     p->main_params[PARAM_SCREAM]    = 0.465f;
     p->main_params[PARAM_RESONANCE] = 1;
-#endif
 
     memcpy(p->audio_params, p->main_params, sizeof(p->main_params));
     _Static_assert(sizeof(p->main_params) == sizeof(p->audio_params));

@@ -30,9 +30,9 @@ typedef struct PluginStatev0_0_4
 
 typedef struct PluginStatev0_2_0
 {
-    double params[9];
+    double params[12];
 } PluginState;
-_Static_assert(PARAM_COUNT == 9, "If params change, update state");
+_Static_assert(PARAM_COUNT == 12, "If params change, update state");
 
 plugin_version get_plugin_version()
 {

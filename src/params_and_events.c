@@ -258,6 +258,7 @@ bool param_string_to_value(uint32_t param_id, const char* str, double* val)
             *val *= 0.01;
         break;
     case PARAM_INPUT_GAIN:
+    case PARAM_OUTPUT_GAIN:
         if ((ok = sscanf(str, "%lfdB", val)))
             *val = xm_normd(*val, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
         break;
@@ -279,6 +280,12 @@ bool param_string_to_value(uint32_t param_id, const char* str, double* val)
         }
         break;
     }
+    case PARAM_RETRIG_LFO_1:
+    case PARAM_RETRIG_LFO_2:
+    {
+        *val = 0 == strcmp(str, "On");
+        break;
+    }
     case PARAM_COUNT:
         break;
     }
@@ -296,9 +303,24 @@ uint32_t cplug_getParameterFlags(void* p, uint32_t paramId) { return CPLUG_FLAG_
 // NOTE: AUv2 supports a max length of 52 bytes, VST3 128, CLAP 256
 void cplug_getParameterName(void*, uint32_t paramId, char* buf, size_t buflen)
 {
-    const char*        str = "";
+    const char* str = "";
+    // clang-format off
     static const char* NAMES[] =
-        {"Cutoff", "Scream", "Resonance", "Input", "Wet", "LFO 1 Pattern", "LFO 1 Rate", "LFO 2 Pattern", "LFO 2 Rate"};
+    {
+        "Cutoff",
+        "Scream",
+        "Resonance",
+        "Input",
+        "Wet",
+        "Output",
+        "LFO 1 Pattern",
+        "LFO 2 Pattern",
+        "LFO 1 Rate",
+        "LFO 2 Rate",
+        "LFO 1 Retrig",
+        "LFO 2 Retrig",
+    };
+    // clang-format on
     _Static_assert(ARRLEN(NAMES) == PARAM_COUNT);
     if (paramId < PARAM_COUNT)
     {
@@ -336,6 +358,9 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
     case PARAM_WET:
         v = 1;
         break;
+    case PARAM_OUTPUT_GAIN:
+        v = 0.5;
+        break;
     case PARAM_PATTERN_LFO_1:
     case PARAM_PATTERN_LFO_2:
         // v = 0;
@@ -343,6 +368,10 @@ double cplug_getDefaultParameterValue(void* _p, uint32_t paramId)
     case PARAM_RATE_LFO_1:
     case PARAM_RATE_LFO_2:
         v = LFO_RATE_1_4;
+        break;
+    case PARAM_RETRIG_LFO_1:
+    case PARAM_RETRIG_LFO_2:
+        v = 1;
         break;
     case PARAM_COUNT:
         break;
@@ -440,6 +469,7 @@ void cplug_parameterValueToString(void* ptr, uint32_t paramId, char* buf, size_t
         snprintf(buf, bufsize, "%.2f%%", value * 100);
         break;
     case PARAM_INPUT_GAIN:
+    case PARAM_OUTPUT_GAIN:
     {
         double dB = xm_lerpd(value, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
         snprintf(buf, bufsize, "%.2fdB", dB);
@@ -458,6 +488,13 @@ void cplug_parameterValueToString(void* ptr, uint32_t paramId, char* buf, size_t
         int idx = xm_droundi(value);
         idx     = xm_clampi(idx, 0, LFO_RATE_COUNT - 1);
         snprintf(buf, bufsize, "%s", LFO_RATE_NAMES[idx]);
+        break;
+    }
+    case PARAM_RETRIG_LFO_1:
+    case PARAM_RETRIG_LFO_2:
+    {
+        int on = xm_droundi(value);
+        snprintf(buf, bufsize, "%s", on ? "On" : "Off");
         break;
     }
     case PARAM_COUNT:

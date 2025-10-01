@@ -19,20 +19,41 @@ typedef enum ParamID
     PARAM_RESONANCE,
     PARAM_INPUT_GAIN,
     PARAM_WET,
+    PARAM_OUTPUT_GAIN,
 
     PARAM_PATTERN_LFO_1,
     PARAM_PATTERN_LFO_2,
     PARAM_RATE_LFO_1,
     PARAM_RATE_LFO_2,
+    PARAM_RETRIG_LFO_1,
+    PARAM_RETRIG_LFO_2,
     PARAM_COUNT,
 } ParamID;
+
+#ifndef NDEBUG
+static const char* PARAM_STR[] = {
+    "PARAM_CUTOFF",
+    "PARAM_SCREAM",
+    "PARAM_RESONANCE",
+    "PARAM_INPUT_GAIN",
+    "PARAM_WET",
+    "PARAM_OUTPUT_GAIN",
+    "PARAM_PATTERN_LFO_1",
+    "PARAM_PATTERN_LFO_2",
+    "PARAM_RATE_LFO_1",
+    "PARAM_RATE_LFO_2",
+    "PARAM_RETRIG_LFO_1",
+    "PARAM_RETRIG_LFO_2",
+};
+_Static_assert(ARRLEN(PARAM_STR) == PARAM_COUNT, "");
+#endif
 
 #define RANGE_INPUT_GAIN_MIN -72.0
 #define RANGE_INPUT_GAIN_MAX 24.0
 
 enum
 {
-    NUM_AUTOMATABLE_PARAMS = PARAM_WET + 1,
+    NUM_AUTOMATABLE_PARAMS = PARAM_OUTPUT_GAIN + 1,
 
     NUM_LFO_PATTERNS = 8,
 
@@ -273,18 +294,3 @@ void param_change_end(Plugin* p, ParamID id);
 void param_change_update(Plugin* p, ParamID id, double value);
 // Calls begin > update > end
 void param_set(Plugin* p, ParamID id, double value);
-
-#ifndef NDEBUG
-static const char* PARAM_STR[] = {
-    "PARAM_CUTOFF",
-    "PARAM_SCREAM",
-    "PARAM_RESONANCE",
-    "PARAM_INPUT_GAIN",
-    "PARAM_WET",
-    "PARAM_PATTERN_LFO_1",
-    "PARAM_PATTERN_LFO_2",
-    "PARAM_RATE_LFO_1",
-    "PARAM_RATE_LFO_2",
-};
-_Static_assert(ARRLEN(PARAM_STR) == PARAM_COUNT, "");
-#endif
