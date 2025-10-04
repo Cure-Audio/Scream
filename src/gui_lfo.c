@@ -1447,7 +1447,7 @@ void draw_lfo_section(GUI* gui)
             float y = btn_pattern.y;
             if (btn_events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
                 y += 1;
-            nvgRoundedRect(nvg, btn_pattern.x + w8 * btn_idx, y, w8, third_height, 2);
+            nvgRoundedRect(nvg, btn_pattern.x + w8 * btn_idx, y, w8, third_height, 4);
             nvgSetColour(nvg, (NVGcolour){1, 1, 1, 0.1});
             nvgFill(nvg);
         }
@@ -2361,7 +2361,16 @@ void draw_lfo_section(GUI* gui)
     lm->last_lfo_playhead    = lm->current_lfo_playhead;
     lm->current_lfo_playhead = playhead;
 
+    bool retrigger_flag = xt_atomic_exchange_u8(&gui->plugin->gui_retrig_flag, 0);
+
+    // Clear trail on resize
     should_clear_lfo_trail |= !!(im->frame.events & (1 << PW_EVENT_RESIZE));
+    // Clear trail on retrigger
+    should_clear_lfo_trail |= retrigger_flag;
+    // Sync prev playhead on retrigger
+    if (retrigger_flag)
+        lm->last_lfo_playhead = playhead;
+
     if (should_clear_lfo_trail)
     {
         size_t cap = xarr_cap(gui->lfo_playhead_trail);

@@ -44,6 +44,8 @@
 // getMidiNoteFromHertz(20000) - getMidiNoteFromHertz(20)
 #define MIDI_NOTE_NUM_RANGE 119.58941141594507f
 
+// float g_pd_threshold = -54;
+
 #ifdef CPLUG_BUILD_STANDALONE
 #include "libs/synth.h"
 
@@ -379,6 +381,319 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
     LINKED_ARENA_LEAK_DETECT_END(p->audio_arena);
 }
 
+void process_audio(Plugin* p, float** output, int start_sample, int num_frames)
+{
+    xassert(num_frames > 0);
+    const float fs_inv = 1.0f / p->sample_rate;
+
+    // These flags represent active LFO modulations on parameters
+    // The index of the set bit corresponds to the parameter idx that is being modulated
+    uint8_t lfo_1_mod_flags = 0;
+    uint8_t lfo_2_mod_flags = 0;
+    for (int i = 0; i < ARRLEN(p->lfo_mod_amounts); i++)
+    {
+        if (fabsf(p->lfo_mod_amounts[i].data[0]) != 0)
+            lfo_1_mod_flags |= 1 << i;
+        if (fabsf(p->lfo_mod_amounts[i].data[1]) != 0)
+            lfo_2_mod_flags |= 1 << i;
+    }
+
+    xvec2f last_lfo_amount = {0};
+    float* mod_buffer_1    = NULL;
+    float* mod_buffer_2    = NULL;
+    if (lfo_1_mod_flags)
+    {
+        mod_buffer_1 = linked_arena_alloc(p->audio_arena, num_frames * sizeof(mod_buffer_1));
+        render_lfo(p, mod_buffer_1, num_frames, 0);
+        last_lfo_amount.left = mod_buffer_1[num_frames - 1];
+    }
+    if (lfo_2_mod_flags)
+    {
+        mod_buffer_2 = linked_arena_alloc(p->audio_arena, num_frames * sizeof(mod_buffer_2));
+        render_lfo(p, mod_buffer_2, num_frames, 1);
+        last_lfo_amount.right = mod_buffer_2[num_frames - 1];
+    }
+    p->last_lfo_amount = last_lfo_amount;
+
+    // Setup params
+
+    // Setting a very slow release time helps to stop any noticeable oscillating effect caused by subtle
+    // changes in peak gain (most problematic with inputs containing lots of subbass)
+    const float autogain_attack  = convert_compressor_time(p->sample_rate * 0.005);
+    const float autogain_release = convert_compressor_time(p->sample_rate * 0.5); // 500ms
+
+    const float expander_attack = convert_compressor_time(1);
+    // const float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
+    const float expander_release = convert_compressor_time(p->sample_rate * 0.001); // 1 ms
+
+    // Frequency of param updates vary. In FL studio (2024), when dragging params in the GUI, FL doesn't do a
+    // great job of sending these updates frequently on the audio thread. FL sends these updates much more
+    // frequently when you are playing parameter automation. Ableton 12 however does a much better job in all
+    // cases, and does a great job with a much shorter smoothing time like 10ms.
+    // It may be possible to improve this with a little bit of DAW detection to optimise smoothing time based on
+    // the DAW.
+    const double smoothing_len = 0.030; // 30ms
+    // const double smoothing_len        = 0.020; // 20ms NOTE: sounds too steppy in FL Studio
+    int param_smoothing_time = xm_droundi(p->sample_rate * smoothing_len);
+
+    for (int ch = 0; ch < 2; ch++)
+    {
+        float* audio = output[ch] + start_sample;
+
+        struct FilterState s = p->state[ch];
+
+        for (int i = 0; i < ARRLEN(s.values); i++)
+            smoothvalue_set_target(&s.values[i], p->audio_params[i], param_smoothing_time);
+
+        float lp_cutoff = s.values[PARAM_CUTOFF].current;
+        float hp_cutoff = s.values[PARAM_SCREAM].current;
+        float resonance = s.values[PARAM_RESONANCE].current;
+        float in_gain   = s.values[PARAM_INPUT_GAIN].current;
+        float wet       = s.values[PARAM_WET].current;
+
+// #define CUTOFF_MAX    MIDI_NOTE_NUM_20kHz
+#define CUTOFF_MAX (MIDI_NOTE_NUM_20kHz)
+// #define HP_CUTOFF_MIN 0
+#define HP_CUTOFF_MIN (MIDI_NOTE_NUM_20Hz - 12)
+#define LP_Q_MIN      XM_SQRT1_2f
+#define LP_Q_MAX      XM_SQRT1_2f
+// #define LP_Q_MAX      XM_SQRT2f
+#define HP_Q_MIN XM_SQRT1_2f
+// #define HP_Q_MAX    (3 * XM_SQRT1_2f)
+#define HP_Q_MAX (XM_SQRT2f)
+// #define HP_Q_MAX    (XM_SQRT1_2f)
+#define FB_GAIN_MIN -12.0f
+#define FB_GAIN_MAX 12.0f
+
+        float lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
+        float hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
+
+        lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX);
+        hp_cutoff  = xm_lerpf(hp_cutoff, HP_CUTOFF_MIN, CUTOFF_MAX);
+        hp_cutoff -= CUTOFF_MAX - lp_cutoff;
+
+        lp_cutoff = xm_midi_to_Hz(lp_cutoff);
+        hp_cutoff = xm_midi_to_Hz(hp_cutoff);
+        lp_cutoff = xm_clampf(lp_cutoff, 5, 20000);
+        hp_cutoff = xm_clampf(hp_cutoff, 5, 20000);
+
+        float feedback_gain = xm_lerpf(resonance, FB_GAIN_MIN, FB_GAIN_MAX);
+        feedback_gain       = xm_fast_dB_to_gain(feedback_gain);
+
+        in_gain = xm_lerpf(in_gain, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+        in_gain = xm_fast_dB_to_gain(in_gain);
+
+        Coeffs lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
+        Coeffs hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
+
+        const bool smooth_params = s.values[PARAM_CUTOFF].remaining | s.values[PARAM_SCREAM].remaining |
+                                   s.values[PARAM_RESONANCE].remaining | s.values[PARAM_INPUT_GAIN].remaining |
+                                   s.values[PARAM_WET].remaining;
+
+        const bool has_modulation_or_smoothing = lfo_1_mod_flags || lfo_2_mod_flags || smooth_params;
+
+        // Setup autogain
+        // Not proud of this design but it appears to do the job at the time of writing and with my limited
+        // testing
+        {
+            for (int i = 0; i < num_frames; i++)
+            {
+                float x = audio[i];
+
+                s.autogain_last_peak = detect_peak(fabsf(x), s.autogain_last_peak, autogain_attack, autogain_release);
+            }
+            float in_peak_dB = xm_fast_gain_to_dB(s.autogain_last_peak);
+
+            if (s.autogain_adsr.current_stage == ADSR_IDLE && in_peak_dB > -96)
+                adsr_set_stage(&s.autogain_adsr, ADSR_ATTACK);
+            if ((s.autogain_adsr.current_stage == ADSR_ATTACK || s.autogain_adsr.current_stage == ADSR_SUSTAIN) &&
+                in_peak_dB < -64)
+            {
+                adsr_set_stage(&s.autogain_adsr, ADSR_RELEASE);
+            }
+            float adsr_gain = adsr_tick(&s.autogain_adsr);
+
+            if (in_peak_dB < -24)
+                in_peak_dB = -24;
+            // We want to bring the peak gain to approx. 0dB
+            float autogain_dB            = -in_peak_dB;
+            int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.005);
+            smoothvalue_set_target(&s.autogain_dB, autogain_dB, smoothing_time_samples);
+
+            for (int i = 0; i < num_frames; i++)
+            {
+                float gain_dB  = smoothvalue_tick(&s.autogain_dB);
+                float gain     = xm_fast_dB_to_gain(gain_dB);
+                gain          *= adsr_tick(&s.autogain_adsr);
+                audio[i]      *= gain;
+            }
+        } // autogain
+
+        if (p->gui)
+        {
+            enum
+            {
+                PEAK_FREQUENCY_SAMPLES = 1 << 12,
+                PEAK_FREQUENCY_MASK    = PEAK_FREQUENCY_SAMPLES - 1,
+            };
+            int remaining_samples = num_frames;
+            while (remaining_samples)
+            {
+                float peak_input = p->_gui_input_last_peak.data[ch];
+                int   N          = xm_mini(remaining_samples, PEAK_FREQUENCY_SAMPLES - p->_gui_input_read_count[ch]);
+                for (int i = 0; i < N; i++)
+                {
+                    float x = fabsf(audio[i]);
+                    if (x > peak_input)
+                        peak_input = x;
+                }
+                remaining_samples            -= N;
+                p->_gui_input_read_count[ch] += N;
+                if (p->_gui_input_read_count[ch] == PEAK_FREQUENCY_SAMPLES)
+                {
+                    p->_gui_input_read_count[ch] = 0;
+                    xvec2f next                  = {.u64 = p->gui_input_peak_gain};
+                    next.data[ch]                = peak_input * in_gain;
+
+                    xt_atomic_store_u64(&p->gui_input_peak_gain, next.u64);
+
+                    p->_gui_input_last_peak.data[ch] = 0;
+                }
+            }
+        } // !!p.gui
+
+        // Process
+        for (int i = 0; i < num_frames; i++)
+        {
+            float x = audio[i];
+
+            x *= in_gain;
+
+            // Feedforward
+            // float y = x + s.fb_yn_1 * feedback_gain;
+            // float y = x + s.fb_yn_1;
+            float y = x + s.fb_yn_1;
+
+            // y = tanhf(y);
+            y = Tanh_ADAA2_process(&s.tanh_1, y);
+            // y = sinarctan2(y);
+            // y = softsine(y);
+            // y = sinarctan(y);
+            // y = xm_clampf(y, -1, 1);
+            y = filter_process(y, &lp_c, s.lp);
+
+            CPLUG_LOG_ASSERT(y == y);
+            if (y != y) // NaN protection. TODO: remove when filter algo is solid
+                y = 0;
+
+            // *it = xm_clampf(y, -1, 1);
+            audio[i] = wet * y + (1 - wet) * audio[i];
+            // *it = x;
+
+#ifdef CPLUG_BUILD_STANDALONE
+            audio[i] *= xm_fast_dB_to_gain(g_output_gain_dB);
+#endif
+
+            // Feedback
+            // float feed = y;
+            float feed = y * feedback_gain;
+
+            // feed = sinarctan(feed);
+            feed = filter_process(feed, &hp_c, s.hp);
+            // feed = xm_clampf(feed, -1, 1);
+            // feed = tanhf(feed);
+            feed = Tanh_ADAA2_process(&s.tanh_2, feed);
+            // feed = softsine(feed);
+            // feed = softsine2(feed);
+
+            // Feedback gate, triggered by input
+            s.peak_xn_1        = detect_peak(fabsf(x), s.peak_xn_1, expander_attack, expander_release);
+            float peak_dB      = xm_fast_gain_to_dB(s.peak_xn_1);
+            float reduction_dB = hard_knee_expander(peak_dB, -120.0f, 2);
+            xassert(reduction_dB == reduction_dB);
+            reduction_dB         -= peak_dB;
+            float reduction_gain  = xm_fast_dB_to_gain(reduction_dB);
+            // Clamp to 0
+            if (reduction_dB < -140)
+                reduction_gain = 0;
+            feed *= reduction_gain;
+            xassert(feed == feed);
+
+            s.fb_yn_1 = feed;
+
+            if (has_modulation_or_smoothing)
+            {
+                _Static_assert(NUM_AUTOMATABLE_PARAMS == ARRLEN(s.values), "");
+                _Static_assert(NUM_AUTOMATABLE_PARAMS == ARRLEN(p->lfo_mod_amounts), "");
+                float modvals[NUM_AUTOMATABLE_PARAMS];
+                for (int j = 0; j < ARRLEN(s.values); j++)
+                {
+                    smoothvalue_tick(&s.values[j]);
+
+                    float v = s.values[j].current;
+
+                    // TODO: apply bidirectional algorithm?
+                    if (lfo_1_mod_flags & (1 << j))
+                        v += p->lfo_mod_amounts[j].data[0] * mod_buffer_1[i];
+                    if (lfo_2_mod_flags & (1 << j))
+                        v += p->lfo_mod_amounts[j].data[1] * mod_buffer_2[i];
+
+                    modvals[j] = xm_clampf(v, 0, 1);
+                }
+
+                lp_cutoff = modvals[PARAM_CUTOFF];
+                hp_cutoff = modvals[PARAM_SCREAM];
+                resonance = modvals[PARAM_RESONANCE];
+                in_gain   = modvals[PARAM_INPUT_GAIN];
+                wet       = modvals[PARAM_WET];
+
+                lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
+                hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
+
+                lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX);
+                hp_cutoff  = xm_lerpf(hp_cutoff, HP_CUTOFF_MIN, CUTOFF_MAX);
+                hp_cutoff -= CUTOFF_MAX - lp_cutoff;
+
+                lp_cutoff = xm_midi_to_Hz(lp_cutoff);
+                hp_cutoff = xm_midi_to_Hz(hp_cutoff);
+                lp_cutoff = xm_clampf(lp_cutoff, 20, 20000);
+                hp_cutoff = xm_clampf(hp_cutoff, 20, 20000);
+
+                feedback_gain = xm_lerpf(resonance, FB_GAIN_MIN, FB_GAIN_MAX);
+                feedback_gain = xm_fast_dB_to_gain(feedback_gain);
+
+                in_gain = xm_lerpf(in_gain, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
+                in_gain = xm_fast_dB_to_gain(in_gain);
+
+                lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
+                hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
+            } // !!has_modulation_or_smoothing
+        } // Process
+#define ROUND_STATE_TO_ZERO(n)                                                                                         \
+    if (fabsf(n) < 1.0e-8f)                                                                                            \
+        n = 0;
+
+        ROUND_STATE_TO_ZERO(s.lp[0])
+        ROUND_STATE_TO_ZERO(s.lp[1])
+        ROUND_STATE_TO_ZERO(s.hp[0])
+        ROUND_STATE_TO_ZERO(s.hp[1])
+        ROUND_STATE_TO_ZERO(s.fb_yn_1)
+
+        p->state[ch] = s;
+    }
+
+    // Wrap beat position
+    p->beat_position += num_frames * p->beat_inc;
+    if (p->beat_position >= MAX_PATTERN_LENGTH_PATTERNS)
+        p->beat_position -= MAX_PATTERN_LENGTH_PATTERNS;
+    xassert(p->beat_position >= 0 && p->beat_position < MAX_PATTERN_LENGTH_PATTERNS);
+
+    if (mod_buffer_2)
+        linked_arena_release(p->audio_arena, mod_buffer_2);
+    if (mod_buffer_1)
+        linked_arena_release(p->audio_arena, mod_buffer_1);
+}
+
 void cplug_process(void* _p, CplugProcessContext* ctx)
 {
     DISABLE_DENORMALS
@@ -386,6 +701,10 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
     bool    should_post_to_global = false;
 
     LINKED_ARENA_LEAK_DETECT_BEGIN(p->audio_arena);
+
+#ifndef NDEBUG
+    p->num_process_callbacks++;
+#endif // DEBUG
 
     // Dequeue events sent from main thread
     {
@@ -499,16 +818,25 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
     if (p->bpm > 0 && (started_playing || did_loop))
     {
-        for (int lfo_idx = 0; lfo_idx < ARRLEN(p->lfos); lfo_idx++)
+        for (unsigned lfo_idx = 0; lfo_idx < ARRLEN(p->lfos); lfo_idx++)
         {
-            ParamID rate_param_id = PARAM_RATE_LFO_1 + lfo_idx;
-            LFORate rate_idx      = p->audio_params[rate_param_id];
-            xassert(rate_idx >= 0 && rate_idx < ARRLEN(SYNC_VALUES));
+            ParamID retrig_param_id = PARAM_RETRIG_LFO_1 + lfo_idx;
+            xassert(retrig_param_id < ARRLEN(p->audio_params));
 
-            double phase  = p->last_playhead_beats / SYNC_VALUES[rate_idx];
-            phase        -= (int)phase;
+            bool retrig_on = p->audio_params[retrig_param_id] >= 0.5;
+            if (!retrig_on)
+            {
+                ParamID rate_param_id = PARAM_RATE_LFO_1 + lfo_idx;
+                xassert(rate_param_id < ARRLEN(p->audio_params));
 
-            p->lfos[lfo_idx].phase = phase;
+                LFORate rate_idx = p->audio_params[rate_param_id];
+                xassert(rate_idx >= 0 && rate_idx < ARRLEN(SYNC_VALUES));
+
+                double phase  = p->last_playhead_beats / SYNC_VALUES[rate_idx];
+                phase        -= (int)phase;
+
+                p->lfos[lfo_idx].phase = phase;
+            }
         }
     }
 
@@ -549,8 +877,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             }
             const int num_frames = event.processAudio.endFrame - frame;
 
-            const float fs_inv = 1.0f / p->sample_rate;
-
 #ifdef CPLUG_BUILD_STANDALONE
             // Saw wave oscillator for testing
             memset(output[0] + frame, 0, num_frames * sizeof(float));
@@ -558,314 +884,53 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             memcpy(output[1] + frame, output[0] + frame, sizeof(float) * num_frames);
 #endif // CPLUG_BUILD_STANDALONE
 
-            // These flags represent active LFO modulations on parameters
-            // The index of the set bit corresponds to the parameter idx that is being modulated
-            uint8_t lfo_1_mod_flags = 0;
-            uint8_t lfo_2_mod_flags = 0;
-            for (int i = 0; i < ARRLEN(p->lfo_mod_amounts); i++)
+            int         start_sample      = 0;
+            int         remaining_samples = num_frames;
+            const float pd_attack_time    = 0;
+            const float pd_release_time   = convert_compressor_time(p->sample_rate * 0.0025); // 25ms
+            const float pd_threshold      = xm_fast_dB_to_gain(-54);
+            while (remaining_samples > 0)
             {
-                if (fabsf(p->lfo_mod_amounts[i].data[0]) != 0)
-                    lfo_1_mod_flags |= 1 << i;
-                if (fabsf(p->lfo_mod_amounts[i].data[1]) != 0)
-                    lfo_2_mod_flags |= 1 << i;
-            }
-
-            xvec2f last_lfo_amount = {0};
-            float* mod_buffer_1    = NULL;
-            float* mod_buffer_2    = NULL;
-            if (lfo_1_mod_flags)
-            {
-                mod_buffer_1 = linked_arena_alloc(p->audio_arena, num_frames * sizeof(mod_buffer_1));
-                render_lfo(p, mod_buffer_1, num_frames, 0);
-                last_lfo_amount.left = mod_buffer_1[num_frames - 1];
-            }
-            if (lfo_2_mod_flags)
-            {
-                mod_buffer_2 = linked_arena_alloc(p->audio_arena, num_frames * sizeof(mod_buffer_2));
-                render_lfo(p, mod_buffer_2, num_frames, 1);
-                last_lfo_amount.right = mod_buffer_2[num_frames - 1];
-            }
-            p->last_lfo_amount = last_lfo_amount;
-
-            // Setup params
-
-            // Setting a very slow release time helps to stop any noticeable oscillating effect caused by subtle
-            // changes in peak gain (most problematic with inputs containing lots of subbass)
-            const float autogain_attack  = convert_compressor_time(p->sample_rate * 0.005);
-            const float autogain_release = convert_compressor_time(p->sample_rate * 0.5); // 500ms
-
-            const float expander_attack = convert_compressor_time(1);
-            // const float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
-            const float expander_release = convert_compressor_time(p->sample_rate * 0.001); // 1 ms
-
-            // Frequency of param updates vary. In FL studio (2024), when dragging params in the GUI, FL doesn't do a
-            // great job of sending these updates frequently on the audio thread. FL sends these updates much more
-            // frequently when you are playing parameter automation. Ableton 12 however does a much better job in all
-            // cases, and does a great job with a much shorter smoothing time like 10ms.
-            // It may be possible to improve this with a little bit of DAW detection to optimise smoothing time based on
-            // the DAW.
-            const double smoothing_len = 0.030; // 30ms
-            // const double smoothing_len        = 0.020; // 20ms NOTE: sounds too steppy in FL Studio
-            int param_smoothing_time = xm_droundi(p->sample_rate * smoothing_len);
-
-            for (int ch = 0; ch < 2; ch++)
-            {
-                float* audio = output[ch] + frame;
-
-                struct FilterState s = p->state[ch];
-
-                for (int i = 0; i < ARRLEN(s.values); i++)
-                    smoothvalue_set_target(&s.values[i], p->audio_params[i], param_smoothing_time);
-
-                float lp_cutoff = s.values[PARAM_CUTOFF].current;
-                float hp_cutoff = s.values[PARAM_SCREAM].current;
-                float resonance = s.values[PARAM_RESONANCE].current;
-                float in_gain   = s.values[PARAM_INPUT_GAIN].current;
-                float wet       = s.values[PARAM_WET].current;
-
-// #define CUTOFF_MAX    MIDI_NOTE_NUM_20kHz
-#define CUTOFF_MAX (MIDI_NOTE_NUM_20kHz)
-// #define HP_CUTOFF_MIN 0
-#define HP_CUTOFF_MIN (MIDI_NOTE_NUM_20Hz - 12)
-#define LP_Q_MIN      XM_SQRT1_2f
-#define LP_Q_MAX      XM_SQRT1_2f
-// #define LP_Q_MAX      XM_SQRT2f
-#define HP_Q_MIN XM_SQRT1_2f
-// #define HP_Q_MAX    (3 * XM_SQRT1_2f)
-#define HP_Q_MAX (XM_SQRT2f)
-// #define HP_Q_MAX    (XM_SQRT1_2f)
-#define FB_GAIN_MIN -12.0f
-#define FB_GAIN_MAX 12.0f
-
-                float lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
-                float hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
-
-                lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX);
-                hp_cutoff  = xm_lerpf(hp_cutoff, HP_CUTOFF_MIN, CUTOFF_MAX);
-                hp_cutoff -= CUTOFF_MAX - lp_cutoff;
-
-                lp_cutoff = xm_midi_to_Hz(lp_cutoff);
-                hp_cutoff = xm_midi_to_Hz(hp_cutoff);
-                lp_cutoff = xm_clampf(lp_cutoff, 5, 20000);
-                hp_cutoff = xm_clampf(hp_cutoff, 5, 20000);
-
-                float feedback_gain = xm_lerpf(resonance, FB_GAIN_MIN, FB_GAIN_MAX);
-                feedback_gain       = xm_fast_dB_to_gain(feedback_gain);
-
-                in_gain = xm_lerpf(in_gain, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                in_gain = xm_fast_dB_to_gain(in_gain);
-
-                Coeffs lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
-                Coeffs hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
-
-                const bool smooth_params = s.values[PARAM_CUTOFF].remaining | s.values[PARAM_SCREAM].remaining |
-                                           s.values[PARAM_RESONANCE].remaining | s.values[PARAM_INPUT_GAIN].remaining |
-                                           s.values[PARAM_WET].remaining;
-
-                const bool has_modulation_or_smoothing = lfo_1_mod_flags || lfo_2_mod_flags || smooth_params;
-
-                // Setup autogain
-                // Not proud of this design but it appears to do the job at the time of writing and with my limited
-                // testing
+                // Peak detect for LFO retrigger
+                const float* audio_L = output[0] + frame + start_sample;
+                const float* audio_R = output[1] + frame + start_sample;
+                int          i;
+                for (i = 0; i < remaining_samples; i++)
                 {
-                    for (int i = 0; i < num_frames; i++)
+                    float       avg_gain  = 0.5 * (audio_L[i] + audio_R[i]);
+                    const float prev_peak = p->retrig_detection;
+                    const float next_peak = detect_peak(avg_gain, p->retrig_detection, pd_attack_time, pd_release_time);
+                    p->retrig_detection   = next_peak;
+
+                    if (prev_peak < pd_threshold && next_peak >= pd_threshold)
                     {
-                        float x = audio[i];
+                        // println("retrig %llu:%d", p->num_process_callbacks, frame + start_sample + i);
+                        bool lfo_1_retrig_on = p->audio_params[PARAM_RETRIG_LFO_1] >= 0.5;
+                        bool lfo_2_retrig_on = p->audio_params[PARAM_RETRIG_LFO_2] >= 0.5;
 
-                        s.autogain_last_peak =
-                            detect_peak(fabsf(x), s.autogain_last_peak, autogain_attack, autogain_release);
+                        if (lfo_1_retrig_on)
+                            p->lfos[0].phase = 0;
+                        if (lfo_2_retrig_on)
+                            p->lfos[1].phase = 0;
+
+                        bool should_set_flag = (p->selected_lfo_idx == 0 && lfo_1_retrig_on) ||
+                                               (p->selected_lfo_idx == 1 && lfo_2_retrig_on);
+                        if (should_set_flag)
+                            xt_atomic_store_u8(&p->gui_retrig_flag, 1);
+
+                        break;
                     }
-                    float in_peak_dB = xm_fast_gain_to_dB(s.autogain_last_peak);
+                }
 
-                    if (s.autogain_adsr.current_stage == ADSR_IDLE && in_peak_dB > -96)
-                        adsr_set_stage(&s.autogain_adsr, ADSR_ATTACK);
-                    if ((s.autogain_adsr.current_stage == ADSR_ATTACK ||
-                         s.autogain_adsr.current_stage == ADSR_SUSTAIN) &&
-                        in_peak_dB < -64)
-                    {
-                        adsr_set_stage(&s.autogain_adsr, ADSR_RELEASE);
-                    }
-                    float adsr_gain = adsr_tick(&s.autogain_adsr);
-
-                    if (in_peak_dB < -24)
-                        in_peak_dB = -24;
-                    // We want to bring the peak gain to approx. 0dB
-                    float autogain_dB            = -in_peak_dB;
-                    int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.005);
-                    smoothvalue_set_target(&s.autogain_dB, autogain_dB, smoothing_time_samples);
-
-                    for (int i = 0; i < num_frames; i++)
-                    {
-                        float gain_dB  = smoothvalue_tick(&s.autogain_dB);
-                        float gain     = xm_fast_dB_to_gain(gain_dB);
-                        gain          *= adsr_tick(&s.autogain_adsr);
-                        audio[i]      *= gain;
-                    }
-                } // autogain
-
-                if (p->gui)
+                // A retrigger may happen on the first sample
+                if (i > 0)
                 {
-                    enum
-                    {
-                        PEAK_FREQUENCY_SAMPLES = 1 << 12,
-                        PEAK_FREQUENCY_MASK    = PEAK_FREQUENCY_SAMPLES - 1,
-                    };
-                    int remaining_samples = num_frames;
-                    while (remaining_samples)
-                    {
-                        float peak_input = p->_gui_input_last_peak.data[ch];
-                        int   N = xm_mini(remaining_samples, PEAK_FREQUENCY_SAMPLES - p->_gui_input_read_count[ch]);
-                        for (int i = 0; i < N; i++)
-                        {
-                            float x = fabsf(audio[i]);
-                            if (x > peak_input)
-                                peak_input = x;
-                        }
-                        remaining_samples            -= N;
-                        p->_gui_input_read_count[ch] += N;
-                        if (p->_gui_input_read_count[ch] == PEAK_FREQUENCY_SAMPLES)
-                        {
-                            p->_gui_input_read_count[ch] = 0;
-                            xvec2f next                  = {.u64 = p->gui_input_peak_gain};
-                            next.data[ch]                = peak_input * in_gain;
-
-                            xt_atomic_store_u64(&p->gui_input_peak_gain, next.u64);
-
-                            p->_gui_input_last_peak.data[ch] = 0;
-                        }
-                    }
-                } // !!p.gui
-
-                // Process
-                for (int i = 0; i < num_frames; i++)
-                {
-                    float x = audio[i];
-
-                    x *= in_gain;
-
-                    // Feedforward
-                    // float y = x + s.fb_yn_1 * feedback_gain;
-                    // float y = x + s.fb_yn_1;
-                    float y = x + s.fb_yn_1;
-
-                    // y = tanhf(y);
-                    y = Tanh_ADAA2_process(&s.tanh_1, y);
-                    // y = sinarctan2(y);
-                    // y = softsine(y);
-                    // y = sinarctan(y);
-                    // y = xm_clampf(y, -1, 1);
-                    y = filter_process(y, &lp_c, s.lp);
-
-                    CPLUG_LOG_ASSERT(y == y);
-                    if (y != y) // NaN protection. TODO: remove when filter algo is solid
-                        y = 0;
-
-                    // *it = xm_clampf(y, -1, 1);
-                    audio[i] = wet * y + (1 - wet) * audio[i];
-                    // *it = x;
-
-#ifdef CPLUG_BUILD_STANDALONE
-                    audio[i] *= xm_fast_dB_to_gain(g_output_gain_dB);
-#endif
-
-                    // Feedback
-                    // float feed = y;
-                    float feed = y * feedback_gain;
-
-                    // feed = sinarctan(feed);
-                    feed = filter_process(feed, &hp_c, s.hp);
-                    // feed = xm_clampf(feed, -1, 1);
-                    // feed = tanhf(feed);
-                    feed = Tanh_ADAA2_process(&s.tanh_2, feed);
-                    // feed = softsine(feed);
-                    // feed = softsine2(feed);
-
-                    // Feedback gate, triggered by input
-                    s.peak_xn_1        = detect_peak(fabsf(x), s.peak_xn_1, expander_attack, expander_release);
-                    float peak_dB      = xm_fast_gain_to_dB(s.peak_xn_1);
-                    float reduction_dB = hard_knee_expander(peak_dB, -120.0f, 2);
-                    xassert(reduction_dB == reduction_dB);
-                    reduction_dB         -= peak_dB;
-                    float reduction_gain  = xm_fast_dB_to_gain(reduction_dB);
-                    // Clamp to 0
-                    if (reduction_dB < -140)
-                        reduction_gain = 0;
-                    feed *= reduction_gain;
-                    xassert(feed == feed);
-
-                    s.fb_yn_1 = feed;
-
-                    if (has_modulation_or_smoothing)
-                    {
-                        _Static_assert(NUM_AUTOMATABLE_PARAMS == ARRLEN(s.values), "");
-                        _Static_assert(NUM_AUTOMATABLE_PARAMS == ARRLEN(p->lfo_mod_amounts), "");
-                        float modvals[NUM_AUTOMATABLE_PARAMS];
-                        for (int j = 0; j < ARRLEN(s.values); j++)
-                        {
-                            smoothvalue_tick(&s.values[j]);
-
-                            float v = s.values[j].current;
-
-                            // TODO: apply bidirectional algorithm?
-                            if (lfo_1_mod_flags & (1 << j))
-                                v += p->lfo_mod_amounts[j].data[0] * mod_buffer_1[i];
-                            if (lfo_2_mod_flags & (1 << j))
-                                v += p->lfo_mod_amounts[j].data[1] * mod_buffer_2[i];
-
-                            modvals[j] = xm_clampf(v, 0, 1);
-                        }
-
-                        lp_cutoff = modvals[PARAM_CUTOFF];
-                        hp_cutoff = modvals[PARAM_SCREAM];
-                        resonance = modvals[PARAM_RESONANCE];
-                        in_gain   = modvals[PARAM_INPUT_GAIN];
-                        wet       = modvals[PARAM_WET];
-
-                        lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
-                        hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
-
-                        lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX);
-                        hp_cutoff  = xm_lerpf(hp_cutoff, HP_CUTOFF_MIN, CUTOFF_MAX);
-                        hp_cutoff -= CUTOFF_MAX - lp_cutoff;
-
-                        lp_cutoff = xm_midi_to_Hz(lp_cutoff);
-                        hp_cutoff = xm_midi_to_Hz(hp_cutoff);
-                        lp_cutoff = xm_clampf(lp_cutoff, 20, 20000);
-                        hp_cutoff = xm_clampf(hp_cutoff, 20, 20000);
-
-                        feedback_gain = xm_lerpf(resonance, FB_GAIN_MIN, FB_GAIN_MAX);
-                        feedback_gain = xm_fast_dB_to_gain(feedback_gain);
-
-                        in_gain = xm_lerpf(in_gain, RANGE_INPUT_GAIN_MIN, RANGE_INPUT_GAIN_MAX);
-                        in_gain = xm_fast_dB_to_gain(in_gain);
-
-                        lp_c = filter_LP(lp_cutoff, lp_Q, fs_inv);
-                        hp_c = filter_HP(hp_cutoff, hp_Q, fs_inv);
-                    } // !!has_modulation_or_smoothing
-                } // Process
-#define ROUND_STATE_TO_ZERO(n)                                                                                         \
-    if (fabsf(n) < 1.0e-8f)                                                                                            \
-        n = 0;
-
-                ROUND_STATE_TO_ZERO(s.lp[0])
-                ROUND_STATE_TO_ZERO(s.lp[1])
-                ROUND_STATE_TO_ZERO(s.hp[0])
-                ROUND_STATE_TO_ZERO(s.hp[1])
-                ROUND_STATE_TO_ZERO(s.fb_yn_1)
-
-                p->state[ch] = s;
+                    process_audio(p, output, frame + start_sample, i);
+                }
+                start_sample      += i;
+                remaining_samples -= i;
+                xassert(remaining_samples >= 0);
             }
-
-            // Wrap beat position
-            p->beat_position += num_frames * p->beat_inc;
-            if (p->beat_position >= MAX_PATTERN_LENGTH_PATTERNS)
-                p->beat_position -= MAX_PATTERN_LENGTH_PATTERNS;
-            xassert(p->beat_position >= 0 && p->beat_position < MAX_PATTERN_LENGTH_PATTERNS);
-
-            if (mod_buffer_2)
-                linked_arena_release(p->audio_arena, mod_buffer_2);
-            if (mod_buffer_1)
-                linked_arena_release(p->audio_arena, mod_buffer_1);
 
             frame = event.processAudio.endFrame;
             break;

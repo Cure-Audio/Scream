@@ -2053,6 +2053,10 @@ void pw_tick(void* _gui)
         draw_lfo_section(gui);
     }
 
+    // extern float g_pd_threshold;
+    // imgui_rect   threshold_rect = {20, 40, 220, 60};
+    // im_slider(nvg, im, threshold_rect, &g_pd_threshold, -96, -36, "%.2fdB", "Threshold");
+
     snvg_command_end_pass(nvg, NVG_LABEL("end main framebuffer"));
 
     snvg_command_begin_pass(

@@ -195,6 +195,10 @@ typedef struct Plugin
     LinkedArena*      audio_arena;
     CplugHostContext* cplug_ctx;
 
+#ifndef NDEBUG
+    uint64_t num_process_callbacks;
+#endif // DEBUG
+
     // Retained data for GUI
     void*                gui;
     int                  width, height;
@@ -221,6 +225,9 @@ typedef struct Plugin
 
     bool   playhead_was_playing;
     double last_playhead_beats;
+
+    float             retrig_detection;
+    xt_atomic_uint8_t gui_retrig_flag;
 
     LFO lfos[2];
 
