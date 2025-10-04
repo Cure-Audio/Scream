@@ -856,9 +856,6 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
         case CPLUG_EVENT_MIDI:
         {
-            if (event.midi.status == 144) // Note on
-                p->beat_position = 0;     // Retrigger LFO on key press
-
             if (event.midi.status == 128)
                 synth_note_off(&g_synth, event.midi.data1);
             else if (event.midi.status == 144)
