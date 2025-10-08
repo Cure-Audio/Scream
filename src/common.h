@@ -71,8 +71,9 @@ void println(const char* const fmt, ...);
 #define STBI_FREE(ptr)        MY_FREE(ptr)
 #define STBI_ASSERT           xassert
 
-#define XFILES_MALLOC(sz) MY_MALLOC(sz)
-#define XFILES_FREE(ptr)  MY_FREE(ptr)
+#define XFILES_MALLOC(sz)       MY_MALLOC(sz)
+#define XFILES_REALLOC(ptr, sz) MY_REALLOC(ptr, sz)
+#define XFILES_FREE(ptr)        MY_FREE(ptr)
 
 #define XARR_REALLOC(ptr, sz) MY_REALLOC(ptr, sz)
 #define XARR_FREE(ptr)        MY_FREE(ptr)
