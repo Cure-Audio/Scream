@@ -252,11 +252,10 @@ void main_dequeue_events(Plugin* p)
     }
     p->queue_main_tail = tail;
 }
-enum
-{
-    SEC_EXPONENT_MIN = -6,
-    SEC_EXPONENT_MAX = 3,
-};
+
+const double SEC_EXPONENT_MIN = -6.643856189774724; // log2(SEC_EXPONENT_MIN) == 10ms
+const double SEC_EXPONENT_MAX = 3;                  // log2(SEC_EXPONENT_MAX) == 8sec
+
 double normalise_sec(double sec)
 {
     double v2 = log2(sec);
@@ -265,6 +264,7 @@ double normalise_sec(double sec)
     xassert(v == v);
     return v;
 }
+
 double denormalise_sec(double v)
 {
     xassert(v == v);
