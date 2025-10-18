@@ -106,4 +106,49 @@ void main() {
 
 @end
 
+@vs logo_vs
+layout(binding = 0) uniform vs_logo_uniforms {
+    vec2 topleft;
+    vec2 bottomright;
+    vec2 size;
+};
+out vec2 uv;
+
+void main() {
+    uint v_idx = gl_VertexIndex / 6u;
+    uint i_idx = gl_VertexIndex - v_idx * 6;
+
+    // Is odd
+    bool is_right = (gl_VertexIndex & 1) == 1;
+    bool is_bottom = i_idx >= 2 && i_idx <= 4;
+
+    vec2 pos = vec2(
+        is_right  ? bottomright.x : topleft.x,
+        is_bottom ? bottomright.y : topleft.y
+    );
+    pos = (pos + pos) / size - vec2(1);
+    pos.y = -pos.y;
+
+    gl_Position = vec4(pos, 1, 1);
+    uv = vec2(
+        is_right  ? 1 : 0,
+        is_bottom ? 1 : 0
+    );
+}
+@end
+
+
+@fs logo_fs
+layout(binding=0)uniform texture2D logo_tex;
+layout(binding=0)uniform sampler logo_smp;
+
+in vec2 uv;
+out vec4 frag_color;
+
+void main() {
+    frag_color = texture(sampler2D(logo_tex, logo_smp), uv);
+}
+@end
+
 @program knob knob_vs knob_fs
+@program logo logo_vs logo_fs

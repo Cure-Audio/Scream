@@ -140,36 +140,51 @@ void* pw_create_gui(void* _plugin, void* _pw)
 
     // Shaders
     {
+        // This should be a nvgImagePattern draw call but somehow I keep breaking nanovg...
+        sg_shader logo_shd = sg_make_shader(logo_shader_desc(sg_query_backend()));
+        gui->logo_pip      = sg_make_pipeline(&(sg_pipeline_desc){
+                 .shader = logo_shd,
+                 .colors[0] =
+                {.write_mask = SG_COLORMASK_RGBA,
+                      .blend =
+                          {
+                              .enabled          = true,
+                              .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
+                              .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                              .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                              .dst_factor_alpha = SG_BLENDFACTOR_ONE,
+                     }},
+                 .label = NVG_LABEL("logo pipeline")});
         // Knob
-        sg_shader shd = sg_make_shader(knob_shader_desc(sg_query_backend()));
-        gui->knob_pip =
-            sg_make_pipeline(&(sg_pipeline_desc){.shader = shd,
-                                                 .colors[0] =
-                                                     {.write_mask = SG_COLORMASK_RGBA,
-                                                      .blend =
-                                                          {
-                                                              .enabled          = true,
-                                                              .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
-                                                              .src_factor_alpha = SG_BLENDFACTOR_ONE,
-                                                              .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                                                              .dst_factor_alpha = SG_BLENDFACTOR_ONE,
-                                                          }},
-                                                 .label = NVG_LABEL("knob pipeline")});
+        sg_shader knob_shd = sg_make_shader(knob_shader_desc(sg_query_backend()));
+        gui->knob_pip      = sg_make_pipeline(&(sg_pipeline_desc){
+                 .shader = knob_shd,
+                 .colors[0] =
+                {.write_mask = SG_COLORMASK_RGBA,
+                      .blend =
+                          {
+                              .enabled          = true,
+                              .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
+                              .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                              .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                              .dst_factor_alpha = SG_BLENDFACTOR_ONE,
+                     }},
+                 .label = NVG_LABEL("knob pipeline")});
 
         // LFO
-        gui->lfo_vertical_grad_pip = sg_make_pipeline(
-            &(sg_pipeline_desc){.shader = sg_make_shader(lfo_vertical_grad_shader_desc(sg_query_backend())),
-                                .colors[0] =
-                                    {.write_mask = SG_COLORMASK_RGBA,
-                                     .blend =
-                                         {
-                                             .enabled          = true,
-                                             .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
-                                             .src_factor_alpha = SG_BLENDFACTOR_ONE,
-                                             .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                                             .dst_factor_alpha = SG_BLENDFACTOR_ONE,
-                                         }},
-                                .label = NVG_LABEL("LFO vertical grad pipeline")});
+        gui->lfo_vertical_grad_pip = sg_make_pipeline(&(sg_pipeline_desc){
+            .shader = sg_make_shader(lfo_vertical_grad_shader_desc(sg_query_backend())),
+            .colors[0] =
+                {.write_mask = SG_COLORMASK_RGBA,
+                 .blend =
+                     {
+                         .enabled          = true,
+                         .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
+                         .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                         .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                         .dst_factor_alpha = SG_BLENDFACTOR_ONE,
+                     }},
+            .label = NVG_LABEL("LFO vertical grad pipeline")});
     }
 
     // Logo
@@ -183,6 +198,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
             int         len = strlen(path);
             const char* cat = XFILES_DIR_STR "Cure Audio" XFILES_DIR_STR "Scream" XFILES_DIR_STR "cureaudio.png";
             snprintf(path + len, sizeof(path) - len, "%s", cat);
+            xassert(xfiles_exists(path));
             ok = xfiles_read(path, &file_data, &file_data_len);
             xassert(ok);
         }
@@ -192,24 +208,18 @@ void* pw_create_gui(void* _plugin, void* _pw)
             stbi_uc* img_buf = stbi_load_from_memory(file_data, file_data_len, &x, &y, &comp, 4);
             xassert(img_buf);
             xassert(comp == 4);
+
             if (img_buf)
             {
-                println("TODO: Figure out mipmaps with new sokol_gfx...");
                 sg_image_desc img_desc = {
-                    .usage.immutable = true,
-                    .width           = x,
-                    .height          = y,
-                    // .num_mipmaps     = 5,
-                    .num_mipmaps     = 1,
-                    .num_slices      = 1,
-                    .pixel_format    = SG_PIXELFORMAT_RGBA8,
-
+                    .width              = x,
+                    .height             = y,
+                    .pixel_format       = SG_PIXELFORMAT_RGBA8,
                     .data.mip_levels[0] = {
                         .ptr  = img_buf,
                         .size = x * y * comp,
                     }};
-                // gui->logo_id      = sg_make_image_with_mipmaps(&img_desc);
-                gui->logo_id      = sg_make_image(&img_desc);
+                gui->logo_id      = sg_make_image_with_mipmaps(&img_desc);
                 gui->logo_texview = sg_make_view(&(sg_view_desc){.texture = gui->logo_id});
                 stbi_image_free(img_buf);
 
@@ -526,9 +536,34 @@ void do_knob_shader(void* uptr)
         sg_draw(0, 6, 1);
     }
 
-    sg_apply_pipeline(gui->knob_pip);
-
     xassert(sg_isvalid());
+}
+
+void do_logo_shader(void* uptr)
+{
+    GUI*           gui = uptr;
+    LayoutMetrics* lm  = &gui->layout;
+
+    float x, y, w, h, img_scale;
+    y         = 4;
+    h         = lm->height_header - y;
+    img_scale = h / (float)gui->logo_height;
+    w         = (float)gui->logo_width * img_scale;
+    x         = lm->width - 16 - w;
+    sg_apply_pipeline(gui->logo_pip);
+    sg_apply_bindings(&(sg_bindings){
+        .views[VIEW_logo_tex]   = gui->logo_texview,
+        .samplers[SMP_logo_smp] = gui->nvg->sampler_linear,
+    });
+
+    vs_logo_uniforms_t vs_uniforms = {
+        .topleft     = {x, y},
+        .bottomright = {x + w, y + h},
+        .size        = {lm->width, lm->height},
+    };
+
+    sg_apply_uniforms(UB_vs_logo_uniforms, &SG_RANGE(vs_uniforms));
+    sg_draw(0, 6, 1);
 }
 
 void pw_tick(void* _gui)
@@ -706,23 +741,30 @@ void pw_tick(void* _gui)
 
             memset(gui->lfo_playhead_trail, 0, sizeof(*gui->lfo_playhead_trail) * lfo_buffer_cap);
 
+            if (gui->lfo_ybuffer_view.id)
+                sg_destroy_view(gui->lfo_ybuffer_view);
+            if (gui->lfo_playhead_trail_view.id)
+                sg_destroy_view(gui->lfo_playhead_trail_view);
+
             if (gui->lfo_ybuffer_obj.id)
                 sg_destroy_buffer(gui->lfo_ybuffer_obj);
             if (gui->lfo_playhead_trail_obj.id)
                 sg_destroy_buffer(gui->lfo_playhead_trail_obj);
 
-            gui->lfo_ybuffer_obj        = sg_make_buffer(&(sg_buffer_desc){
-                       .usage.storage_buffer = true,
-                       .usage.stream_update  = true,
-                       .size                 = lfo_buffer_cap * sizeof(*gui->lfo_ybuffer),
-                       .label                = "lfo_ybuffer",
+            gui->lfo_ybuffer_obj         = sg_make_buffer(&(sg_buffer_desc){
+                        .usage.storage_buffer = true,
+                        .usage.stream_update  = true,
+                        .size                 = lfo_buffer_cap * sizeof(*gui->lfo_ybuffer),
+                        .label                = NVG_LABEL("lfo_ybuffer"),
             });
-            gui->lfo_playhead_trail_obj = sg_make_buffer(&(sg_buffer_desc){
-                .usage.storage_buffer = true,
-                .usage.stream_update  = true,
-                .size                 = lfo_buffer_cap * sizeof(*gui->lfo_playhead_trail),
-                .label                = "lfo_playhead_trail",
+            gui->lfo_playhead_trail_obj  = sg_make_buffer(&(sg_buffer_desc){
+                 .usage.storage_buffer = true,
+                 .usage.stream_update  = true,
+                 .size                 = lfo_buffer_cap * sizeof(*gui->lfo_playhead_trail),
+                 .label                = NVG_LABEL("lfo_playhead_trail"),
             });
+            gui->lfo_ybuffer_view        = sg_make_view(&(sg_view_desc){.storage_buffer = gui->lfo_ybuffer_obj});
+            gui->lfo_playhead_trail_view = sg_make_view(&(sg_view_desc){.storage_buffer = gui->lfo_playhead_trail_obj});
         }
         const int lfo_idx        = gui->plugin->selected_lfo_idx;
         float     playhead       = (float)gui->plugin->lfos[lfo_idx].phase;
@@ -766,9 +808,10 @@ void pw_tick(void* _gui)
     snvg_command_begin_pass(
         nvg,
         &(sg_pass){
-            .action                = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
-            .attachments.colors[0] = gui->main_framebuffer.img_colview,
-            .label                 = NVG_LABEL("main_framebuffer"),
+            .action                    = {.colors[0] = {.load_action = SG_LOADACTION_DONTCARE}},
+            .attachments.colors[0]     = gui->main_framebuffer.img_colview,
+            .attachments.depth_stencil = gui->main_framebuffer.depth_view,
+            .label                     = NVG_LABEL("main_framebuffer"),
         },
         gui->main_framebuffer.width,
         gui->main_framebuffer.height,
@@ -793,16 +836,8 @@ void pw_tick(void* _gui)
         nvgText(nvg, lm->width * 0.5f, lm->height_header * 0.5f + 4, "SCREAM", NULL);
 
         // Logo
-        float x, y, w, h, img_scale;
-        y         = 4;
-        h         = lm->height_header - 4;
-        img_scale = h / (float)gui->logo_height;
-        w         = (float)gui->logo_width * img_scale;
-        x         = lm->width - 16 - w;
-        nvgBeginPath(nvg);
-        nvgRect(nvg, x, y, w, h);
-        nvgSetPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_texview, 1, nvg->sampler_linear));
-        nvgFill(nvg);
+        snvg_command_custom(nvg, gui, do_logo_shader, NVG_LABEL("Knob shader"));
+        snvg_command_draw_nvg(nvg, NVG_LABEL("main framebuffer 2"));
     }
 
     // Main content background
@@ -1895,9 +1930,9 @@ void pw_tick(void* _gui)
     snvg_command_draw_nvg(nvg, NVG_LABEL("swapchain"));
 
     sg_view bgimg = gui->main_framebuffer.img_texview;
-    nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, bgimg, 1, nvg->sampler_nearest));
     nvgBeginPath(nvg);
     nvgRect(nvg, 0, 0, lm->width, lm->height);
+    nvgSetPaint(nvg, nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, bgimg, 1, nvg->sampler_nearest));
     nvgFill(nvg);
 
     // Footer

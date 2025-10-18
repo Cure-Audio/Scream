@@ -30,7 +30,7 @@ Name: vst3;        Description: VST3 Plugin;      Types: full compact
 
 [Files]
 Components: assets; Source: "..\assets\Tomorrow-SemiBold.ttf";              DestDir: "{userappdata}\Cure Audio\Scream";
-Components: assets; Source: "..\assets\OFL.txt";                            DestDir: "{userappdata}\Cure Audio\Scream\Tomorrow-LICENSE.txt";
+Components: assets; Source: "..\assets\OFL.txt";                            DestDir: "{userappdata}\Cure Audio\Scream";    DestName: Tomorrow-LICENSE.txt
 Components: assets; Source: "..\assets\cureaudio.png";                      DestDir: "{userappdata}\Cure Audio\Scream";
-Components: vst3;   Source: "..\build\Release\{#MyAppName}.vst3";           DestDir: "{commonpf64}\Common Files\VST3";                        Flags: recursesubdirs
-Components: clap;   Source: "..\build\Release\{#MyAppName}_plugin.dll";     DestDir: "{commonpf64}\Common Files\CLAP";                        DestName: {#MyAppName}.clap
+Components: vst3;   Source: "..\build\Release\{#MyAppName}.vst3";           DestDir: "{commonpf64}\Common Files\VST3";     Flags: recursesubdirs
+Components: clap;   Source: "..\build\Release\{#MyAppName}_plugin.dll";     DestDir: "{commonpf64}\Common Files\CLAP";     DestName: {#MyAppName}.clap
