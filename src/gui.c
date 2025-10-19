@@ -521,6 +521,7 @@ void do_knob_shader(void* uptr)
 }
 
 // This should be a nvgImagePattern draw call but somehow I keep breaking nanovg...
+/*
 void do_logo_shader(void* uptr)
 {
     GUI*           gui = uptr;
@@ -552,6 +553,7 @@ void do_logo_shader(void* uptr)
         sg_draw(0, 6, 1);
     }
 }
+*/
 
 void pw_tick(void* _gui)
 {
@@ -824,8 +826,19 @@ void pw_tick(void* _gui)
         nvgText(nvg, lm->width * 0.5f, lm->height_header * 0.5f + 4, "SCREAM", NULL);
 
         // Logo
-        snvg_command_custom(nvg, gui, do_logo_shader, NVG_LABEL("Knob shader"));
-        snvg_command_draw_nvg(nvg, NVG_LABEL("main framebuffer 2"));
+        // snvg_command_custom(nvg, gui, do_logo_shader, NVG_LABEL("Knob shader"));
+        // snvg_command_draw_nvg(nvg, NVG_LABEL("main framebuffer 2"));
+
+        float x, y, w, h, img_scale;
+        y         = 4;
+        h         = lm->height_header - y;
+        img_scale = h / (float)gui->logo_height;
+        w         = (float)gui->logo_width * img_scale;
+        x         = lm->width - 16 - w;
+        nvgBeginPath(nvg);
+        nvgRect(nvg, x, y, w, h);
+        nvgSetPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_texview, 1, nvg->sampler_linear));
+        nvgFill(nvg);
     }
 
     // Main content background
