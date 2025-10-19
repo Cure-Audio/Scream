@@ -140,26 +140,6 @@ void* pw_create_gui(void* _plugin, void* _pw)
         gui->font_id = font_id;
     }
 
-    // Shaders
-    {
-        // Knob
-
-        // LFO
-        gui->lfo_vertical_grad_pip = sg_make_pipeline(
-            &(sg_pipeline_desc){.shader = sg_make_shader(lfo_vertical_grad_shader_desc(sg_query_backend())),
-                                .colors[0] =
-                                    {.write_mask = SG_COLORMASK_RGBA,
-                                     .blend =
-                                         {
-                                             .enabled          = true,
-                                             .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
-                                             .src_factor_alpha = SG_BLENDFACTOR_ONE,
-                                             .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                                             .dst_factor_alpha = SG_BLENDFACTOR_ONE,
-                                         }},
-                                .label = NVG_LABEL("LFO vertical grad pipeline")});
-    }
-
     // Logo
     {
         void*  file_data     = NULL;

@@ -6,12 +6,15 @@
 
 typedef enum ResourceType
 {
+    // sg_shader
+    RESOURCE_TYPE_SHADER,
     // sg_pipeline
     RESOURCE_TYPE_PIPELINE,
+    // SGNVGframebuffer
     RESOURCE_TYPE_FRAMEBUFFER,
     // sg_buffer + sg_view
     RESOURCE_TYPE_STORAGEBUFFER,
-    // // Nanovg have their own 'Image' type, but I want to replace it with this
+    // Nanovg have their own 'NVGtexture' type, but I may want to replace it with this
     // sg_image + sg_view + width _ height
     RESOURCE_TYPE_TEXTURE,
 } ResourceType;
@@ -25,8 +28,8 @@ enum
 
 typedef union ResourceID
 {
-    void*    ptr;
     uint64_t u64;
+    void*    ptr;
     struct
     {
         unsigned u32_1;

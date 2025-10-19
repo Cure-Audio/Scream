@@ -24,7 +24,8 @@ ResourceHeader* resource_find(ResourceManager* rm, ResourceID id)
             break;
         }
     }
-    list->predict_idx = idx + 1;
+    if (head)
+        list->predict_idx = idx + 1;
     return head;
 }
 
@@ -70,25 +71,52 @@ ResourceHeader* resource_create(ResourceManager* rm, size_t num_bytes, ResourceI
     return res;
 }
 
-bool resource_get_pipeline(ResourceManager* rm, sg_pipeline* pipelne, sokol_shdc_shader_t method, uint32_t flags)
+bool resource_get_shader(ResourceManager* rm, sg_shader* shader, sokol_shdc_shader_t method, uint32_t flags)
 {
-    ResourceID      id  = {.ptr = method};
+    ResourceID id  = {.ptr = method};
+    id.u64        += RESOURCE_TYPE_SHADER;
+
     ResourceHeader* res = resource_find(rm, id);
     if (res == NULL)
     {
-        res = resource_create(rm, sizeof(*pipelne), id, RESOURCE_TYPE_PIPELINE, flags);
+        // println("Create shader");
+        res = resource_create(rm, sizeof(*shader), id, RESOURCE_TYPE_SHADER, flags);
 
-        sg_pipeline* pip = (void*)&res->payload;
-        *pip             = sg_make_pipeline(&(sg_pipeline_desc){.shader    = sg_make_shader(method(sg_query_backend())),
-                                                                .colors[0] = {
-                                                                    .write_mask = SG_COLORMASK_RGBA,
-                                                                    .blend      = {
-                                                                             .enabled          = true,
-                                                                             .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
-                                                                             .src_factor_alpha = SG_BLENDFACTOR_ONE,
-                                                                             .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                                                                             .dst_factor_alpha = SG_BLENDFACTOR_ONE,
-                                                        }}});
+        sg_shader* sh = (void*)&res->payload;
+        *sh           = sg_make_shader(method(sg_query_backend()));
+    }
+
+    xassert(res->type == RESOURCE_TYPE_SHADER);
+    *shader = *(sg_shader*)&res->payload;
+
+    return res != NULL;
+}
+
+bool resource_get_pipeline(ResourceManager* rm, sg_pipeline* pipelne, sokol_shdc_shader_t method, uint32_t flags)
+{
+    ResourceID id        = {.ptr = method};
+    id.u64              += RESOURCE_TYPE_PIPELINE;
+    ResourceHeader* res  = resource_find(rm, id);
+    if (res == NULL)
+    {
+        sg_shader shd;
+        if (resource_get_shader(rm, &shd, method, flags | RESOURCE_FLAG_NODESTROY_ENDFRAME))
+        {
+            // println("Create pipeline");
+            res = resource_create(rm, sizeof(*pipelne), id, RESOURCE_TYPE_PIPELINE, flags);
+
+            sg_pipeline* pip = (void*)&res->payload;
+            *pip             = sg_make_pipeline(&(sg_pipeline_desc){.shader    = shd,
+                                                                    .colors[0] = {
+                                                                        .write_mask = SG_COLORMASK_RGBA,
+                                                                        .blend      = {
+                                                                                 .enabled          = true,
+                                                                                 .src_factor_rgb   = SG_BLENDFACTOR_SRC_ALPHA,
+                                                                                 .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                                                                                 .dst_factor_rgb   = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                                                                                 .dst_factor_alpha = SG_BLENDFACTOR_ONE,
+                                                            }}});
+        }
     }
 
     xassert(res->type == RESOURCE_TYPE_PIPELINE);
@@ -118,6 +146,7 @@ bool resource_get_framebuffer(
         *res_fb                   = snvgCreateFramebuffer(nvg, w, h);
         res_fb                   += 0;
     }
+    xassert(res->type == RESOURCE_TYPE_FRAMEBUFFER);
     *fb = *(SGNVGframebuffer*)&res->payload;
 
     return res != NULL;
@@ -134,14 +163,23 @@ void _resource_destroy(ResourceHeader* res, NVGcontext* nvg)
     void* data = &res->payload;
     switch (res->type)
     {
+    case RESOURCE_TYPE_SHADER:
+    {
+        // println("Destroy RESOURCE_TYPE_SHADER");
+        sg_shader* sh = data;
+        sg_destroy_shader(*sh);
+        break;
+    }
     case RESOURCE_TYPE_PIPELINE:
     {
+        // println("Destroy RESOURCE_TYPE_PIPELINE");
         sg_pipeline* pip = data;
         sg_destroy_pipeline(*pip);
         break;
     }
     case RESOURCE_TYPE_FRAMEBUFFER:
     {
+        // println("Destroy RESOURCE_TYPE_FRAMEBUFFER");
         SGNVGframebuffer* fb = data;
         snvgDestroyFramebuffer(nvg, fb);
         break;
