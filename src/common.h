@@ -40,6 +40,12 @@ void println(const char* const fmt, ...);
 #define println(...)
 #endif
 
+#if defined(_MSC_VER)
+#define XALIGN(a) __declspec(align(a))
+#else
+#define XALIGN(a) __attribute__((aligned(a)))
+#endif
+
 #ifdef CPLUG_BUILD_STANDALONE
 #define XFILES_ASSERT          xassert
 #define CPLUG_LOG_ASSERT(cond) xassert((cond));

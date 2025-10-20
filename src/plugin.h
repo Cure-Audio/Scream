@@ -19,7 +19,7 @@ typedef enum ParamID
     PARAM_RESONANCE,
     PARAM_INPUT_GAIN,
     PARAM_WET,
-    PARAM_OUTPUT_GAIN,
+    PARAM_OUTPUT_GAIN, // Currently not used...
 
     PARAM_PATTERN_LFO_1,
     PARAM_PATTERN_LFO_2,

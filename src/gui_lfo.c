@@ -666,7 +666,7 @@ void draw_lfo_section(GUI* gui)
     bool should_update_gui_lfo_points_with_points           = false;
     bool should_update_audio_lfo_points_with_gui_lfo_points = false;
     bool should_clear_lfo_trail                             = false;
-    int  next_pattern_length                                = 0;
+    // int  next_pattern_length                                = 0;
 
     const float bot_content_height = lm->content_b - lm->top_content_bottom;
     const float font_size          = lm->content_scale * 14;
@@ -2593,8 +2593,8 @@ void draw_lfo_section(GUI* gui)
         {
             xt_spinlock_lock(&lfo->spinlocks[pattern_idx]);
 
-            if (next_pattern_length)
-                xt_atomic_store_i32(&lfo->pattern_length[pattern_idx], next_pattern_length);
+            // if (next_pattern_length)
+            //     xt_atomic_store_i32(&lfo->pattern_length[pattern_idx], next_pattern_length);
 
             old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], gui->main_lfo_points);
 
