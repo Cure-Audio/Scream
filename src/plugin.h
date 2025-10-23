@@ -160,10 +160,12 @@ typedef struct LFO
 
     double phase;
 
+    // (deprecated. Might remove later)
     // Length in beats
     int pattern_length[NUM_LFO_PATTERNS];
 
     int grid_x[NUM_LFO_PATTERNS];
+    // (deprecated. Might remove later)
     int grid_y[NUM_LFO_PATTERNS];
 } LFO;
 

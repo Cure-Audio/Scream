@@ -722,6 +722,8 @@ void draw_lfo_section(GUI* gui)
                 gui->plugin->selected_lfo_idx = i;
                 gui->gui_lfo_points_valid     = false;
                 should_clear_lfo_trail        = true;
+
+                lm->current_lfo_playhead = lm->last_lfo_playhead = gui->plugin->lfos[i].phase;
             }
 
             NVGcolour  col1, col2;

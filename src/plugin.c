@@ -284,16 +284,19 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
     const double pattern_v   = p->audio_params[PARAM_PATTERN_LFO_1 + lfo_idx];
     const int    pattern_idx = xm_droundi(pattern_v * (NUM_LFO_PATTERNS - 1));
 
+    LFOPoint* points     = NULL;
+    int       num_points = 0;
     // !!!
-    xt_spinlock_lock(&lfo->spinlocks[pattern_idx]);
+    {
+        xt_spinlock_lock(&lfo->spinlocks[pattern_idx]);
 
-    const int num_points = xarr_len(lfo->points[pattern_idx]);
-    // const double pattern_length = xt_atomic_load_i32((xt_atomic_int32_t*)&lfo->pattern_length[pattern_idx]);
-    const double pattern_length = 1;
-    LFOPoint*    points         = linked_arena_alloc(p->audio_arena, num_points * sizeof(*points));
-    memcpy(points, lfo->points[pattern_idx], num_points * sizeof(*points));
+        num_points = xarr_len(lfo->points[pattern_idx]);
+        // const double pattern_length = xt_atomic_load_i32((xt_atomic_int32_t*)&lfo->pattern_length[pattern_idx]);
+        points = linked_arena_alloc(p->audio_arena, num_points * sizeof(*points));
+        memcpy(points, lfo->points[pattern_idx], num_points * sizeof(*points));
 
-    xt_spinlock_unlock(&lfo->spinlocks[pattern_idx]);
+        xt_spinlock_unlock(&lfo->spinlocks[pattern_idx]);
+    }
 
     const LFOPoint* points_start = points;
     const LFOPoint* points_end   = points_start + num_points;
@@ -314,6 +317,7 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
 
     const double rate_sync_as_hz = p->bpm / (SYNC_VALUES[lfo_rate_idx] * 240);
     const double beat_inc        = (is_ms ? rate_sec_as_hz : rate_sync_as_hz) / p->sample_rate;
+    const double pattern_length  = 1;
 
 #define beat_position lfo->phase
 
