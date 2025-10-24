@@ -537,20 +537,32 @@ void do_logo_shader(void* uptr)
     }
 }
 
+#ifdef _WIN32
+// #include <Windows.h>
+struct HWND__;
+struct HINSTANCE__;
+typedef struct HWND__*       HWND;
+typedef struct HINSTANCE__*  HINSTANCE;
+extern __declspec(dllimport) HINSTANCE __stdcall ShellExecuteA(
+    _In_opt_ HWND        hwnd,
+    _In_opt_ const char* lpOperation,
+    _In_ const char*     lpFile,
+    _In_opt_ const char* lpParameters,
+    _In_opt_ const char* lpDirectory,
+    _In_ int             nShowCmd);
+#endif
+
 int thread_run_hyperlink(void* data)
 {
     const char* url = data;
 
 #if defined(_WIN32)
-#define OPEN_URL_COMMAND "start"
+    ShellExecuteA(NULL, "open", url, NULL, NULL, 1);
 #elif defined(__APPLE__)
-#define OPEN_URL_COMMAND "open"
-#endif
     char buf[256];
-    snprintf(buf, sizeof(buf), OPEN_URL_COMMAND " %s", url);
-
-    // TODO: create wrapper for system() that doesn't spawn a console on Windows
+    snprintf(buf, sizeof(buf), "open %s", url);
     system(buf);
+#endif
 
     return 0;
 }
