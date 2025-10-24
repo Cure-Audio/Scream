@@ -259,7 +259,7 @@ void cplug_loadState(void* _p, const void* stateCtx, cplug_readProc readProc)
 
                 _Static_assert(sizeof(state->lfo_mod_amounts) == sizeof(p->lfo_mod_amounts), "");
                 _Static_assert(ARRLEN(state->lfo_mod_amounts) == ARRLEN(p->lfo_mod_amounts), "");
-                memcpy(state->lfo_mod_amounts, p->lfo_mod_amounts, sizeof(p->lfo_mod_amounts));
+                memcpy(p->lfo_mod_amounts, state->lfo_mod_amounts, sizeof(p->lfo_mod_amounts));
 
                 // spare array
                 LFOPoint* dst_points = NULL;
