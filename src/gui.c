@@ -1999,6 +1999,51 @@ void pw_tick(void* _gui)
         nvgSetTextAlign(nvg, NVG_ALIGN_BL);
         nvgText(nvg, 8, lm->height - 8, text, text + len);
 
+#ifndef NDEBUG
+        // uint64_t frame_time_end         = xtime_now_ns();
+        // uint64_t frame_time_duration_ns = frame_time_end - gui->frame_start_time;
+
+        uint64_t max_frame_time_ns = 16666666; // 1/60th of a second, in nanoseconds
+
+        // limit accuracy from nanoseconds to approximately microseconds
+        uint64_t cpu_numerator   = last_frame_draw_time >> 10; // fast integer divide by 1024
+        uint64_t cpu_denominator = max_frame_time_ns >> 10;    // fast integer divide by 1024
+
+        double cpu_amt       = (double)cpu_numerator / (double)cpu_denominator;
+        double frame_time_ms = (double)cpu_numerator * 1024e-6; // correct for 1024 int 'division'
+        // double approx_fps    = 1000 / frame_time_ms; // Potential FPS
+
+        // uint64_t actual
+        // uint64_t diff_last_frame = frame_time_end - gui->frame_end_time;
+        // gui->frame_end_time      = frame_time_end;
+        double actual_fps = 1000.0 / ((time_since_last_frame >> 10) * 1024e-6);
+
+        nvgSetFontSize(nvg, 12 * lm->content_scale);
+        len = snprintf(
+            text,
+            sizeof(text),
+            "GUI CPU: %.2lf%% Frame Time: %.3lfms. FPS: %.lf",
+            (cpu_amt * 100),
+            frame_time_ms,
+            actual_fps);
+        nvgSetTextAlign(nvg, NVG_ALIGN_TL);
+        nvgText(nvg, 8, 8, text, text + len);
+#endif // !NDEBUG
+
+        // Show window dimensions w/h on resize
+        uint64_t time_since_creation_ns = gui->frame_start_time - gui->gui_create_time;
+        uint64_t time_since_resize_ns   = gui->frame_start_time - gui->last_resize_time;
+        uint64_t threshold_1sec         = 1000000000;
+        uint64_t threshold_1_2sec       = 1200000000;
+        if (time_since_resize_ns < threshold_1sec && time_since_creation_ns > threshold_1_2sec)
+        {
+            len = snprintf(text, sizeof(text), "%dx%d", lm->width, lm->height);
+            nvgSetTextAlign(nvg, NVG_ALIGN_BR);
+            nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
+            // nvgSetTextAlign(nvg, NVG_ALIGN_TL);
+            // nvgText(nvg, 8, 8, text, text + len);
+        }
+        else // shameless plug
         {
 #define DEV_TAG "Developed by exacoustics"
             const char*       devtag             = DEV_TAG;
@@ -2033,49 +2078,6 @@ void pw_tick(void* _gui)
 
             linked_arena_release(gui->arena, glyphs);
         }
-
-#ifndef NDEBUG
-        // uint64_t frame_time_end         = xtime_now_ns();
-        // uint64_t frame_time_duration_ns = frame_time_end - gui->frame_start_time;
-
-        uint64_t max_frame_time_ns = 16666666; // 1/60th of a second, in nanoseconds
-
-        // limit accuracy from nanoseconds to approximately microseconds
-        uint64_t cpu_numerator   = last_frame_draw_time >> 10; // fast integer divide by 1024
-        uint64_t cpu_denominator = max_frame_time_ns >> 10;    // fast integer divide by 1024
-
-        double cpu_amt       = (double)cpu_numerator / (double)cpu_denominator;
-        double frame_time_ms = (double)cpu_numerator * 1024e-6; // correct for 1024 int 'division'
-        // double approx_fps    = 1000 / frame_time_ms; // Potential FPS
-
-        // uint64_t actual
-        // uint64_t diff_last_frame = frame_time_end - gui->frame_end_time;
-        // gui->frame_end_time      = frame_time_end;
-        double actual_fps = 1000.0 / ((time_since_last_frame >> 10) * 1024e-6);
-
-        nvgSetFontSize(nvg, 12 * lm->content_scale);
-        len = snprintf(
-            text,
-            sizeof(text),
-            "GUI CPU: %.2lf%% Frame Time: %.3lfms. FPS: %.lf",
-            (cpu_amt * 100),
-            frame_time_ms,
-            actual_fps);
-        nvgSetTextAlign(nvg, NVG_ALIGN_TL);
-        nvgText(nvg, 8, 8, text, text + len);
-#endif
-
-        // Show window dimensions w/h
-        // uint64_t time_since_creation_ns = gui->frame_start_time - gui->gui_create_time;
-        // uint64_t time_since_resize_ns   = gui->frame_start_time - gui->last_resize_time;
-        // uint64_t threshold_1sec         = 1000000000;
-        // uint64_t threshold_1_2sec       = 1200000000;
-        // if (time_since_resize_ns < threshold_1sec && time_since_creation_ns > threshold_1_2sec)
-        // {
-        //     len = snprintf(text, sizeof(text), "%dx%d", lm->width, lm->height);
-        //     nvgSetTextAlign(nvg, NVG_ALIGN_BR);
-        //     nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
-        // }
     }
 
     if (gui->tooltip.text)
