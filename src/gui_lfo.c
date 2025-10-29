@@ -1686,8 +1686,15 @@ void draw_lfo_section(GUI* gui)
 
         for (int pt_idx = 0; pt_idx < num_points; pt_idx++)
         {
-            unsigned       uid       = 'lfop' + pt_idx;
-            const imgui_pt pt        = gui->points_copy[pt_idx];
+            unsigned uid = 'lfop' + pt_idx;
+
+            // const imgui_pt pt        = gui->points_copy[pt_idx];
+
+            // Properly track point position
+            // We're reading out of an array of points cached at the beginning of a drag, and not the points that are
+            // actually displayed
+            const imgui_pt pt        = (im->uid_mouse_hold == uid || im->frame.uid_mouse_up == uid) ? im->pos_mouse_move
+                                                                                                    : gui->points_copy[pt_idx];
             const unsigned pt_events = imgui_get_events_circle(im, uid, pt, LFO_POINT_CLICK_RADIUS);
 
             if (pt_events == 0)
@@ -1729,6 +1736,7 @@ void draw_lfo_section(GUI* gui)
                     }
 
                     lfo_points_add_selected(gui, select_idx);
+                    pt_hover_idx         = select_idx;
                     int num_selected_pts = xarr_len(gui->selected_point_indexes);
                     xassert(num_selected_pts > 0);
                     pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_DRAGGING);
