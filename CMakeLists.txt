@@ -3,7 +3,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment ve
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
 project(Scream
-    VERSION 0.2.4
+    VERSION 0.2.5
     DESCRIPTION ""
     HOMEPAGE_URL "https://github.com/Tremus/skibidiscream"
     LANGUAGES C)
