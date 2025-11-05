@@ -427,12 +427,6 @@ void process_audio(Plugin* p, float** output, int start_sample, int num_frames)
     p->last_lfo_amount = last_lfo_amount;
 
     // Setup params
-
-    // Setting a very slow release time helps to stop any noticeable oscillating effect caused by subtle
-    // changes in peak gain (most problematic with inputs containing lots of subbass)
-    const float autogain_attack  = convert_compressor_time(p->sample_rate * 0.005);
-    const float autogain_release = convert_compressor_time(p->sample_rate * 0.5); // 500ms
-
     const float expander_attack = convert_compressor_time(1);
     // const float expander_release = convert_compressor_time(p->sample_rate * 0.001 * 0.5); // 5 ms
     const float expander_release = convert_compressor_time(p->sample_rate * 0.001); // 1 ms
@@ -505,43 +499,6 @@ void process_audio(Plugin* p, float** output, int start_sample, int num_frames)
                                    s.values[PARAM_WET].remaining | s.values[PARAM_OUTPUT_GAIN].remaining;
 
         const bool has_modulation_or_smoothing = lfo_1_mod_flags || lfo_2_mod_flags || smooth_params;
-
-        // Setup autogain
-        // Not proud of this design but it appears to do the job at the time of writing and with my limited
-        // testing
-        {
-            for (int i = 0; i < num_frames; i++)
-            {
-                float x = audio[i];
-
-                s.autogain_last_peak = detect_peak(fabsf(x), s.autogain_last_peak, autogain_attack, autogain_release);
-            }
-            float in_peak_dB = xm_fast_gain_to_dB(s.autogain_last_peak);
-
-            if (s.autogain_adsr.current_stage == ADSR_IDLE && in_peak_dB > -96)
-                adsr_set_stage(&s.autogain_adsr, ADSR_ATTACK);
-            if ((s.autogain_adsr.current_stage == ADSR_ATTACK || s.autogain_adsr.current_stage == ADSR_SUSTAIN) &&
-                in_peak_dB < -64)
-            {
-                adsr_set_stage(&s.autogain_adsr, ADSR_RELEASE);
-            }
-            float adsr_gain = adsr_tick(&s.autogain_adsr);
-
-            if (in_peak_dB < -24)
-                in_peak_dB = -24;
-            // We want to bring the peak gain to approx. 0dB
-            float autogain_dB            = -in_peak_dB;
-            int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.005);
-            smoothvalue_set_target(&s.autogain_dB, autogain_dB, smoothing_time_samples);
-
-            for (int i = 0; i < num_frames; i++)
-            {
-                float gain_dB  = smoothvalue_tick(&s.autogain_dB);
-                float gain     = xm_fast_dB_to_gain(gain_dB);
-                gain          *= adsr_tick(&s.autogain_adsr);
-                audio[i]      *= gain;
-            }
-        } // autogain
 
         if (p->gui)
         {
@@ -899,6 +856,54 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             memcpy(output[1] + frame, output[0] + frame, sizeof(float) * num_frames);
 #endif // CPLUG_BUILD_STANDALONE
 
+            // Setup autogain
+            // Not proud of this design but it appears to do the job at the time of writing and with my limited testing
+            {
+                // Setting a very slow release time helps to stop any noticeable oscillating effect caused by subtle
+                // changes in peak gain (most problematic with inputs containing lots of subbass)
+                const float autogain_attack  = convert_compressor_time(p->sample_rate * 0.005);
+                const float autogain_release = convert_compressor_time(p->sample_rate * 0.5); // 500ms
+
+                for (int ch = 0; ch < 2; ch++)
+                {
+                    float*              audio = output[ch] + frame;
+                    struct FilterState* s     = &p->state[ch];
+                    ADSR*               adsr  = &s->autogain_adsr;
+
+                    for (int i = 0; i < num_frames; i++)
+                    {
+                        float x = audio[i];
+
+                        s->autogain_last_peak =
+                            detect_peak(fabsf(x), s->autogain_last_peak, autogain_attack, autogain_release);
+                    }
+                    float in_peak_dB = xm_fast_gain_to_dB(s->autogain_last_peak);
+
+                    if (adsr->current_stage == ADSR_IDLE && in_peak_dB > -96)
+                        adsr_set_stage(&s->autogain_adsr, ADSR_ATTACK);
+                    if ((adsr->current_stage == ADSR_ATTACK || adsr->current_stage == ADSR_SUSTAIN) && in_peak_dB < -64)
+                    {
+                        adsr_set_stage(adsr, ADSR_RELEASE);
+                    }
+                    float adsr_gain = adsr_tick(adsr);
+
+                    if (in_peak_dB < -24)
+                        in_peak_dB = -24;
+                    // We want to bring the peak gain to approx. 0dB
+                    float autogain_dB            = -in_peak_dB;
+                    int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.005);
+                    smoothvalue_set_target(&s->autogain_dB, autogain_dB, smoothing_time_samples);
+
+                    for (int i = 0; i < num_frames; i++)
+                    {
+                        float gain_dB  = smoothvalue_tick(&s->autogain_dB);
+                        float gain     = xm_fast_dB_to_gain(gain_dB);
+                        gain          *= adsr_tick(adsr);
+                        audio[i]      *= gain;
+                    }
+                }
+            } // autogain
+
             // Note: The slower the release times on this envelope follower, the lower a user can play a saw wave
             // without the retrigger constantly firing off
             // The settings of 25ms and -54dB were optimised for drum loops
@@ -907,8 +912,9 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             int         start_sample      = 0;
             int         remaining_samples = num_frames;
             const float pd_attack_time    = 0;
-            // const float pd_release_time   = convert_compressor_time(p->sample_rate * 0.0025); // 25ms
-            const float pd_release_time = convert_compressor_time(p->sample_rate * 0.0035); // 35ms
+            // const float pd_release_time   = convert_compressor_time(p->sample_rate * 0.0025); // 2.5ms
+            // const float pd_release_time = convert_compressor_time(p->sample_rate * 0.0035); // 3.5ms
+            const float pd_release_time = convert_compressor_time(p->sample_rate * 0.010); // 10ms
             const float pd_threshold    = xm_fast_dB_to_gain(-54);
             while (remaining_samples > 0)
             {
