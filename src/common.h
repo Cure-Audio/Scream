@@ -92,4 +92,6 @@ void println(const char* const fmt, ...);
                      ( hex        & 0xff) / 255.0f}
 // clang-format on
 
+#include <cplug.h>
+
 #endif // PLUGIN_CONFIG_H

@@ -182,9 +182,6 @@ void cplug_loadState(void* _p, const void* stateCtx, cplug_readProc readProc)
     StateHeader header = {0};
     int64_t     ret    = readProc(stateCtx, &header, sizeof(header));
 
-    // TODO: init LFO points
-    // xassert(false);
-
     // Before v0.2.5, the "output gain" param existed but wasn't used.
     // Since v0.2.5 the default value was changed, so old saved projects will likely load with the old
     // and undesirable default value. Here we set the output gain to 100%, or 0dB so the user continues

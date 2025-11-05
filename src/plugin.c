@@ -148,7 +148,6 @@ void* cplug_createPlugin(CplugHostContext* ctx)
 
     p->bpm = 120;
 
-    // TODO: uncomment this
     p->lfo_mod_amounts[PARAM_CUTOFF].left = 0.25f;
 
 #ifdef CPLUG_BUILD_STANDALONE

@@ -173,37 +173,6 @@ typedef struct LFO
     int grid_y[NUM_LFO_PATTERNS];
 } LFO;
 
-typedef union LFOEvent
-{
-    struct
-    {
-        enum EventType type;
-        uint8_t        lfo_idx;
-        uint8_t        pattern_idx;
-        uint8_t        pattern_length;
-        LFOPoint*      array;
-    } set_points;
-
-    struct
-    {
-        enum EventType type;
-        uint8_t        lfo_idx;
-        uint8_t        pattern_idx;
-        uint16_t       point_idx;
-        float          x, y;
-    } set_xy;
-
-    struct
-    {
-        enum EventType type;
-        uint8_t        lfo_idx;
-        uint8_t        pattern_idx;
-        uint16_t       point_idx;
-        float          skew;
-    } set_skew;
-} LFOEvent;
-_Static_assert(sizeof(LFOEvent) == sizeof(CplugEvent), "");
-
 typedef struct Plugin
 {
     LinkedArena*      audio_arena;
@@ -227,8 +196,8 @@ typedef struct Plugin
     xvec2f _gui_input_last_peak;
     int    _gui_input_read_count[2];
 
-    xt_atomic_float gui_osc_phase;
-    xt_atomic_float gui_osc_midi;
+    // xt_atomic_float gui_osc_phase;
+    // xt_atomic_float gui_osc_midi;
 
     double main_params[PARAM_COUNT];
     double audio_params[PARAM_COUNT];

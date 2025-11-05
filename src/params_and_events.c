@@ -327,8 +327,14 @@ bool param_string_to_value(uint32_t param_id, const char* str, double* val)
     case PARAM_SEC_RATE_LFO_1:
     case PARAM_SEC_RATE_LFO_2:
     {
-        // TODO
-        xassert(false);
+        double sec = 0;
+        if ((ok = sscanf(str, "%lfs", val)))
+            sec = *val;
+        else if ((ok = sscanf(str, "%lfms", val)))
+            sec = (*val) * 1000;
+
+        if (ok)
+            *val = normalise_sec(sec);
     }
     case PARAM_RETRIG_LFO_1:
     case PARAM_RETRIG_LFO_2:
