@@ -14,23 +14,25 @@
 
 enum SynthParamIds
 {
-    kEnvAttack,
-    kEnvDecay,
-    kEnvSustain,
-    kEnvRelease,
+    kSynthEnvAttack,
+    kSynthEnvDecay,
+    kSynthEnvSustain,
+    kSynthEnvRelease,
 
-    kUnisonVoices,
-    kUnisonDetune,
+    kSynthUnisonVoices,
+    kSynthUnisonDetune,
 
-    kFilterCutoff,
-    kFilterResonance,
-    kFilterEnvAmount,
-    kFilterEnvAttack,
-    kFilterEnvDecay,
+    kSynthFilterCutoff,
+    kSynthFilterResonance,
+    kSynthFilterEnvAmount,
+    kSynthFilterEnvAttack,
+    kSynthFilterEnvDecay,
 
-    kNumSynthParams,
+    kSynthVolume,
+
+    kSynthNumParams,
 };
-typedef float SynthParams[kNumSynthParams];
+typedef float SynthParams[kSynthNumParams];
 
 enum
 {
@@ -162,8 +164,8 @@ voice_start(Voice* voc, Wavetable* wt, PFFFT_Setup* fft, double sample_rate, flo
 {
     // Tune oscillator
     {
-        const float midi_detune = params[kUnisonDetune];
-        voc->unison.length      = params[kUnisonVoices];
+        const float midi_detune = params[kSynthUnisonDetune];
+        voc->unison.length      = params[kSynthUnisonVoices];
         voc->unison.scale       = sqrtf(1.0f / voc->unison.length);
 
         xassert(voc->unison.length > 0 && voc->unison.length <= ARRLEN(voc->unison.phases));
@@ -216,28 +218,28 @@ voice_start(Voice* voc, Wavetable* wt, PFFFT_Setup* fft, double sample_rate, flo
 
     adsr_set_params(
         &voc->adsr,
-        params[kEnvAttack],
-        params[kEnvDecay],
-        params[kEnvSustain],
-        params[kEnvRelease],
+        params[kSynthEnvAttack],
+        params[kSynthEnvDecay],
+        params[kSynthEnvSustain],
+        params[kSynthEnvRelease],
         sample_rate);
     adsr_set_stage(&voc->adsr, ADSR_ATTACK);
 
     voc->sample_rate_inv = 1.0f / sample_rate;
 
-    float midi_cutoff_min = midi_note_num + params[kFilterCutoff];
-    float midi_cutoff_max = midi_cutoff_min + params[kFilterEnvAmount];
+    float midi_cutoff_min = midi_note_num + params[kSynthFilterCutoff];
+    float midi_cutoff_max = midi_cutoff_min + params[kSynthFilterEnvAmount];
     voc->midi_cutoff_min  = xm_clampf(midi_cutoff_min, SYNTH_MIDI_20Hz, SYNTH_MIDI_20kHz);
     voc->midi_cutoff_max  = xm_clampf(midi_cutoff_max, SYNTH_MIDI_20Hz, SYNTH_MIDI_20kHz);
     adsr_set_params(
         &voc->filter_env,
-        params[kFilterEnvAttack],
-        params[kFilterEnvDecay],
+        params[kSynthFilterEnvAttack],
+        params[kSynthFilterEnvDecay],
         0.0,
-        params[kEnvRelease],
+        params[kSynthEnvRelease],
         sample_rate);
     adsr_set_stage(&voc->filter_env, ADSR_ATTACK);
-    voc->resonance = params[kFilterResonance];
+    voc->resonance = params[kSynthFilterResonance];
 }
 
 static void voice_process(Voice* restrict voc, float* out, int num_samples, const bool filter_on)
@@ -296,7 +298,7 @@ typedef struct Synth
     Wavetable*   wt_saw;
     Wavetable*   wt_square;
 
-    float params[kNumSynthParams];
+    float params[kSynthNumParams];
 
     uint64_t filter_on;
 
@@ -314,19 +316,21 @@ static void synth_init(Synth* s, LinkedArena* arena)
     wavetable_set_saw(s->wt_saw, s->fft11_plan);
     wavetable_set_square(s->wt_square, s->fft11_plan);
 
-    s->params[kEnvAttack]  = 0.01;
-    s->params[kEnvDecay]   = 0.4;
-    s->params[kEnvSustain] = 0.1;
-    s->params[kEnvRelease] = 0.25;
+    s->params[kSynthEnvAttack]  = 0.01;
+    s->params[kSynthEnvDecay]   = 0.4;
+    s->params[kSynthEnvSustain] = 0.1;
+    s->params[kSynthEnvRelease] = 0.25;
 
-    s->params[kUnisonVoices] = 1;
-    s->params[kUnisonDetune] = 0.2;
+    s->params[kSynthUnisonVoices] = 1;
+    s->params[kSynthUnisonDetune] = 0.2;
 
-    s->params[kFilterCutoff]    = 12 * 2;
-    s->params[kFilterResonance] = 2;
-    s->params[kFilterEnvAmount] = 12 * 3;
-    s->params[kFilterEnvAttack] = 0.005;
-    s->params[kFilterEnvDecay]  = 0.5;
+    s->params[kSynthFilterCutoff]    = 12 * 2;
+    s->params[kSynthFilterResonance] = 2;
+    s->params[kSynthFilterEnvAmount] = 12 * 3;
+    s->params[kSynthFilterEnvAttack] = 0.005;
+    s->params[kSynthFilterEnvDecay]  = 0.5;
+
+    s->params[kSynthVolume] = 0.5;
 
     s->filter_on = true;
 
@@ -437,4 +441,7 @@ static void synth_process(Synth* s, float* out, int num_samples)
             }
         }
     }
+
+    for (int i = 0; i < num_samples; i++)
+        out[i] *= s->params[kSynthVolume];
 }

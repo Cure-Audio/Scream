@@ -158,10 +158,10 @@ void param_change_update(Plugin* p, ParamID id, double value)
 
 void param_set(Plugin* p, ParamID id, double value)
 {
+    // println("%s %s %f", __FUNCTION__, PARAM_STR[id], value);
     double range_min = 0, range_max = 1;
     cplug_getParameterRange(p, id, &range_min, &range_max);
     value = xm_clampd(value, range_min, range_max);
-    // println("%s %s %f", __FUNCTION__, PARAM_STR[id], value);
     if (p->main_params[id] != value)
     {
         param_change_begin(p, id);

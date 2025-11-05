@@ -29,6 +29,15 @@
 #include <knob.glsl.h>
 #include <lfo.glsl.h>
 
+#if defined(CPLUG_BUILD_STANDALONE)
+// #define SYNTH_HUD
+#endif
+
+#if defined(SYNTH_HUD) && defined(CPLUG_BUILD_STANDALONE)
+#include "libs/synth.h"
+extern Synth g_synth;
+#endif
+
 void gui_handle_param_change(void* _gui, ParamID param_id)
 {
     GUI* gui = _gui;
@@ -832,10 +841,31 @@ void pw_tick(void* _gui)
             .attachments.depth_stencil = fb_main.depth_view,
             .label                     = NVG_LABEL("main_framebuffer"),
         },
+        0,
+        0,
         fb_main.width,
         fb_main.height,
         NVG_LABEL("main framebuffer begin pass"));
     snvg_command_draw_nvg(nvg, NVG_LABEL("main framebuffer"));
+
+// Synth HUD
+#ifdef SYNTH_HUD
+    SNVGcallState calls_synth_hud = {0};
+    {
+        SNVGcallState calls_main    = snvg_calls_pop(nvg);
+        const float   slider_height = 20;
+        imgui_rect    rect;
+        rect.x = 40;
+        rect.y = 40;
+        rect.r = 240;
+        rect.b = 40 + slider_height;
+        im_slider(nvg, im, rect, &g_synth.params[kSynthVolume], 0, 1, "%.3f%%", "Vol");
+
+        calls_synth_hud = snvg_calls_pop(nvg);
+
+        snvg_calls_set(nvg, &calls_main);
+    }
+#endif // SYNTH_HUD
 
     // Background
     {

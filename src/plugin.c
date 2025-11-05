@@ -154,11 +154,11 @@ void* cplug_createPlugin(CplugHostContext* ctx)
 #ifdef CPLUG_BUILD_STANDALONE
     synth_init(&g_synth, p->audio_arena);
     // p->synth.params[kUnisonVoices] = 1;
-    g_synth.params[kUnisonVoices] = 1;
-    g_synth.params[kUnisonDetune] = 0.0;
-    g_synth.params[kEnvDecay]     = 0.5;
-    g_synth.params[kEnvRelease]   = 0.01;
-    g_synth.params[kEnvSustain]   = 1;
+    g_synth.params[kSynthUnisonVoices] = 1;
+    g_synth.params[kSynthUnisonDetune] = 0.0;
+    g_synth.params[kSynthEnvDecay]     = 0.5;
+    g_synth.params[kSynthEnvRelease]   = 0.01;
+    g_synth.params[kSynthEnvSustain]   = 1;
     // g_synth.params[kFilterEnvDecay]  = 0.5;
     // g_synth.params[kFilterCutoff]    = 7;
     // g_synth.params[kFilterResonance] = 0.5;
