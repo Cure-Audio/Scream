@@ -747,6 +747,11 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
     // NOTE: FL Studio and Ableton may return NULL if your FX slot is bypassed
     float** output = ctx->getAudioOutput(ctx, 0);
+    if (output == NULL)
+    {
+        p->gui_input_peak_gain      = 0;
+        p->_gui_input_last_peak.u64 = 0;
+    }
 
     // Force "in place processing"
     {
