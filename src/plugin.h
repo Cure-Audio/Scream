@@ -8,7 +8,7 @@
 #include <xhl/vector.h>
 
 #include "libs/adsr.h"
-#include "param_smoothing.h"
+#include <param_smoothing.h>
 
 #include "libs/ADAA.h"
 

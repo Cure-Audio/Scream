@@ -1962,6 +1962,8 @@ void pw_tick(void* _gui)
             .swapchain = gui->swapchain,
             .label     = NVG_LABEL("swapchain / main"),
         },
+        0,
+        0,
         lm->width,
         lm->height,
         0);
@@ -1973,6 +1975,11 @@ void pw_tick(void* _gui)
         nvg,
         nvgImagePattern(nvg, 0, 0, lm->width, lm->height, 0, fb_main.img_texview, 1, nvg->sampler_nearest));
     nvgFill(nvg);
+
+#ifdef SYNTH_HUD
+    if (calls_synth_hud.start)
+        snvg_calls_join(nvg, &calls_synth_hud);
+#endif // SYNTH_HUD
 
     // Footer
     {
