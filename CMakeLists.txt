@@ -112,6 +112,7 @@ set(PLUGIN_SOURCES
     src/libs/texteditor.c
     src/libs/tooltip.c
 
+    src/libs/stb_image.c
     modules/wip_libs/src/nanovg2.c
     modules/wip_libs/src/linked_arena.c
     )
@@ -146,7 +147,10 @@ if (WIN32)
             list(APPEND PLUGIN_OPTIONS -march=haswell)
         endif()
     endif()
-    list(APPEND PLUGIN_SOURCES src/platform_win.c)
+    list(APPEND PLUGIN_SOURCES
+        modules/sokol_gfx_multiinstance/sokol_gfx_d3d11.c
+        modules/CPLUG/src/cplug_extensions/window_win.c
+        src/platform_win.c)
     list(APPEND PLUGIN_LIBRARIES dxguid)
 elseif(APPLE)
     enable_language(OBJC)
@@ -156,7 +160,10 @@ elseif(APPLE)
     list(APPEND PLUGIN_OPTIONS -g)
     # endif()
 
-    list(APPEND PLUGIN_SOURCES src/platform_osx.m)
+    list(APPEND PLUGIN_SOURCES
+        modules/sokol_gfx_multiinstance/sokol_gfx_metal.m
+        modules/CPLUG/src/cplug_extensions/window_osx.m
+        src/platform_osx.m)
     list(APPEND PLUGIN_LIBRARIES
         "-framework Quartz"
         "-framework Cocoa"
@@ -165,25 +172,6 @@ elseif(APPLE)
     list(APPEND PLUGIN_DEFINITIONS PW_METAL)
 endif()
 
-set(COMPILE_SHADER_CMD sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h --slang ${SHADER_LANG})
-
-### COMPILE SHADERS ###
-# https://discourse.cmake.org/t/pre-ninja-bash-command/1418/5
-# add_custom_command(
-#     OUTPUT
-#         ${CMAKE_CURRENT_BINARY_DIR}/shaders/shader.h.noexist
-#         ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl.h
-#         ${PROJECT_SOURCE_DIR}/src/shaders/knob.glsl.h
-#     COMMAND
-#         sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/nanovg_sokol.glsl.h --slang ${SHADER_LANG}
-#     COMMAND
-#         sokol-shdc --input ${PROJECT_SOURCE_DIR}/src/shaders/knob.glsl --output ${CMAKE_CURRENT_BINARY_DIR}/shaders/knob.glsl.h --slang ${SHADER_LANG}
-# )
-# add_custom_target(shader_header
-#     DEPENDS
-#         ${PROJECT_SOURCE_DIR}/src/shaders/nanovg_sokol.glsl.h
-#         ${PROJECT_SOURCE_DIR}/src/shaders/knob.glsl.h
-# )
 
 # ██████╗ ██╗     ██╗   ██╗ ██████╗ ██╗███╗   ██╗
 # ██╔══██╗██║     ██║   ██║██╔════╝ ██║████╗  ██║

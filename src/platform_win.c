@@ -1,21 +1,14 @@
-#define SOKOL_D3D11
-#define SOKOL_GFX_IMPL
 #define XHL_ALLOC_IMPL
 #define XHL_FILES_IMPL
 #define XHL_MATHS_IMPL
 #define XHL_THREAD_IMPL
 #define XHL_TIME_IMPL
-#define STB_IMAGE_IMPLEMENTATION
 
 #ifndef NDEBUG
 #define SOKOL_ASSERT(cond) (cond) ? (void)0 : __debugbreak()
 #endif
 
 #include "common.h"
-
-#include <cplug_extensions/window_win.c>
-#include <sokol_gfx.h>
-#include <stb_image.h>
 
 #include <stdio.h>
 #include <xhl/alloc.h>
@@ -77,7 +70,7 @@ void        TimerFunc(HWND unnamedParam1, UINT unnamedParam2, UINT_PTR unnamedPa
 
 void library_load_platform()
 {
-    int refcount = cplug_atomic_fetch_add_i32(&g_platform_init_counter, 1);
+    int refcount = xt_atomic_fetch_add_i32(&g_platform_init_counter, 1);
     if (refcount == 0)
     {
         // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-settimer
@@ -89,7 +82,7 @@ void library_unload_platform()
 {
     dequeue_global_events();
 
-    int refcount = cplug_atomic_fetch_add_i32(&g_platform_init_counter, 1);
+    int refcount = xt_atomic_fetch_add_i32(&g_platform_init_counter, 1);
     if (refcount == 1)
     {
         if (g_timer != 0)

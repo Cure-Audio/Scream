@@ -1,21 +1,14 @@
-#define SOKOL_METAL
-#define SOKOL_GFX_IMPL
 #define XHL_ALLOC_IMPL
 #define XHL_FILES_IMPL
 #define XHL_MATHS_IMPL
 #define XHL_THREAD_IMPL
 #define XHL_TIME_IMPL
-#define STB_IMAGE_IMPLEMENTATION
 
 #ifndef NDEBUG
 #define SOKOL_ASSERT(cond) (cond) ? (void)0 : __builtin_debugtrap()
 #endif
 
 #include "common.h"
-
-#include <cplug_extensions/window_osx.m>
-#include <sokol_gfx.h>
-#include <stb_image.h>
 
 #include <stdarg.h>
 #include <stdio.h>
