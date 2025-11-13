@@ -61,7 +61,7 @@ typedef struct IMPointsData
     // drag-auto-erase feature
     int selected_point_idx;
 
-    xvec2f* lfo_cached_path;
+    xvec2f* path_cache;
 
     struct
     {
@@ -156,7 +156,7 @@ void imp_deinit(IMPointsData* imp)
     xarr_free(imp->main_points);
     xarr_free(imp->points);
     xarr_free(imp->skew_points);
-    xarr_free(imp->lfo_cached_path);
+    xarr_free(imp->path_cache);
     xarr_free(imp->selected_point_indexes);
     xarr_free(imp->points_copy);
     xarr_free(imp->skew_points_copy);
@@ -1163,8 +1163,8 @@ void imp_draw_points(IMPointsFrameContext* fstate)
 
     // Draw path
     {
-        const int     N   = xarr_len(imp->lfo_cached_path);
-        const xvec2f* it  = imp->lfo_cached_path;
+        const int     N   = xarr_len(imp->path_cache);
+        const xvec2f* it  = imp->path_cache;
         const xvec2f* end = it + N;
         nvgBeginPath(nvg);
         nvgMoveTo(nvg, it->x, it->y);

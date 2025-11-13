@@ -179,26 +179,26 @@ void draw_lfo_section(GUI* gui)
         DISPLAY_PADDING_BOTTOM = 32,
     };
 
-    NVGcontext*    nvg  = gui->nvg;
-    imgui_context* im   = &gui->imgui;
-    LayoutMetrics* lm   = &gui->layout;
-    IMPointsData*  glfo = &gui->imp;
+    NVGcontext*    nvg = gui->nvg;
+    imgui_context* im  = &gui->imgui;
+    LayoutMetrics* lm  = &gui->layout;
+    IMPointsData*  imp = &gui->imp;
 
     if (im->frame.events & ((1 << PW_EVENT_RESIZE) | (1 << PW_EVENT_DPI_CHANGED)))
     {
-        glfo->theme.col_line          = nvgCompressColour(C_LIGHT_BLUE_2);
-        glfo->theme.line_stroke_width = 2;
+        imp->theme.col_line          = nvgCompressColour(C_LIGHT_BLUE_2);
+        imp->theme.line_stroke_width = 2;
 
-        glfo->theme.col_point_hover_bg = 0xffffff33;
+        imp->theme.col_point_hover_bg = 0xffffff33;
 
-        glfo->theme.col_skewpoint_inner    = nvgCompressColour(C_BG_LFO);
-        glfo->theme.col_skewpoint_outer    = nvgCompressColour(C_LIGHT_BLUE_2);
-        glfo->theme.skewpoint_stroke_width = 1.5f;
+        imp->theme.col_skewpoint_inner    = nvgCompressColour(C_BG_LFO);
+        imp->theme.col_skewpoint_outer    = nvgCompressColour(C_LIGHT_BLUE_2);
+        imp->theme.skewpoint_stroke_width = 1.5f;
 
-        glfo->theme.col_point          = nvgCompressColour(C_LIGHT_BLUE_2);
-        glfo->theme.col_point_selected = 0xffff00ff;
+        imp->theme.col_point          = nvgCompressColour(C_LIGHT_BLUE_2);
+        imp->theme.col_point_selected = 0xffff00ff;
 
-        glfo->theme.col_selection_box = 0x007fffff;
+        imp->theme.col_selection_box = 0x007fffff;
     }
 
     // TODO: rather than cache a line of points, cache the vertices from NanoVG.
@@ -258,7 +258,7 @@ void draw_lfo_section(GUI* gui)
             if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
             {
                 gui->plugin->selected_lfo_idx = i;
-                glfo->main_points_valid       = false;
+                imp->main_points_valid        = false;
                 should_clear_lfo_trail        = true;
 
                 lm->current_lfo_playhead = lm->last_lfo_playhead = gui->plugin->lfos[i].phase;
@@ -494,8 +494,8 @@ void draw_lfo_section(GUI* gui)
                     const xvec3f* current_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
                     int             N              = xarr_len(current_points);
 
-                    xarr_setcap(glfo->main_points, (N * 2));
-                    xarr_setlen(glfo->main_points, 0);
+                    xarr_setcap(imp->main_points, (N * 2));
+                    xarr_setlen(imp->main_points, 0);
 
                     if (btn_idx == BUTTON_LENGTH_HALF)
                     {
@@ -505,7 +505,7 @@ void draw_lfo_section(GUI* gui)
                             xvec3f pt = current_points[i];
                             if (pt.x <= next_pattern_length)
                             {
-                                xarr_push(glfo->main_points, pt);
+                                xarr_push(imp->main_points, pt);
                             }
                             if (pt.x >= next_pattern_length)
                                 break;
@@ -516,8 +516,8 @@ void draw_lfo_section(GUI* gui)
                         // Duplicate pattern
 
                         // Deep copy
-                        memcpy(glfo->main_points, current_points, sizeof(*glfo->main_points) * N);
-                        xarr_header(glfo->main_points)->length = N;
+                        memcpy(imp->main_points, current_points, sizeof(*imp->main_points) * N);
+                        xarr_header(imp->main_points)->length = N;
 
                         // Copy & translate points
                         float delta_x = next_pattern_length >> 1;
@@ -525,28 +525,28 @@ void draw_lfo_section(GUI* gui)
                         {
                             xvec3f pt  = current_points[i];
                             pt.x        += delta_x;
-                            xarr_push(glfo->main_points, pt);
+                            xarr_push(imp->main_points, pt);
                         }
                     }
 
                     // Coalesce duplicate points
-                    N = xarr_len(glfo->main_points);
+                    N = xarr_len(imp->main_points);
                     for (int i = N - 1; i-- > 0;)
                     {
                         xassert(i >= 0);
-                        xassert((i + 1) < xarr_len(glfo->main_points));
-                        xvec3f* pt1 = glfo->main_points + i;
-                        xvec3f* pt2 = glfo->main_points + i + 1;
+                        xassert((i + 1) < xarr_len(imp->main_points));
+                        xvec3f* pt1 = imp->main_points + i;
+                        xvec3f* pt2 = imp->main_points + i + 1;
                         int       cmp = memcmp(pt1, pt2, sizeof(*pt1));
                         if (cmp == 0)
                         {
-                            xarr_delete(glfo->main_points, i);
+                            xarr_delete(imp->main_points, i);
                         }
                     }
 
                     gui->plugin->lfos[lfo_idx].pattern_length[pattern_idx] = next_pattern_length;
 
-                    glfo->points_valid = false;
+                    imp->points_valid = false;
 
                     should_update_audio_lfo_points_with_main_points = true;
                 }
@@ -1024,8 +1024,8 @@ void draw_lfo_section(GUI* gui)
         {
             value_f = next_value;
             param_change_update(gui->plugin, param_id, value_f);
-            glfo->main_points_valid = false;
-            should_clear_lfo_trail  = true;
+            imp->main_points_valid = false;
+            should_clear_lfo_trail = true;
         }
 
         if (sl_events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
@@ -1035,7 +1035,7 @@ void draw_lfo_section(GUI* gui)
 
             param_change_update(gui->plugin, param_id, value_f);
             param_change_end(gui->plugin, param_id);
-            glfo->main_points_valid = false;
+            imp->main_points_valid = false;
         }
 
         if (sl_events & IMGUI_EVENT_MOUSE_WHEEL)
@@ -1049,7 +1049,7 @@ void draw_lfo_section(GUI* gui)
             if (sl_events & IMGUI_EVENT_MOUSE_WHEEL)
                 param_set(gui->plugin, param_id, value_f);
 
-            glfo->main_points_valid = false;
+            imp->main_points_valid = false;
         }
 
         int vi  = xm_droundi(xm_lerpd(value_f, 1, NUM_LFO_PATTERNS));
@@ -1108,10 +1108,10 @@ void draw_lfo_section(GUI* gui)
     const float grid_r = lm->content_r - CONTENT_PADDING_X;
     const float grid_w = ceilf(grid_r - grid_x);
 
-    glfo->area.x = grid_x;
-    glfo->area.y = grid_y;
-    glfo->area.r = grid_r;
-    glfo->area.b = grid_b;
+    imp->area.x = grid_x;
+    imp->area.y = grid_y;
+    imp->area.r = grid_r;
+    imp->area.b = grid_b;
 
     const int lfo_idx     = gui->plugin->selected_lfo_idx;
     const int pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
@@ -1124,46 +1124,45 @@ void draw_lfo_section(GUI* gui)
     bool should_clear = false;
     if (im->frame.events & IMGUI_FLAGS_PW_MOUSE_DOWN_EVENTS)
     {
-        bool hit = imgui_hittest_rect(
-            im->pos_mouse_down,
-            &(imgui_rect){glfo->area.x, glfo->area.y, glfo->area.r, glfo->area.b});
+        bool hit =
+            imgui_hittest_rect(im->pos_mouse_down, &(imgui_rect){imp->area.x, imp->area.y, imp->area.r, imp->area.b});
         if (!hit)
             should_clear = true;
     }
     should_clear |= !!(im->frame.events & (1 << PW_EVENT_RESIZE));
     if (should_clear)
-        imp_clear_selection(glfo);
+        imp_clear_selection(imp);
 
-    if (!glfo->main_points_valid)
+    if (!imp->main_points_valid)
     {
-        glfo->main_points_valid  = !glfo->main_points_valid;
+        imp->main_points_valid   = !imp->main_points_valid;
         const xvec3f* lfo_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
 
         // deep copy audio lfo points array to gui
         size_t N = xarr_len(lfo_points);
-        xarr_setlen(glfo->main_points, N);
-        _Static_assert(sizeof(*glfo->main_points) == sizeof(*lfo_points), "");
-        memcpy(glfo->main_points, lfo_points, sizeof(*lfo_points) * N);
+        xarr_setlen(imp->main_points, N);
+        _Static_assert(sizeof(*imp->main_points) == sizeof(*lfo_points), "");
+        memcpy(imp->main_points, lfo_points, sizeof(*lfo_points) * N);
 
-        glfo->points_valid = false;
+        imp->points_valid = false;
     }
 
-    if (!glfo->points_valid)
+    if (!imp->points_valid)
     {
-        glfo->points_valid               = !glfo->points_valid;
+        imp->points_valid                = !imp->points_valid;
         fstate.should_update_cached_path = true;
 
-        imp_clear_selection(glfo);
+        imp_clear_selection(imp);
 
-        const int N = xarr_len(glfo->main_points);
+        const int N = xarr_len(imp->main_points);
 
-        const xvec3f* it  = glfo->main_points;
+        const xvec3f* it  = imp->main_points;
         const xvec3f* end = it + N;
 
-        xarr_setlen(glfo->points, (N + 1));
-        xarr_setlen(glfo->skew_points, N);
+        xarr_setlen(imp->points, (N + 1));
+        xarr_setlen(imp->skew_points, N);
 
-        xvec2f* p = glfo->points;
+        xvec2f* p = imp->points;
 
         // scale beat time to px with one multiply
         const float beattime_scale = grid_w / pattern_length;
@@ -1177,11 +1176,11 @@ void draw_lfo_section(GUI* gui)
         }
         // last Y point matches first point
         p->x = grid_r;
-        p->y = glfo->points->y;
+        p->y = imp->points->y;
 
-        it         = glfo->main_points;
-        p          = glfo->points;
-        xvec2f* sp = glfo->skew_points;
+        it         = imp->main_points;
+        p          = imp->points;
+        xvec2f* sp = imp->skew_points;
 
         while (it != end)
         {
@@ -1209,10 +1208,10 @@ void draw_lfo_section(GUI* gui)
             sp++;
         }
 
-        xarr_setlen(glfo->points_copy, (N + 1));
-        xarr_setlen(glfo->skew_points_copy, N);
-        memcpy(glfo->points_copy, glfo->points, sizeof(*glfo->points) * (N + 1));
-        memcpy(glfo->skew_points_copy, glfo->skew_points, sizeof(*glfo->skew_points_copy) * N);
+        xarr_setlen(imp->points_copy, (N + 1));
+        xarr_setlen(imp->skew_points_copy, N);
+        memcpy(imp->points_copy, imp->points, sizeof(*imp->points) * (N + 1));
+        memcpy(imp->skew_points_copy, imp->skew_points, sizeof(*imp->skew_points_copy) * N);
     }
 
     const enum IMPShapeType current_shape = gui->plugin->lfo_shape_idx;
@@ -1225,19 +1224,19 @@ void draw_lfo_section(GUI* gui)
 
     if (fstate.should_update_cached_path)
     {
-        const int points_cap = grid_w + xarr_len(glfo->points);
-        xarr_setcap(glfo->lfo_cached_path, points_cap);
+        const int points_cap = grid_w + xarr_len(imp->points);
+        xarr_setcap(imp->path_cache, points_cap);
 
-        xvec2f* points  = glfo->lfo_cached_path;
+        xvec2f* points  = imp->path_cache;
         int     npoints = 0;
         int     ny      = 0;
 
         xvec2f pos = {grid_x, grid_b};
 
-        const xvec2f* pt      = glfo->points;
-        const xvec2f* next_pt = glfo->points + 1;
-        const xvec2f* end     = glfo->points + xarr_len(glfo->points) - 1;
-        const xvec2f* skew_pt = glfo->skew_points;
+        const xvec2f* pt      = imp->points;
+        const xvec2f* next_pt = imp->points + 1;
+        const xvec2f* end     = imp->points + xarr_len(imp->points) - 1;
+        const xvec2f* skew_pt = imp->skew_points;
 
         points[npoints++] = *pt;
         while (pt != end)
@@ -1276,9 +1275,9 @@ void draw_lfo_section(GUI* gui)
             xarr_header(gui->lfo_ybuffer)->length = ny;
         }
 
-        xvec2f(*view_points)[1024] = (void*)glfo->lfo_cached_path;
+        xvec2f(*view_points)[1024] = (void*)imp->path_cache;
 
-        xarr_header(glfo->lfo_cached_path)->length = npoints;
+        xarr_header(imp->path_cache)->length = npoints;
 
         // I don't believe this is good KISS code
         // But it is an interesting proof of concept
@@ -1565,7 +1564,7 @@ void draw_lfo_section(GUI* gui)
     {
         LFO*    lfo        = &gui->plugin->lfos[lfo_idx];
         xvec3f* old_array  = NULL;
-        size_t  num_points = xarr_len(glfo->main_points);
+        size_t  num_points = xarr_len(imp->main_points);
 
         // !!!
         {
@@ -1574,7 +1573,7 @@ void draw_lfo_section(GUI* gui)
             // if (next_pattern_length)
             //     xt_atomic_store_i32(&lfo->pattern_length[pattern_idx], next_pattern_length);
 
-            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], glfo->main_points);
+            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], imp->main_points);
 
             xt_spinlock_unlock(&lfo->spinlocks[pattern_idx]);
         }
@@ -1583,7 +1582,7 @@ void draw_lfo_section(GUI* gui)
         xarr_setlen(old_array, num_points);
         memcpy(old_array, lfo->points[pattern_idx], sizeof(*old_array) * num_points);
 
-        glfo->main_points = old_array;
+        imp->main_points = old_array;
     }
 
     LINKED_ARENA_LEAK_DETECT_END(gui->arena);
