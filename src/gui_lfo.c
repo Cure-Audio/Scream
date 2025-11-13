@@ -77,9 +77,9 @@ void do_lfo_shaders(void* uptr)
         gui->lfo_playhead_trail[idx] = y;
     }
 
-    sg_pipeline pip;
-    imgui_rect* grid_area          = &gui->imp.area;
-    bool        have_all_resources = true;
+    sg_pipeline   pip;
+    IMPointsArea* grid_area          = &gui->imp.area;
+    bool          have_all_resources = true;
     have_all_resources &= resource_get_pipeline(&gui->resource_manager, &pip, lfo_vertical_grad_shader_desc, 0);
     // imgui_rect* grid_area          = NULL;
     // have_all_resources &=
@@ -186,19 +186,19 @@ void draw_lfo_section(GUI* gui)
 
     if (im->frame.events & ((1 << PW_EVENT_RESIZE) | (1 << PW_EVENT_DPI_CHANGED)))
     {
-        glfo->theme.col_line          = C_LIGHT_BLUE_2;
+        glfo->theme.col_line          = nvgCompressColour(C_LIGHT_BLUE_2);
         glfo->theme.line_stroke_width = 2;
 
-        glfo->theme.col_point_hover_bg = (NVGcolour){1, 1, 1, 0.2};
+        glfo->theme.col_point_hover_bg = 0xffffff33;
 
-        glfo->theme.col_skewpoint_inner    = C_BG_LFO;
-        glfo->theme.col_skewpoint_outer    = C_LIGHT_BLUE_2;
+        glfo->theme.col_skewpoint_inner    = nvgCompressColour(C_BG_LFO);
+        glfo->theme.col_skewpoint_outer    = nvgCompressColour(C_LIGHT_BLUE_2);
         glfo->theme.skewpoint_stroke_width = 1.5f;
 
-        glfo->theme.col_point          = C_LIGHT_BLUE_2;
-        glfo->theme.col_point_selected = nvgHexColour(0xffff00ff);
+        glfo->theme.col_point          = nvgCompressColour(C_LIGHT_BLUE_2);
+        glfo->theme.col_point_selected = 0xffff00ff;
 
-        glfo->theme.col_selection_box = (NVGcolour){0, 0.5, 1, 1};
+        glfo->theme.col_selection_box = 0x007fffff;
     }
 
     // TODO: rather than cache a line of points, cache the vertices from NanoVG.
@@ -1219,7 +1219,7 @@ void draw_lfo_section(GUI* gui)
     if (current_shape == IMP_SHAPE_POINT)
         imp_handle_point_events(&fstate, num_grid_x, num_grid_y);
 
-    const imgui_rect selection_area =
+    const IMPointsArea selection_area =
         {lm->content_x + 16, display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT, lm->content_r - 16, pattern_area.y};
     imp_handle_grid_events(&fstate, selection_area, num_grid_x, num_grid_y, current_shape);
 

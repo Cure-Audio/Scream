@@ -1,14 +1,7 @@
 #ifndef IM_POINTS_H
 #define IM_POINTS_H
 
-#include "dsp.h"
-#include <linked_arena.h>
-#include <sort.h>
 #include <xhl/vector.h>
-
-// TODO: move these out of the header
-#include <imgui.h>
-#include <nanovg2.h>
 
 enum
 {
@@ -37,9 +30,14 @@ typedef enum IMPShapeType
     IMP_SHAPE_COUNT,
 } IMPShapeType;
 
+typedef struct IMPointsArea
+{
+    float x, y, r, b;
+} IMPointsArea;
+
 typedef struct IMPointsData
 {
-    imgui_rect area;
+    IMPointsArea area;
 
     // If false, should copy over the points array from the audio thread to the main thread
     bool main_points_valid;
@@ -67,29 +65,28 @@ typedef struct IMPointsData
 
     struct
     {
-        NVGcolour col_line;
-        float     line_stroke_width;
+        uint32_t col_line;
+        float    line_stroke_width;
 
-        NVGcolour col_point_hover_bg;
+        uint32_t col_point_hover_bg;
 
-        NVGcolour col_skewpoint_inner;
-        NVGcolour col_skewpoint_outer;
-        float     skewpoint_stroke_width;
+        uint32_t col_skewpoint_inner;
+        uint32_t col_skewpoint_outer;
+        float    skewpoint_stroke_width;
 
-        NVGcolour col_point;
-        NVGcolour col_point_selected;
-
-        NVGcolour col_selection_box;
+        uint32_t col_point;
+        uint32_t col_point_selected;
+        uint32_t col_selection_box;
     } theme;
 } IMPointsData;
 
 typedef struct IMPointsFrameContext
 {
-    IMPointsData*  imp;   // not owned
-    NVGcontext*    nvg;   // not owned
-    imgui_context* im;    // not owned
-    LinkedArena*   arena; // not owned
-    void*          pw;    // not owned
+    IMPointsData*         imp;   // not owned
+    struct NVGcontext*    nvg;   // not owned
+    struct imgui_context* im;    // not owned
+    struct LinkedArena*   arena; // not owned
+    void*                 pw;    // not owned
 
     bool should_update_cached_path;
     bool should_update_main_points_with_points;
@@ -99,8 +96,12 @@ typedef struct IMPointsFrameContext
     int  delete_pt_idx;
 } IMPointsFrameContext;
 
-static IMPointsFrameContext
-imp_frame_context_new(IMPointsData* imp, NVGcontext* nvg, imgui_context* im, LinkedArena* arena, void* pw)
+static IMPointsFrameContext imp_frame_context_new(
+    IMPointsData*         imp,
+    struct NVGcontext*    nvg,
+    struct imgui_context* im,
+    struct LinkedArena*   arena,
+    void*                 pw)
 {
     IMPointsFrameContext framestate = {0};
     framestate.imp                  = imp;
@@ -122,7 +123,7 @@ void imp_clear_selection(IMPointsData* imp);
 void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int num_grid_y);
 void imp_handle_grid_events(
     IMPointsFrameContext* fstate,
-    imgui_rect            selection_area,
+    IMPointsArea          selection_area,
     int                   num_grid_x,
     int                   num_grid_y,
     IMPShapeType          selected_shape);
@@ -143,6 +144,10 @@ void imp_draw_points(IMPointsFrameContext* fstate);
 #ifdef IM_POINTS_IMPL
 #undef IM_POINTS_IMPL
 
+#include "dsp.h"
+#include <imgui.h>
+#include <nanovg2.h>
+#include <sort.h>
 #include <xhl/array.h>
 #include <xhl/maths.h>
 
@@ -984,7 +989,7 @@ static inline double _imp_snap_point(double x)
 
 void imp_handle_grid_events(
     IMPointsFrameContext* fstate,
-    imgui_rect            sel_area,
+    IMPointsArea          selection_area,
     int                   num_grid_x,
     int                   num_grid_y,
     IMPShapeType          selected_shape)
@@ -997,6 +1002,13 @@ void imp_handle_grid_events(
     xassert(fstate->arena);
     xassert(imp->area.r > imp->area.x);
     xassert(imp->area.b > imp->area.y);
+
+    const imgui_rect sel_area = {
+        selection_area.x,
+        selection_area.y,
+        selection_area.r,
+        selection_area.b,
+    };
 
     const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &sel_area);
 
@@ -1159,7 +1171,8 @@ void imp_draw_points(IMPointsFrameContext* fstate)
         while (++it != end)
             nvgLineTo(nvg, it->x, it->y);
 
-        nvgSetColour(nvg, imp->theme.col_line);
+        NVGcolour col = nvgHexColour(imp->theme.col_line);
+        nvgSetColour(nvg, col);
         nvgStroke(nvg, imp->theme.line_stroke_width);
     }
 
@@ -1176,7 +1189,7 @@ void imp_draw_points(IMPointsFrameContext* fstate)
             xassert(fstate->delete_pt_idx == -1);
             nvgBeginPath(nvg);
             nvgCircle(nvg, hover_pt->x, hover_pt->y, IMP_DEFAULT_POINT_CLICK_RADIUS);
-            nvgSetColour(nvg, imp->theme.col_point_hover_bg);
+            nvgSetColour(nvg, nvgHexColour(imp->theme.col_point_hover_bg));
             nvgFill(nvg);
         }
     }
@@ -1189,7 +1202,7 @@ void imp_draw_points(IMPointsFrameContext* fstate)
             xvec2f pt = imp->skew_points[i];
             nvgCircle(nvg, pt.x, pt.y, IMP_DEFAULT_SKEW_POINT_RADIUS);
         }
-        nvgSetColour(nvg, imp->theme.col_skewpoint_inner);
+        nvgSetColour(nvg, nvgHexColour(imp->theme.col_skewpoint_inner));
         nvgFill(nvg);
 
         nvgBeginPath(nvg);
@@ -1198,7 +1211,7 @@ void imp_draw_points(IMPointsFrameContext* fstate)
             xvec2f pt = imp->skew_points[i];
             nvgCircle(nvg, pt.x, pt.y, IMP_DEFAULT_SKEW_POINT_RADIUS);
         }
-        nvgSetColour(nvg, imp->theme.col_skewpoint_outer);
+        nvgSetColour(nvg, nvgHexColour(imp->theme.col_skewpoint_outer));
         nvgStroke(nvg, imp->theme.skewpoint_stroke_width);
     }
 
@@ -1221,7 +1234,9 @@ void imp_draw_points(IMPointsFrameContext* fstate)
             }
         }
 
-        size_t num_points = xarr_len(imp->points);
+        size_t    num_points   = xarr_len(imp->points);
+        NVGcolour col_selected = nvgHexColour(imp->theme.col_point_selected);
+        NVGcolour col_normal   = nvgHexColour(imp->theme.col_point);
         for (uint64_t i = 0; i < num_points; i++)
         {
             xvec2f pt = imp->points[i];
@@ -1234,16 +1249,16 @@ void imp_draw_points(IMPointsFrameContext* fstate)
             nvgBeginPath(nvg);
             nvgCircle(nvg, pt.x, pt.y, IMP_DEFAULT_POINT_RADIUS);
             if (selected_points_flags & (1llu << pt_idx))
-                nvgSetColour(nvg, imp->theme.col_point_selected);
+                nvgSetColour(nvg, col_selected);
             else
-                nvgSetColour(nvg, imp->theme.col_point);
+                nvgSetColour(nvg, col_normal);
             nvgFill(nvg);
         }
     }
 
     if (imp->selection_start.u64 != 0 && imp->selection_end.u64 != 0)
     {
-        const NVGcolour  col  = imp->theme.col_selection_box;
+        const NVGcolour  col  = nvgHexColour(imp->theme.col_selection_box);
         const imgui_rect area = {
             xm_minf(imp->selection_start.x, imp->selection_end.x),
             xm_minf(imp->selection_start.y, imp->selection_end.y),
