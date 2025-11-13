@@ -258,7 +258,7 @@ void draw_lfo_section(GUI* gui)
             if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
             {
                 gui->plugin->selected_lfo_idx = i;
-                glfo->gui_lfo_points_valid    = false;
+                glfo->main_points_valid       = false;
                 should_clear_lfo_trail        = true;
 
                 lm->current_lfo_playhead = lm->last_lfo_playhead = gui->plugin->lfos[i].phase;
@@ -494,8 +494,8 @@ void draw_lfo_section(GUI* gui)
                     const xvec3f* current_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
                     int             N              = xarr_len(current_points);
 
-                    xarr_setcap(glfo->gui_lfo_points, (N * 2));
-                    xarr_setlen(glfo->gui_lfo_points, 0);
+                    xarr_setcap(glfo->main_points, (N * 2));
+                    xarr_setlen(glfo->main_points, 0);
 
                     if (btn_idx == BUTTON_LENGTH_HALF)
                     {
@@ -505,7 +505,7 @@ void draw_lfo_section(GUI* gui)
                             xvec3f pt = current_points[i];
                             if (pt.x <= next_pattern_length)
                             {
-                                xarr_push(glfo->gui_lfo_points, pt);
+                                xarr_push(glfo->main_points, pt);
                             }
                             if (pt.x >= next_pattern_length)
                                 break;
@@ -516,8 +516,8 @@ void draw_lfo_section(GUI* gui)
                         // Duplicate pattern
 
                         // Deep copy
-                        memcpy(glfo->gui_lfo_points, current_points, sizeof(*glfo->gui_lfo_points) * N);
-                        xarr_header(glfo->gui_lfo_points)->length = N;
+                        memcpy(glfo->main_points, current_points, sizeof(*glfo->main_points) * N);
+                        xarr_header(glfo->main_points)->length = N;
 
                         // Copy & translate points
                         float delta_x = next_pattern_length >> 1;
@@ -525,22 +525,22 @@ void draw_lfo_section(GUI* gui)
                         {
                             xvec3f pt  = current_points[i];
                             pt.x        += delta_x;
-                            xarr_push(glfo->gui_lfo_points, pt);
+                            xarr_push(glfo->main_points, pt);
                         }
                     }
 
                     // Coalesce duplicate points
-                    N = xarr_len(glfo->gui_lfo_points);
+                    N = xarr_len(glfo->main_points);
                     for (int i = N - 1; i-- > 0;)
                     {
                         xassert(i >= 0);
-                        xassert((i + 1) < xarr_len(glfo->gui_lfo_points));
-                        xvec3f* pt1 = glfo->gui_lfo_points + i;
-                        xvec3f* pt2 = glfo->gui_lfo_points + i + 1;
+                        xassert((i + 1) < xarr_len(glfo->main_points));
+                        xvec3f* pt1 = glfo->main_points + i;
+                        xvec3f* pt2 = glfo->main_points + i + 1;
                         int       cmp = memcmp(pt1, pt2, sizeof(*pt1));
                         if (cmp == 0)
                         {
-                            xarr_delete(glfo->gui_lfo_points, i);
+                            xarr_delete(glfo->main_points, i);
                         }
                     }
 
@@ -548,7 +548,7 @@ void draw_lfo_section(GUI* gui)
 
                     glfo->points_valid = false;
 
-                    should_update_audio_lfo_points_with_gui_lfo_points = true;
+                    should_update_audio_lfo_points_with_main_points = true;
                 }
             }
 
@@ -1024,8 +1024,8 @@ void draw_lfo_section(GUI* gui)
         {
             value_f = next_value;
             param_change_update(gui->plugin, param_id, value_f);
-            glfo->gui_lfo_points_valid = false;
-            should_clear_lfo_trail     = true;
+            glfo->main_points_valid = false;
+            should_clear_lfo_trail  = true;
         }
 
         if (sl_events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
@@ -1035,7 +1035,7 @@ void draw_lfo_section(GUI* gui)
 
             param_change_update(gui->plugin, param_id, value_f);
             param_change_end(gui->plugin, param_id);
-            glfo->gui_lfo_points_valid = false;
+            glfo->main_points_valid = false;
         }
 
         if (sl_events & IMGUI_EVENT_MOUSE_WHEEL)
@@ -1049,7 +1049,7 @@ void draw_lfo_section(GUI* gui)
             if (sl_events & IMGUI_EVENT_MOUSE_WHEEL)
                 param_set(gui->plugin, param_id, value_f);
 
-            glfo->gui_lfo_points_valid = false;
+            glfo->main_points_valid = false;
         }
 
         int vi  = xm_droundi(xm_lerpd(value_f, 1, NUM_LFO_PATTERNS));
@@ -1134,16 +1134,16 @@ void draw_lfo_section(GUI* gui)
     if (should_clear)
         imp_clear_selection(glfo);
 
-    if (!glfo->gui_lfo_points_valid)
+    if (!glfo->main_points_valid)
     {
-        glfo->gui_lfo_points_valid = !glfo->gui_lfo_points_valid;
-        xvec3f* lfo_points         = gui->plugin->lfos[lfo_idx].points[pattern_idx];
+        glfo->main_points_valid  = !glfo->main_points_valid;
+        const xvec3f* lfo_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
 
         // deep copy audio lfo points array to gui
         size_t N = xarr_len(lfo_points);
-        xarr_setlen(glfo->gui_lfo_points, N);
-        _Static_assert(sizeof(*glfo->gui_lfo_points) == sizeof(*lfo_points), "");
-        memcpy(glfo->gui_lfo_points, lfo_points, sizeof(*lfo_points) * N);
+        xarr_setlen(glfo->main_points, N);
+        _Static_assert(sizeof(*glfo->main_points) == sizeof(*lfo_points), "");
+        memcpy(glfo->main_points, lfo_points, sizeof(*lfo_points) * N);
 
         glfo->points_valid = false;
     }
@@ -1155,9 +1155,9 @@ void draw_lfo_section(GUI* gui)
 
         imp_clear_selection(glfo);
 
-        const int N = xarr_len(glfo->gui_lfo_points);
+        const int N = xarr_len(glfo->main_points);
 
-        const xvec3f* it  = glfo->gui_lfo_points;
+        const xvec3f* it  = glfo->main_points;
         const xvec3f* end = it + N;
 
         xarr_setlen(glfo->points, (N + 1));
@@ -1179,7 +1179,7 @@ void draw_lfo_section(GUI* gui)
         p->x = grid_r;
         p->y = glfo->points->y;
 
-        it         = glfo->gui_lfo_points;
+        it         = glfo->main_points;
         p          = glfo->points;
         xvec2f* sp = glfo->skew_points;
 
@@ -1561,11 +1561,11 @@ void draw_lfo_section(GUI* gui)
     // x = 0.6666,      y = 0.75, skew = 0.44
     // x = 1 - (1 / 7), y = 0.96, skew = 1 - 0.731994
 
-    if (fstate.should_update_audio_lfo_points_with_gui_lfo_points)
+    if (fstate.should_update_audio_lfo_points_with_main_points)
     {
         LFO*    lfo        = &gui->plugin->lfos[lfo_idx];
         xvec3f* old_array  = NULL;
-        size_t  num_points = xarr_len(glfo->gui_lfo_points);
+        size_t  num_points = xarr_len(glfo->main_points);
 
         // !!!
         {
@@ -1574,7 +1574,7 @@ void draw_lfo_section(GUI* gui)
             // if (next_pattern_length)
             //     xt_atomic_store_i32(&lfo->pattern_length[pattern_idx], next_pattern_length);
 
-            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], glfo->gui_lfo_points);
+            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], glfo->main_points);
 
             xt_spinlock_unlock(&lfo->spinlocks[pattern_idx]);
         }
@@ -1583,7 +1583,7 @@ void draw_lfo_section(GUI* gui)
         xarr_setlen(old_array, num_points);
         memcpy(old_array, lfo->points[pattern_idx], sizeof(*old_array) * num_points);
 
-        glfo->gui_lfo_points = old_array;
+        glfo->main_points = old_array;
     }
 
     LINKED_ARENA_LEAK_DETECT_END(gui->arena);

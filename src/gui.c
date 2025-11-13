@@ -42,7 +42,7 @@ void gui_handle_param_change(void* _gui, ParamID param_id)
 {
     GUI* gui = _gui;
     if (param_id == PARAM_PATTERN_LFO_1 || param_id == PARAM_PATTERN_LFO_2)
-        gui->imp.gui_lfo_points_valid = false;
+        gui->imp.main_points_valid = false;
 }
 
 static void my_sg_logger(

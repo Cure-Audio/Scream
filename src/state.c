@@ -318,7 +318,7 @@ void cplug_loadState(void* _p, const void* stateCtx, cplug_readProc readProc)
 
     if (p->gui)
     {
-        GUI* gui                      = p->gui;
-        gui->imp.gui_lfo_points_valid = false;
+        GUI* gui                   = p->gui;
+        gui->imp.main_points_valid = false;
     }
 }

@@ -41,15 +41,14 @@ typedef struct IMPointsData
 {
     imgui_rect area;
 
-    // If false, should copy over the points array from the audio thread
-    bool gui_lfo_points_valid;
-    // Used to queue changes made to LFO points on the audio thread
-    // Coordinates are in beat time, exactly like the lfo
-    xvec3f* gui_lfo_points;
+    // If false, should copy over the points array from the audio thread to the main thread
+    bool main_points_valid;
+    // Used to queue changes made to points on the audio thread
+    xvec3f* main_points;
 
     // Draggable points (widgets)
     // Cordinates are in window space
-    bool    points_valid; // Set to false to copy gui_lfo_points > points
+    bool    points_valid; // Set to false to copy main_points > points
     xvec2f* points;
     xvec2f* skew_points;
     // Used as backup while doing non-destructive preview editing of points
@@ -86,15 +85,15 @@ typedef struct IMPointsData
 
 typedef struct IMPointsFrameContext
 {
-    IMPointsData*  imp; // not owned
-    NVGcontext*    nvg;
+    IMPointsData*  imp;   // not owned
+    NVGcontext*    nvg;   // not owned
     imgui_context* im;    // not owned
     LinkedArena*   arena; // not owned
     void*          pw;    // not owned
 
     bool should_update_cached_path;
-    bool should_update_gui_lfo_points_with_points;
-    bool should_update_audio_lfo_points_with_gui_lfo_points;
+    bool should_update_main_points_with_points;
+    bool should_update_audio_lfo_points_with_main_points;
     int  pt_hover_idx;
     int  pt_hover_skew_idx;
     int  delete_pt_idx;
@@ -120,22 +119,13 @@ void imp_deinit(IMPointsData*);
 
 void imp_clear_selection(IMPointsData* imp);
 
-void _imp_drag_and_draw(
-    IMPointsData*           imp,
-    imgui_pt                pos,
-    bool                    snap_to_grid,
-    const enum IMPShapeType shape_type,
-    int                     num_grid_x,
-    int                     num_grid_y);
-
 void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int num_grid_y);
-
 void imp_handle_grid_events(
     IMPointsFrameContext* fstate,
     imgui_rect            selection_area,
     int                   num_grid_x,
     int                   num_grid_y,
-    enum IMPShapeType     current_shape_type);
+    IMPShapeType          selected_shape);
 
 void imp_draw_points(IMPointsFrameContext* fstate);
 
@@ -158,7 +148,7 @@ void imp_draw_points(IMPointsFrameContext* fstate);
 
 void imp_deinit(IMPointsData* imp)
 {
-    xarr_free(imp->gui_lfo_points);
+    xarr_free(imp->main_points);
     xarr_free(imp->points);
     xarr_free(imp->skew_points);
     xarr_free(imp->lfo_cached_path);
@@ -167,7 +157,13 @@ void imp_deinit(IMPointsData* imp)
     xarr_free(imp->skew_points_copy);
 }
 
-float imp_calculate_point_skew(IMPointsData* imp, int idx)
+void imp_clear_selection(IMPointsData* imp)
+{
+    xarr_setlen(imp->selected_point_indexes, 0);
+    imp->selected_point_idx = -1;
+}
+
+float _imp_calculate_point_skew(IMPointsData* imp, int idx)
 {
     size_t num_points      = xarr_len(imp->points);
     size_t num_skew_points = xarr_len(imp->skew_points);
@@ -194,7 +190,7 @@ float imp_calculate_point_skew(IMPointsData* imp, int idx)
     return skew;
 }
 
-void imp_add_to_selection(IMPointsData* imp, int idx)
+void _imp_add_to_selection(IMPointsData* imp, int idx)
 {
     int num_points = xarr_len(imp->points);
     if (idx == num_points - 1)
@@ -221,7 +217,7 @@ void imp_add_to_selection(IMPointsData* imp, int idx)
     }
 }
 
-void imp_update_skew_point(IMPointsData* imp, int i, float skew)
+void _imp_update_skew_point(IMPointsData* imp, int i, float skew)
 {
     xassert(i < xarr_len(imp->skew_points));
     xassert(i < xarr_len(imp->points) - 1);
@@ -245,8 +241,8 @@ void imp_update_skew_point(IMPointsData* imp, int i, float skew)
     }
 }
 
-// Clamps target_pos to boundaries. Updates relevant skew points. Updates LFO points on audio thread
-void imp_update_point(IMPointsData* imp, xvec2f pos, int idx)
+// Clamps target_pos to boundaries. Updates relevant skew points
+void _imp_update_point(IMPointsData* imp, xvec2f pos, int idx)
 {
     const size_t num_points = xarr_len(imp->points);
 
@@ -264,14 +260,14 @@ void imp_update_point(IMPointsData* imp, xvec2f pos, int idx)
     else
         range_horizontal.right = imp->points[idx + 1].x;
 
-    float i_skew        = imp_calculate_point_skew(imp, idx);
+    float i_skew        = _imp_calculate_point_skew(imp, idx);
     float prev_skew     = 0;
     float last_skew     = 0;
     int   last_skew_idx = (int)xarr_len(imp->skew_points) - 1;
     if (idx > 0)
-        prev_skew = imp_calculate_point_skew(imp, idx - 1);
+        prev_skew = _imp_calculate_point_skew(imp, idx - 1);
     if (idx == 0)
-        last_skew = imp_calculate_point_skew(imp, last_skew_idx);
+        last_skew = _imp_calculate_point_skew(imp, last_skew_idx);
 
     xvec2f* pt = &imp->points[idx];
     pt->x      = xm_clampf(pos.x, range_horizontal.l, range_horizontal.r);
@@ -280,17 +276,17 @@ void imp_update_point(IMPointsData* imp, xvec2f pos, int idx)
     if (idx == 0)
         imp->points[num_points - 1].y = pt->y;
 
-    imp_update_skew_point(imp, idx, i_skew);
+    _imp_update_skew_point(imp, idx, i_skew);
     if (idx > 0)
-        imp_update_skew_point(imp, idx - 1, prev_skew);
+        _imp_update_skew_point(imp, idx - 1, prev_skew);
 
     if (idx == 0)
     {
-        imp_update_skew_point(imp, last_skew_idx, last_skew);
+        _imp_update_skew_point(imp, last_skew_idx, last_skew);
     }
 }
 
-void imp_insert_point(IMPointsData* imp, xvec2f pos, int idx)
+void _imp_insert_point(IMPointsData* imp, xvec2f pos, int idx)
 {
     const int prev_idx = idx - 1;
 
@@ -303,18 +299,18 @@ void imp_insert_point(IMPointsData* imp, xvec2f pos, int idx)
     xassert(prev_pt.x <= pos.x);
 #endif
 
-    float skew = imp_calculate_point_skew(imp, prev_idx);
+    float skew = _imp_calculate_point_skew(imp, prev_idx);
 
     // add points locally
     xarr_insert(imp->points, idx, pos);
     xarr_insert(imp->skew_points, prev_idx, pos);
 
-    imp_update_skew_point(imp, prev_idx, skew);
+    _imp_update_skew_point(imp, prev_idx, skew);
     if (idx < xarr_len(imp->skew_points))
-        imp_update_skew_point(imp, idx, 0.5f);
+        _imp_update_skew_point(imp, idx, 0.5f);
 }
 
-void imp_delete_point(IMPointsData* imp, int idx)
+void _imp_delete_point(IMPointsData* imp, int idx)
 {
     xassert(idx > 0);
     xassert(idx != xarr_len(imp->skew_points));
@@ -323,38 +319,32 @@ void imp_delete_point(IMPointsData* imp, int idx)
     xarr_delete(imp->points, idx);
     xarr_delete(imp->skew_points, idx - 1);
     // when user clears the "last point", reset neighbouring skew amounts
-    imp_update_skew_point(imp, idx - 1, 0.5f);
+    _imp_update_skew_point(imp, idx - 1, 0.5f);
 }
 
-void imp_save_points_to_copy(IMPointsData* imp)
+void _imp_save_points_to_copy(IMPointsData* imp)
 {
     int N = xarr_len(imp->points);
     xarr_setlen(imp->points_copy, N);
     memcpy(imp->points_copy, imp->points, N * sizeof(*imp->points_copy));
 }
 
-void imp_save_skew_points_to_copy(IMPointsData* imp)
+void _imp_save_skew_points_to_copy(IMPointsData* imp)
 {
     int N = xarr_len(imp->skew_points);
     xarr_setlen(imp->skew_points_copy, N);
     memcpy(imp->skew_points_copy, imp->skew_points, N * sizeof(*imp->skew_points_copy));
 }
 
-void imp_clear_selection(IMPointsData* imp)
-{
-    xarr_setlen(imp->selected_point_indexes, 0);
-    imp->selected_point_idx = -1;
-}
-
 void _imp_drag_and_draw(
-    IMPointsData*           imp,
-    imgui_pt                pos,
-    bool                    snap_to_grid,
-    const enum IMPShapeType shape_type,
-    int                     num_grid_x,
-    int                     num_grid_y)
+    IMPointsData* imp,
+    imgui_pt      pos,
+    bool          snap_to_grid,
+    IMPShapeType  selected_shape,
+    int           num_grid_x,
+    int           num_grid_y)
 {
-    xassert(shape_type >= 0 && shape_type < IMP_SHAPE_COUNT);
+    xassert(selected_shape >= 0 && selected_shape < IMP_SHAPE_COUNT);
 
     imp->selection_start.u64 = 0;
     imp->selection_end.u64   = 0;
@@ -389,7 +379,7 @@ void _imp_drag_and_draw(
 
     // New points at grid boundary
     float pt_y_left = y, pt_y_right = y;
-    switch (shape_type)
+    switch (selected_shape)
     {
     case IMP_SHAPE_POINT:
     case IMP_SHAPE_FLAT:
@@ -430,7 +420,7 @@ void _imp_drag_and_draw(
             between      &= imp->points[i].x < boundary_right;
 
             if (between)
-                imp_delete_point(imp, i);
+                _imp_delete_point(imp, i);
         }
     }
 
@@ -481,7 +471,7 @@ void _imp_drag_and_draw(
         float interp_y_right = 0, interp_y_left = 0;
         if (num_points_at_right_boundary == 0)
         {
-            float skew = imp_calculate_point_skew(imp, right_idx - 1);
+            float skew = _imp_calculate_point_skew(imp, right_idx - 1);
 
             const xvec2f* pt      = imp->points + right_idx - 1;
             const xvec2f* next_pt = imp->points + right_idx;
@@ -493,7 +483,7 @@ void _imp_drag_and_draw(
 
         if (num_points_at_left_boundary == 0)
         {
-            float skew = imp_calculate_point_skew(imp, left_idx);
+            float skew = _imp_calculate_point_skew(imp, left_idx);
 
             const xvec2f* pt      = imp->points + left_idx;
             const xvec2f* next_pt = imp->points + left_idx + 1;
@@ -506,14 +496,14 @@ void _imp_drag_and_draw(
         if (num_points_at_right_boundary == 0)
         {
             xvec2f pt = {boundary_right, interp_y_right};
-            imp_insert_point(imp, pt, right_idx);
+            _imp_insert_point(imp, pt, right_idx);
             num_points++;
             num_points_at_right_boundary++;
         }
         if (num_points_at_left_boundary == 0)
         {
             xvec2f pt = {boundary_left, interp_y_left};
-            imp_insert_point(imp, pt, left_idx + 1);
+            _imp_insert_point(imp, pt, left_idx + 1);
             num_points++;
             num_points_at_left_boundary++;
             left_idx++;
@@ -524,7 +514,7 @@ void _imp_drag_and_draw(
     if (num_points_at_right_boundary == 1)
     {
         xvec2f pt = {boundary_right, pt_y_right};
-        imp_insert_point(imp, pt, right_idx);
+        _imp_insert_point(imp, pt, right_idx);
         num_points++;
         num_points_at_right_boundary++;
     }
@@ -532,7 +522,7 @@ void _imp_drag_and_draw(
     {
         xassert(num_points_at_right_boundary >= 2);
         xvec2f pt = {boundary_right, pt_y_right};
-        imp_update_point(imp, pt, right_idx);
+        _imp_update_point(imp, pt, right_idx);
     }
 
     if (num_points_at_left_boundary == 1)
@@ -541,7 +531,7 @@ void _imp_drag_and_draw(
         xvec2f pt      = {boundary_left, pt_y_left};
         if (prev_pt.x != pt.x || prev_pt.y != pt.y)
         {
-            imp_insert_point(imp, pt, left_idx + 1);
+            _imp_insert_point(imp, pt, left_idx + 1);
             num_points++;
             num_points_at_left_boundary++;
             left_idx++;
@@ -551,32 +541,32 @@ void _imp_drag_and_draw(
     {
         xassert(num_points_at_left_boundary >= 2);
         xvec2f pt = {boundary_left, pt_y_left};
-        imp_update_point(imp, pt, left_idx);
+        _imp_update_point(imp, pt, left_idx);
     }
     // xassert(num_points_at_right_boundary == 2);
 
-    if (shape_type == IMP_SHAPE_LINEAR_ASC || shape_type == IMP_SHAPE_LINEAR_DESC)
+    if (selected_shape == IMP_SHAPE_LINEAR_ASC || selected_shape == IMP_SHAPE_LINEAR_DESC)
     {
-        imp_update_skew_point(imp, left_idx, 0.5);
+        _imp_update_skew_point(imp, left_idx, 0.5);
     }
-    if (shape_type == IMP_SHAPE_CONVEX_ASC || shape_type == IMP_SHAPE_CONVEX_DESC)
+    if (selected_shape == IMP_SHAPE_CONVEX_ASC || selected_shape == IMP_SHAPE_CONVEX_DESC)
     {
-        imp_update_skew_point(imp, left_idx, 0.85);
+        _imp_update_skew_point(imp, left_idx, 0.85);
     }
-    if (shape_type == IMP_SHAPE_CONCAVE_ASC || shape_type == IMP_SHAPE_CONCAVE_DESC)
+    if (selected_shape == IMP_SHAPE_CONCAVE_ASC || selected_shape == IMP_SHAPE_CONCAVE_DESC)
     {
-        imp_update_skew_point(imp, left_idx, 0.15);
+        _imp_update_skew_point(imp, left_idx, 0.15);
     }
 
-    if (shape_type == IMP_SHAPE_TRIANGLE_UP || shape_type == IMP_SHAPE_TRIANGLE_DOWN)
+    if (selected_shape == IMP_SHAPE_TRIANGLE_UP || selected_shape == IMP_SHAPE_TRIANGLE_DOWN)
     {
         xvec2f pt = {boundary_left + x_inc * 0.5f, y};
-        imp_insert_point(imp, pt, left_idx + 1);
+        _imp_insert_point(imp, pt, left_idx + 1);
         num_points++;
         left_idx++;
     }
 
-    if (shape_type == IMP_SHAPE_COSINE_ASC || shape_type == IMP_SHAPE_COSINE_DESC)
+    if (selected_shape == IMP_SHAPE_COSINE_ASC || selected_shape == IMP_SHAPE_COSINE_DESC)
     {
         // Approximation for a descening cosing shape
         // x = (1 / 7), y = 0.95, skew = 0.731994
@@ -598,7 +588,7 @@ void _imp_drag_and_draw(
             1 - 0.731994,
         };
         _Static_assert(ARRLEN(pts) == ARRLEN(skews) - 1, "");
-        if (shape_type == IMP_SHAPE_COSINE_ASC)
+        if (selected_shape == IMP_SHAPE_COSINE_ASC)
         {
             for (int i = 0; i < ARRLEN(pts); i++)
             {
@@ -614,16 +604,16 @@ void _imp_drag_and_draw(
             xvec2f* pt = pts + i;
             pt->x      = xm_lerpf(pt->x, boundary_left, boundary_right);
             pt->y      = xm_lerpf(pt->y, imp->area.b, y);
-            imp_insert_point(imp, *pt, left_idx + 1);
-            imp_update_skew_point(imp, left_idx, skews[i]);
+            _imp_insert_point(imp, *pt, left_idx + 1);
+            _imp_update_skew_point(imp, left_idx, skews[i]);
             num_points++;
             left_idx++;
         }
-        imp_update_skew_point(imp, left_idx, skews[ARRLEN(skews) - 1]);
+        _imp_update_skew_point(imp, left_idx, skews[ARRLEN(skews) - 1]);
     }
 
-    imp_save_points_to_copy(imp);
-    imp_save_skew_points_to_copy(imp);
+    _imp_save_points_to_copy(imp);
+    _imp_save_skew_points_to_copy(imp);
 }
 
 void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int num_grid_y)
@@ -696,7 +686,7 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
                         imp_clear_selection(imp);
                     }
 
-                    imp_add_to_selection(imp, select_idx);
+                    _imp_add_to_selection(imp, select_idx);
                     fstate->pt_hover_idx = select_idx;
                     int num_selected_pts = xarr_len(imp->selected_point_indexes);
                     xassert(num_selected_pts > 0);
@@ -759,7 +749,7 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
                     const int sel_idx = imp->selected_point_indexes[0];
                     if (sel_idx == 0 || sel_idx == num_points - 1)
                     {
-                        imp_update_point(imp, drag_pos, sel_idx);
+                        _imp_update_point(imp, drag_pos, sel_idx);
                     }
                     else
                     {
@@ -891,12 +881,12 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
                         translate_pos.x      += delta.x;
                         translate_pos.y      += delta.y;
 
-                        imp_update_point(imp, translate_pos, idx);
+                        _imp_update_point(imp, translate_pos, idx);
                     }
                 }
 
-                fstate->should_update_cached_path                = true;
-                fstate->should_update_gui_lfo_points_with_points = true;
+                fstate->should_update_cached_path             = true;
+                fstate->should_update_main_points_with_points = true;
             } // IMGUI_EVENT_DRAG_MOVE
 
             if (pt_events & IMGUI_EVENT_MOUSE_LEFT_UP)
@@ -908,21 +898,21 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
 
         if (fstate->delete_pt_idx > 0)
         {
-            imp_delete_point(imp, fstate->delete_pt_idx);
+            _imp_delete_point(imp, fstate->delete_pt_idx);
             imp_clear_selection(imp);
 
             fstate->pt_hover_idx      = -1;
             fstate->pt_hover_skew_idx = -1;
             backup_points             = true;
 
-            fstate->should_update_gui_lfo_points_with_points = true;
-            fstate->should_update_cached_path                = true;
+            fstate->should_update_main_points_with_points = true;
+            fstate->should_update_cached_path             = true;
         }
 
         if (backup_points)
         {
-            imp_save_points_to_copy(imp);
-            imp_save_skew_points_to_copy(imp);
+            _imp_save_points_to_copy(imp);
+            _imp_save_skew_points_to_copy(imp);
         }
     }
 
@@ -953,10 +943,10 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
                 const bool ctrl = im->frame.modifiers_mouse_down & PW_MOD_PLATFORM_KEY_CTRL;
                 if (im->left_click_counter == 2 && !ctrl)
                 {
-                    imp_update_skew_point(imp, pt_idx, 0.5f);
-                    fstate->pt_hover_skew_idx                        = -1;
-                    fstate->should_update_gui_lfo_points_with_points = true;
-                    fstate->should_update_cached_path                = true;
+                    _imp_update_skew_point(imp, pt_idx, 0.5f);
+                    fstate->pt_hover_skew_idx                     = -1;
+                    fstate->should_update_main_points_with_points = true;
+                    fstate->should_update_cached_path             = true;
                 }
             }
             if (pt_events & IMGUI_EVENT_DRAG_MOVE)
@@ -964,18 +954,18 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
                 float delta = 0;
                 imgui_drag_value(im, &delta, -1, 1, IMP_DEFAULT_SKEW_DRAG_RANGE * 2, IMGUI_DRAG_VERTICAL);
 
-                float skew      = imp_calculate_point_skew(imp, pt_idx);
+                float skew      = _imp_calculate_point_skew(imp, pt_idx);
                 float next_skew = skew + delta;
                 next_skew       = xm_clampf(next_skew, 0.0f, 1.0f);
                 xassert(next_skew >= 0 && next_skew <= 1);
 
-                imp_update_skew_point(imp, pt_idx, next_skew);
-                fstate->should_update_gui_lfo_points_with_points = true;
-                fstate->should_update_cached_path                = true;
+                _imp_update_skew_point(imp, pt_idx, next_skew);
+                fstate->should_update_main_points_with_points = true;
+                fstate->should_update_cached_path             = true;
             }
             if (pt_events & IMGUI_EVENT_MOUSE_LEFT_UP)
             {
-                imp_save_skew_points_to_copy(imp);
+                _imp_save_skew_points_to_copy(imp);
             }
         }
     }
@@ -994,10 +984,10 @@ static inline double _imp_snap_point(double x)
 
 void imp_handle_grid_events(
     IMPointsFrameContext* fstate,
-    imgui_rect            selection_area,
+    imgui_rect            sel_area,
     int                   num_grid_x,
     int                   num_grid_y,
-    enum IMPShapeType     current_shape_type)
+    IMPShapeType          selected_shape)
 {
     IMPointsData*  imp = fstate->imp;
     imgui_context* im  = fstate->im;
@@ -1008,7 +998,7 @@ void imp_handle_grid_events(
     xassert(imp->area.r > imp->area.x);
     xassert(imp->area.b > imp->area.y);
 
-    const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &selection_area);
+    const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &sel_area);
 
     if (grid_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
     {
@@ -1017,16 +1007,16 @@ void imp_handle_grid_events(
         pos.y = floorf(im->pos_mouse_down.y);
 
         // bool should_draw_shape = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_CTRL;
-        bool should_draw_shape = current_shape_type != IMP_SHAPE_POINT;
+        bool should_draw_shape = selected_shape != IMP_SHAPE_POINT;
         if (should_draw_shape)
         {
             im->left_click_counter = 0;
 
             const bool snap_to_grid = im->frame.modifiers_mouse_down & PW_MOD_PLATFORM_KEY_ALT;
-            _imp_drag_and_draw(imp, pos, snap_to_grid, current_shape_type, num_grid_x, num_grid_y);
+            _imp_drag_and_draw(imp, pos, snap_to_grid, selected_shape, num_grid_x, num_grid_y);
 
-            fstate->should_update_gui_lfo_points_with_points = true;
-            fstate->should_update_cached_path                = true;
+            fstate->should_update_main_points_with_points = true;
+            fstate->should_update_cached_path             = true;
         }
         else if (im->left_click_counter == 1)
         {
@@ -1054,18 +1044,18 @@ void imp_handle_grid_events(
                     pt.x = xm_clampf(mouse_down.x, imp->area.x, imp->area.r);
                     pt.y = xm_clampf(mouse_down.y, imp->area.y, imp->area.b);
 
-                    imp_insert_point(imp, pt, i + 1);
+                    _imp_insert_point(imp, pt, i + 1);
 
-                    imp_save_points_to_copy(imp);
-                    imp_save_skew_points_to_copy(imp);
+                    _imp_save_points_to_copy(imp);
+                    _imp_save_skew_points_to_copy(imp);
 
                     imp_clear_selection(imp);
-                    imp_add_to_selection(imp, i + 1);
+                    _imp_add_to_selection(imp, i + 1);
 
                     fstate->pt_hover_idx = i + 1;
 
-                    fstate->should_update_gui_lfo_points_with_points = true;
-                    fstate->should_update_cached_path                = true;
+                    fstate->should_update_main_points_with_points = true;
+                    fstate->should_update_cached_path             = true;
                     break;
                 }
             }
@@ -1079,7 +1069,7 @@ void imp_handle_grid_events(
     if (grid_events & IMGUI_EVENT_DRAG_MOVE)
     {
         // bool     should_draw_shape = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_CTRL;
-        bool     should_draw_shape = current_shape_type != IMP_SHAPE_POINT;
+        bool     should_draw_shape = selected_shape != IMP_SHAPE_POINT;
         imgui_pt pos;
         pos.x = floorf(im->pos_mouse_move.x);
         pos.y = floorf(im->pos_mouse_move.y);
@@ -1087,15 +1077,15 @@ void imp_handle_grid_events(
         if (should_draw_shape)
         {
             const bool snap_to_grid = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_ALT;
-            _imp_drag_and_draw(imp, pos, snap_to_grid, current_shape_type, num_grid_x, num_grid_y);
+            _imp_drag_and_draw(imp, pos, snap_to_grid, selected_shape, num_grid_x, num_grid_y);
 
-            fstate->should_update_gui_lfo_points_with_points = true;
-            fstate->should_update_cached_path                = true;
+            fstate->should_update_main_points_with_points = true;
+            fstate->should_update_cached_path             = true;
         }
         else
         {
-            imp->selection_end.x = xm_clampf(pos.x, selection_area.x, selection_area.r);
-            imp->selection_end.y = xm_clampf(pos.y, selection_area.y, selection_area.b);
+            imp->selection_end.x = xm_clampf(pos.x, sel_area.x, sel_area.r);
+            imp->selection_end.y = xm_clampf(pos.y, sel_area.y, sel_area.b);
 
             if (imp->selection_start.u64 != 0 && imp->selection_start.u64 != imp->selection_end.u64)
             {
@@ -1112,7 +1102,7 @@ void imp_handle_grid_events(
                 {
                     const xvec2f pt = imp->points[i];
                     if (imgui_hittest_rect((imgui_pt){pt.x, pt.y}, &area))
-                        imp_add_to_selection(imp, i);
+                        _imp_add_to_selection(imp, i);
                 }
             }
         }
@@ -1122,18 +1112,18 @@ void imp_handle_grid_events(
         pw_set_mouse_cursor(fstate->pw, PW_CURSOR_DEFAULT);
     }
 
-    if (fstate->should_update_gui_lfo_points_with_points)
+    if (fstate->should_update_main_points_with_points)
     {
-        fstate->should_update_audio_lfo_points_with_gui_lfo_points = true;
+        fstate->should_update_audio_lfo_points_with_main_points = true;
         // Queue LFO points
         int npoints = xarr_len(imp->skew_points);
-        xarr_setlen(imp->gui_lfo_points, npoints);
+        xarr_setlen(imp->main_points, npoints);
         for (int i = 0; i < npoints; i++)
         {
-            xvec3f* p1 = imp->gui_lfo_points + i;
+            xvec3f* p1 = imp->main_points + i;
             p1->x      = _imp_snap_point(xm_normd(imp->points[i].x, imp->area.x, imp->area.r));
             p1->y      = _imp_snap_point(xm_normd(imp->points[i].y, imp->area.b, imp->area.y));
-            p1->skew   = imp_calculate_point_skew(imp, i);
+            p1->skew   = _imp_calculate_point_skew(imp, i);
             xassert(p1->x >= 0 && p1->x <= 1);
             xassert(p1->y >= 0 && p1->y <= 1);
             xassert(p1->skew >= 0 && p1->skew <= 1);
@@ -1141,14 +1131,14 @@ void imp_handle_grid_events(
             // validate we didn't do anything silly
             if (i > 0)
             {
-                xvec3f* prev = imp->gui_lfo_points + i - 1;
+                xvec3f* prev = imp->main_points + i - 1;
                 xassert(p1->x >= prev->x);
             }
 #endif
 
             i += 0;
         }
-        imp->gui_lfo_points->x = 0;
+        imp->main_points->x = 0;
     }
 }
 
