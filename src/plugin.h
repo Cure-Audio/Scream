@@ -165,12 +165,12 @@ typedef struct Plugin
 #endif // DEBUG
 
     // Retained data for GUI
-    void*                gui;
-    int                  width, height;
-    bool                 lfo_section_open;
-    uint8_t              selected_lfo_idx;
-    enum ShapeButtonType lfo_shape_idx;
-    xvec2f               last_lfo_amount;
+    void*             gui;
+    int               width, height;
+    bool              lfo_section_open;
+    uint8_t           selected_lfo_idx;
+    enum IMPShapeType lfo_shape_idx;
+    xvec2f            last_lfo_amount;
 
     // two floats, stored as a u64
     xt_atomic_uint64_t gui_input_peak_gain;

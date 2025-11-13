@@ -42,7 +42,7 @@ void gui_handle_param_change(void* _gui, ParamID param_id)
 {
     GUI* gui = _gui;
     if (param_id == PARAM_PATTERN_LFO_1 || param_id == PARAM_PATTERN_LFO_2)
-        gui->lfo.gui_lfo_points_valid = false;
+        gui->imp.gui_lfo_points_valid = false;
 }
 
 static void my_sg_logger(
@@ -214,7 +214,7 @@ void pw_destroy_gui(void* _gui)
 
     ted_deinit(&gui->texteditor);
 
-    gui_lfo_deinit(&gui->lfo);
+    imp_deinit(&gui->imp);
     xarr_free(gui->lfo_ybuffer);
     xarr_free(gui->lfo_playhead_trail);
 
@@ -799,7 +799,7 @@ void pw_tick(void* _gui)
         lfo_btn.b              = lm->top_content_bottom;
         gui->lfo_toggle_button = lfo_btn;
 
-        gui->lfo.points_valid = false;
+        gui->imp.points_valid = false;
     }
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.

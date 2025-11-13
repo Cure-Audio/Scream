@@ -95,7 +95,7 @@ typedef struct GUI
     unsigned   logo_events;
     imgui_rect logo_area;
 
-    GUILFOPoints lfo;
+    IMPointsData imp;
 
     Tooltip tooltip;
 

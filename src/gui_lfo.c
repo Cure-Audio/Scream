@@ -17,15 +17,6 @@ static inline int main_get_lfo_pattern_idx(Plugin* p)
     return xm_droundi(v);
 }
 
-static inline double snap_point(double x)
-{
-    if (x < 0.000001)
-        x = 0;
-    if (x > 0.999999)
-        x = 1;
-    return x;
-}
-
 void do_lfo_shaders(void* uptr)
 {
     GUI*           gui = uptr;
@@ -87,13 +78,19 @@ void do_lfo_shaders(void* uptr)
     }
 
     sg_pipeline pip;
-    imgui_rect* grid_area          = NULL;
+    imgui_rect* grid_area          = &gui->imp.area;
     bool        have_all_resources = true;
     have_all_resources &= resource_get_pipeline(&gui->resource_manager, &pip, lfo_vertical_grad_shader_desc, 0);
-    have_all_resources &=
-        resource_get_data_fixed(&gui->resource_manager, RID_LFO_GRID_AREA, (void**)&grid_area, sizeof(*grid_area), 0);
+    // imgui_rect* grid_area          = NULL;
+    // have_all_resources &=
+    //     resource_get_data_fixed(&gui->resource_manager, RID_LFO_GRID_AREA, (void**)&grid_area, sizeof(*grid_area),
+    //     0);
     if (have_all_resources)
     {
+        xassert(grid_area);
+        xassert(grid_area->r > grid_area->x);
+        xassert(grid_area->b > grid_area->y);
+
         sg_range range_ybuf     = {.ptr = gui->lfo_ybuffer, .size = len * sizeof(*gui->lfo_ybuffer)};
         sg_range range_playhead = {.ptr = gui->lfo_playhead_trail, .size = len * sizeof(*gui->lfo_playhead_trail)};
 
@@ -185,12 +182,28 @@ void draw_lfo_section(GUI* gui)
     NVGcontext*    nvg  = gui->nvg;
     imgui_context* im   = &gui->imgui;
     LayoutMetrics* lm   = &gui->layout;
-    GUILFOPoints*  glfo = &gui->lfo;
+    IMPointsData*  glfo = &gui->imp;
+
+    if (im->frame.events & ((1 << PW_EVENT_RESIZE) | (1 << PW_EVENT_DPI_CHANGED)))
+    {
+        glfo->theme.col_line          = C_LIGHT_BLUE_2;
+        glfo->theme.line_stroke_width = 2;
+
+        glfo->theme.col_point_hover_bg = (NVGcolour){1, 1, 1, 0.2};
+
+        glfo->theme.col_skewpoint_inner    = C_BG_LFO;
+        glfo->theme.col_skewpoint_outer    = C_LIGHT_BLUE_2;
+        glfo->theme.skewpoint_stroke_width = 1.5f;
+
+        glfo->theme.col_point          = C_LIGHT_BLUE_2;
+        glfo->theme.col_point_selected = nvgHexColour(0xffff00ff);
+
+        glfo->theme.col_selection_box = (NVGcolour){0, 0.5, 1, 1};
+    }
 
     // TODO: rather than cache a line of points, cache the vertices from NanoVG.
-    GUILFOFrameState fstate                                             = gui_lfo_framestate_new();
-    bool             should_update_audio_lfo_points_with_gui_lfo_points = false;
-    bool             should_clear_lfo_trail                             = false;
+    IMPointsFrameContext fstate                 = imp_frame_context_new(&gui->imp, nvg, im, gui->arena, gui->pw);
+    bool                 should_clear_lfo_trail = false;
     // int  next_pattern_length                                = 0;
 
     const float bot_content_height = lm->content_b - lm->top_content_bottom;
@@ -481,8 +494,8 @@ void draw_lfo_section(GUI* gui)
                     const xvec3f* current_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
                     int             N              = xarr_len(current_points);
 
-                    xarr_setcap(glfo->main_lfo_points, (N * 2));
-                    xarr_setlen(glfo->main_lfo_points, 0);
+                    xarr_setcap(glfo->gui_lfo_points, (N * 2));
+                    xarr_setlen(glfo->gui_lfo_points, 0);
 
                     if (btn_idx == BUTTON_LENGTH_HALF)
                     {
@@ -492,7 +505,7 @@ void draw_lfo_section(GUI* gui)
                             xvec3f pt = current_points[i];
                             if (pt.x <= next_pattern_length)
                             {
-                                xarr_push(glfo->main_lfo_points, pt);
+                                xarr_push(glfo->gui_lfo_points, pt);
                             }
                             if (pt.x >= next_pattern_length)
                                 break;
@@ -503,8 +516,8 @@ void draw_lfo_section(GUI* gui)
                         // Duplicate pattern
 
                         // Deep copy
-                        memcpy(glfo->main_lfo_points, current_points, sizeof(*glfo->main_lfo_points) * N);
-                        xarr_header(glfo->main_lfo_points)->length = N;
+                        memcpy(glfo->gui_lfo_points, current_points, sizeof(*glfo->gui_lfo_points) * N);
+                        xarr_header(glfo->gui_lfo_points)->length = N;
 
                         // Copy & translate points
                         float delta_x = next_pattern_length >> 1;
@@ -512,22 +525,22 @@ void draw_lfo_section(GUI* gui)
                         {
                             xvec3f pt  = current_points[i];
                             pt.x        += delta_x;
-                            xarr_push(glfo->main_lfo_points, pt);
+                            xarr_push(glfo->gui_lfo_points, pt);
                         }
                     }
 
                     // Coalesce duplicate points
-                    N = xarr_len(glfo->main_lfo_points);
+                    N = xarr_len(glfo->gui_lfo_points);
                     for (int i = N - 1; i-- > 0;)
                     {
                         xassert(i >= 0);
-                        xassert((i + 1) < xarr_len(glfo->main_lfo_points));
-                        xvec3f* pt1 = glfo->main_lfo_points + i;
-                        xvec3f* pt2 = glfo->main_lfo_points + i + 1;
+                        xassert((i + 1) < xarr_len(glfo->gui_lfo_points));
+                        xvec3f* pt1 = glfo->gui_lfo_points + i;
+                        xvec3f* pt2 = glfo->gui_lfo_points + i + 1;
                         int       cmp = memcmp(pt1, pt2, sizeof(*pt1));
                         if (cmp == 0)
                         {
-                            xarr_delete(glfo->main_lfo_points, i);
+                            xarr_delete(glfo->gui_lfo_points, i);
                         }
                     }
 
@@ -780,8 +793,8 @@ void draw_lfo_section(GUI* gui)
     float shape_x = content_x;
     float shape_y = display_b - CONTENT_PADDING_Y - SHAPES_WIDTH;
     {
-        imgui_rect btns[SHAPE_COUNT];
-        unsigned   events[SHAPE_COUNT];
+        imgui_rect btns[IMP_SHAPE_COUNT];
+        unsigned   events[IMP_SHAPE_COUNT];
 
         layout_uniform_horizontal(btns, ARRLEN(btns), content_x, shape_y, SHAPES_WIDTH, SHAPES_WIDTH, LAYOUT_START, 0);
 
@@ -852,47 +865,47 @@ void draw_lfo_section(GUI* gui)
             inner.r          -= SHAPES_INNER_PADDING;
             inner.b          -= SHAPES_INNER_PADDING;
 
-            const enum ShapeButtonType type = i;
+            const enum IMPShapeType type = i;
             switch (type)
             {
-            case SHAPE_POINT:
+            case IMP_SHAPE_POINT:
                 nvgCircle(nvg, (inner.x + inner.r) * 0.5f, (inner.y + inner.b) * 0.5f, 2);
                 nvgFill(nvg);
                 nvgBeginPath(nvg);
                 break;
-            case SHAPE_FLAT:
+            case IMP_SHAPE_FLAT:
             {
                 float cy = floorf((inner.y + inner.b) * 0.5f) + 0.5f;
                 nvgMoveTo(nvg, inner.x, cy);
                 nvgLineTo(nvg, inner.r, cy);
                 break;
             }
-            case SHAPE_LINEAR_ASC:
+            case IMP_SHAPE_LINEAR_ASC:
                 nvgMoveTo(nvg, inner.x, inner.b);
                 nvgLineTo(nvg, inner.r, inner.y);
                 break;
-            case SHAPE_LINEAR_DESC:
+            case IMP_SHAPE_LINEAR_DESC:
                 nvgMoveTo(nvg, inner.x, inner.y);
                 nvgLineTo(nvg, inner.r, inner.b);
                 break;
-            case SHAPE_CONCAVE_ASC:
+            case IMP_SHAPE_CONCAVE_ASC:
                 nvgMoveTo(nvg, inner.x, inner.b);
                 nvgQuadTo(nvg, inner.r, inner.b, inner.r, inner.y);
                 break;
-            case SHAPE_CONVEX_ASC:
+            case IMP_SHAPE_CONVEX_ASC:
                 nvgMoveTo(nvg, inner.x, inner.b);
                 nvgQuadTo(nvg, inner.x, inner.y, inner.r, inner.y);
                 break;
-            case SHAPE_CONCAVE_DESC:
+            case IMP_SHAPE_CONCAVE_DESC:
                 nvgMoveTo(nvg, inner.x, inner.y);
                 nvgQuadTo(nvg, inner.x, inner.b, inner.r, inner.b);
                 break;
-            case SHAPE_CONVEX_DESC:
+            case IMP_SHAPE_CONVEX_DESC:
                 nvgMoveTo(nvg, inner.x, inner.y);
                 nvgQuadTo(nvg, inner.r, inner.y, inner.r, inner.b);
                 break;
-            case SHAPE_COSINE_ASC:
-            case SHAPE_COSINE_DESC:
+            case IMP_SHAPE_COSINE_ASC:
+            case IMP_SHAPE_COSINE_DESC:
             {
                 float w = inner.r - inner.x;
                 float h = inner.b - inner.y;
@@ -900,8 +913,8 @@ void draw_lfo_section(GUI* gui)
                 float cx = inner.x + w * 0.5f;
                 float cy = inner.y + h * 0.5f;
 
-                float y1 = type == SHAPE_COSINE_ASC ? inner.y : inner.b;
-                float y2 = type == SHAPE_COSINE_ASC ? inner.b : inner.y;
+                float y1 = type == IMP_SHAPE_COSINE_ASC ? inner.y : inner.b;
+                float y2 = type == IMP_SHAPE_COSINE_ASC ? inner.b : inner.y;
                 // More like a cosine
                 nvgMoveTo(nvg, inner.x, y2);
                 nvgQuadTo(nvg, inner.x + w * 0.25f, y2, cx, cy);
@@ -913,17 +926,17 @@ void draw_lfo_section(GUI* gui)
                 // nvgQuadTo(nvg, cx, inner.y, inner.r, inner.y);
                 break;
             }
-            case SHAPE_TRIANGLE_UP:
+            case IMP_SHAPE_TRIANGLE_UP:
                 nvgMoveTo(nvg, inner.x, inner.b);
                 nvgLineTo(nvg, (inner.x + inner.r) * 0.5f, inner.y);
                 nvgLineTo(nvg, inner.r, inner.b);
                 break;
-            case SHAPE_TRIANGLE_DOWN:
+            case IMP_SHAPE_TRIANGLE_DOWN:
                 nvgMoveTo(nvg, inner.x, inner.y);
                 nvgLineTo(nvg, (inner.x + inner.r) * 0.5f, inner.b);
                 nvgLineTo(nvg, inner.r, inner.y);
                 break;
-            case SHAPE_COUNT:
+            case IMP_SHAPE_COUNT:
                 break;
             }
         }
@@ -1095,10 +1108,6 @@ void draw_lfo_section(GUI* gui)
     const float grid_r = lm->content_r - CONTENT_PADDING_X;
     const float grid_w = ceilf(grid_r - grid_x);
 
-    // const imgui_rect grid_bg = {grid_x, grid_y, grid_r, grid_b};
-
-    glfo->pw     = gui->pw;
-    glfo->arena  = gui->arena;
     glfo->area.x = grid_x;
     glfo->area.y = grid_y;
     glfo->area.r = grid_r;
@@ -1123,7 +1132,7 @@ void draw_lfo_section(GUI* gui)
     }
     should_clear |= !!(im->frame.events & (1 << PW_EVENT_RESIZE));
     if (should_clear)
-        gui_lfo_clear_selection(glfo);
+        imp_clear_selection(glfo);
 
     if (!glfo->gui_lfo_points_valid)
     {
@@ -1132,9 +1141,9 @@ void draw_lfo_section(GUI* gui)
 
         // deep copy audio lfo points array to gui
         size_t N = xarr_len(lfo_points);
-        xarr_setlen(glfo->main_lfo_points, N);
-        _Static_assert(sizeof(*glfo->main_lfo_points) == sizeof(*lfo_points), "");
-        memcpy(glfo->main_lfo_points, lfo_points, sizeof(*lfo_points) * N);
+        xarr_setlen(glfo->gui_lfo_points, N);
+        _Static_assert(sizeof(*glfo->gui_lfo_points) == sizeof(*lfo_points), "");
+        memcpy(glfo->gui_lfo_points, lfo_points, sizeof(*lfo_points) * N);
 
         glfo->points_valid = false;
     }
@@ -1144,11 +1153,11 @@ void draw_lfo_section(GUI* gui)
         glfo->points_valid               = !glfo->points_valid;
         fstate.should_update_cached_path = true;
 
-        gui_lfo_clear_selection(glfo);
+        imp_clear_selection(glfo);
 
-        const int N = xarr_len(glfo->main_lfo_points);
+        const int N = xarr_len(glfo->gui_lfo_points);
 
-        const xvec3f* it  = glfo->main_lfo_points;
+        const xvec3f* it  = glfo->gui_lfo_points;
         const xvec3f* end = it + N;
 
         xarr_setlen(glfo->points, (N + 1));
@@ -1170,7 +1179,7 @@ void draw_lfo_section(GUI* gui)
         p->x = grid_r;
         p->y = glfo->points->y;
 
-        it         = glfo->main_lfo_points;
+        it         = glfo->gui_lfo_points;
         p          = glfo->points;
         xvec2f* sp = glfo->skew_points;
 
@@ -1206,154 +1215,13 @@ void draw_lfo_section(GUI* gui)
         memcpy(glfo->skew_points_copy, glfo->skew_points, sizeof(*glfo->skew_points_copy) * N);
     }
 
-    if (gui->plugin->lfo_shape_idx == SHAPE_POINT)
-        gui_lfo_handle_point_events(glfo, &fstate, im, num_grid_x, num_grid_y);
+    const enum IMPShapeType current_shape = gui->plugin->lfo_shape_idx;
+    if (current_shape == IMP_SHAPE_POINT)
+        imp_handle_point_events(&fstate, num_grid_x, num_grid_y);
 
     const imgui_rect selection_area =
         {lm->content_x + 16, display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT, lm->content_r - 16, pattern_area.y};
-    const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &selection_area);
-    if (grid_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
-    {
-        imgui_pt pos;
-        pos.x = floorf(im->pos_mouse_down.x);
-        pos.y = floorf(im->pos_mouse_down.y);
-
-        // bool should_draw_shape = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_CTRL;
-        bool should_draw_shape = gui->plugin->lfo_shape_idx != SHAPE_POINT;
-        if (should_draw_shape)
-        {
-            im->left_click_counter = 0;
-
-            const bool                 snap_to_grid = gui->imgui.frame.modifiers_mouse_down & PW_MOD_PLATFORM_KEY_ALT;
-            const enum ShapeButtonType shape_type   = gui->plugin->lfo_shape_idx;
-            gui_lfo_drag_and_draw(glfo, pos, snap_to_grid, shape_type, num_grid_x, num_grid_y);
-
-            fstate.should_update_gui_lfo_points_with_points = true;
-            fstate.should_update_cached_path                = true;
-        }
-        else if (im->left_click_counter == 1)
-        {
-            bool shift_click = (PW_MOD_KEY_SHIFT | PW_MOD_LEFT_BUTTON) == im->frame.modifiers_mouse_down;
-            if (shift_click == false)
-            {
-                gui_lfo_clear_selection(glfo);
-            }
-
-            glfo->selection_start.x = pos.x;
-            glfo->selection_start.y = pos.y;
-            glfo->selection_end.u64 = glfo->selection_start.u64;
-        }
-        else if (im->left_click_counter == 2)
-        {
-            // add point
-            imgui_pt mouse_down = im->pos_mouse_down;
-
-            // user clicked in empty space
-            for (int i = xarr_len(glfo->points) - 1; i-- != 0;)
-            {
-                if (mouse_down.x >= glfo->points[i].x)
-                {
-                    xvec2f pt;
-                    pt.x = xm_clampf(mouse_down.x, glfo->area.x, glfo->area.r);
-                    pt.y = xm_clampf(mouse_down.y, glfo->area.y, glfo->area.b);
-
-                    gui_lfo_insert_point(glfo, pt, i + 1);
-
-                    gui_lfo_save_points_to_copy(glfo);
-                    gui_lfo_save_skew_points_to_copy(glfo);
-
-                    gui_lfo_clear_selection(glfo);
-                    gui_lfo_add_to_selection(glfo, i + 1);
-
-                    fstate.pt_hover_idx = i + 1;
-
-                    fstate.should_update_gui_lfo_points_with_points = true;
-                    fstate.should_update_cached_path                = true;
-                    break;
-                }
-            }
-        }
-    }
-    if (grid_events & IMGUI_EVENT_MOUSE_LEFT_UP)
-    {
-        glfo->selection_start.u64 = 0;
-        glfo->selection_end.u64   = 0;
-    }
-    if (grid_events & IMGUI_EVENT_DRAG_MOVE)
-    {
-        // bool     should_draw_shape = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_CTRL;
-        bool     should_draw_shape = gui->plugin->lfo_shape_idx != SHAPE_POINT;
-        imgui_pt pos;
-        pos.x = floorf(im->pos_mouse_move.x);
-        pos.y = floorf(im->pos_mouse_move.y);
-
-        if (should_draw_shape)
-        {
-            const bool                 snap_to_grid = gui->imgui.frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_ALT;
-            const enum ShapeButtonType shape_type   = gui->plugin->lfo_shape_idx;
-            gui_lfo_drag_and_draw(glfo, pos, snap_to_grid, shape_type, num_grid_x, num_grid_y);
-
-            fstate.should_update_gui_lfo_points_with_points = true;
-            fstate.should_update_cached_path                = true;
-        }
-        else
-        {
-            glfo->selection_end.x = xm_clampf(pos.x, selection_area.x, selection_area.r);
-            glfo->selection_end.y = xm_clampf(pos.y, selection_area.y, selection_area.b);
-
-            if (glfo->selection_start.u64 != 0 && glfo->selection_start.u64 != glfo->selection_end.u64)
-            {
-                const imgui_rect area = {
-                    xm_minf(glfo->selection_start.x, glfo->selection_end.x),
-                    xm_minf(glfo->selection_start.y, glfo->selection_end.y),
-                    xm_maxf(glfo->selection_start.x, glfo->selection_end.x) + 1,
-                    xm_maxf(glfo->selection_start.y, glfo->selection_end.y) + 1};
-
-                const int N = xarr_len(glfo->points);
-                xarr_setcap(glfo->selected_point_indexes, N);
-
-                for (int i = 0; i < N; i++)
-                {
-                    const xvec2f pt = glfo->points[i];
-                    if (imgui_hittest_rect((imgui_pt){pt.x, pt.y}, &area))
-                        gui_lfo_add_to_selection(glfo, i);
-                }
-            }
-        }
-    }
-    if (grid_events & IMGUI_EVENT_MOUSE_ENTER)
-    {
-        pw_set_mouse_cursor(gui->pw, PW_CURSOR_DEFAULT);
-    }
-
-    if (fstate.should_update_gui_lfo_points_with_points)
-    {
-        should_update_audio_lfo_points_with_gui_lfo_points = true;
-        // Queue LFO points
-        int npoints = xarr_len(glfo->skew_points);
-        xarr_setlen(glfo->main_lfo_points, npoints);
-        for (int i = 0; i < npoints; i++)
-        {
-            xvec3f* p1 = glfo->main_lfo_points + i;
-            p1->x      = pattern_length * snap_point(xm_normd(glfo->points[i].x, grid_x, grid_r));
-            p1->y      = snap_point(xm_normd(glfo->points[i].y, grid_b, grid_y));
-            p1->skew   = gui_lfo_calculate_point_skew(glfo, i);
-            xassert(p1->x >= 0 && p1->x <= pattern_length);
-            xassert(p1->y >= 0 && p1->y <= 1);
-            xassert(p1->skew >= 0 && p1->skew <= 1);
-#ifndef NDEBUG
-            // validate we didn't do anything silly
-            if (i > 0)
-            {
-                xvec3f* prev = glfo->main_lfo_points + i - 1;
-                xassert(p1->x >= prev->x);
-            }
-#endif
-
-            i += 0;
-        }
-        glfo->main_lfo_points->x = 0;
-    }
+    imp_handle_grid_events(&fstate, selection_area, num_grid_x, num_grid_y, current_shape);
 
     if (fstate.should_update_cached_path)
     {
@@ -1414,44 +1282,20 @@ void draw_lfo_section(GUI* gui)
 
         // I don't believe this is good KISS code
         // But it is an interesting proof of concept
-        imgui_rect* grid_area = NULL;
-        if (resource_get_data_fixed(
-                &gui->resource_manager,
-                RID_LFO_GRID_AREA,
-                (void**)&grid_area,
-                sizeof(*grid_area),
-                0))
-        {
-            grid_area->x = grid_x;
-            grid_area->y = grid_y;
-            grid_area->r = grid_r;
-            grid_area->b = grid_b;
-        }
+        // imgui_rect* grid_area = NULL;
+        // if (resource_get_data_fixed(
+        //         &gui->resource_manager,
+        //         RID_LFO_GRID_AREA,
+        //         (void**)&grid_area,
+        //         sizeof(*grid_area),
+        //         0))
+        // {
+        //     grid_area->x = grid_x;
+        //     grid_area->y = grid_y;
+        //     grid_area->r = grid_r;
+        //     grid_area->b = grid_b;
+        // }
     }
-
-    // Draw cosine shape to LFO grid. Useful for approximating cosine shape
-    // nvgBeginPath(nvg);
-    // for (int i = 0; i <= (int)(grid_w / 4.0f); i++)
-    // {
-    //     float x  = grid_x + i;
-    //     float v  = cosf((float)i / floorf(grid_w / 2.0f) * XM_TAUf);
-    //     v       += 1;
-    //     v       *= 0.5f;
-    //     float y  = xm_lerpf(v, grid_b, grid_y);
-
-    //     if (i == 0)
-    //         nvgMoveTo(nvg, x, y);
-    //     else
-    //         nvgLineTo(nvg, x, y);
-    // }
-    // nvgSetColour(nvg, C_WHITE);
-    // nvgStroke(nvg, 2);
-    // Skew values for 'cosine'
-
-    // x = (1 / 7),     y = 0.05, skew = 0.731994
-    // x = 0.3333,      y = 0.25, skew = 0.56
-    // x = 0.6666,      y = 0.75, skew = 0.44
-    // x = 1 - (1 / 7), y = 0.96, skew = 1 - 0.731994
 
     // Draw grid
     {
@@ -1679,94 +1523,7 @@ void draw_lfo_section(GUI* gui)
     snvg_command_custom(nvg, gui, do_lfo_shaders, NVG_LABEL("LFO shaders"));
     snvg_command_draw_nvg(nvg, NVG_LABEL("LFO path"));
 
-    // Draw path
-    {
-        const int     N   = xarr_len(glfo->lfo_cached_path);
-        const xvec2f* it  = glfo->lfo_cached_path;
-        const xvec2f* end = it + N;
-        nvgBeginPath(nvg);
-        nvgMoveTo(nvg, it->x, it->y);
-        while (++it != end)
-            nvgLineTo(nvg, it->x, it->y);
-
-        nvgSetColour(nvg, C_LIGHT_BLUE_2);
-        nvgStroke(nvg, 2);
-    }
-
-    // Draw points
-    {
-        xvec2f* hover_pt = NULL;
-        if (fstate.pt_hover_skew_idx != -1)
-            hover_pt = glfo->skew_points + fstate.pt_hover_skew_idx;
-        if (fstate.pt_hover_idx != -1)
-            hover_pt = glfo->points + fstate.pt_hover_idx;
-
-        if (hover_pt)
-        {
-            xassert(fstate.delete_pt_idx == -1);
-            nvgBeginPath(nvg);
-            nvgCircle(nvg, hover_pt->x, hover_pt->y, LFO_POINT_CLICK_RADIUS);
-            nvgSetColour(nvg, (NVGcolour){1, 1, 1, 0.2});
-            nvgFill(nvg);
-        }
-
-        // skew points
-        nvgBeginPath(nvg);
-        for (int i = 0; i < xarr_len(glfo->skew_points); i++)
-        {
-            xvec2f pt = glfo->skew_points[i];
-            nvgCircle(nvg, pt.x, pt.y, LFO_SKEW_POINT_RADIUS);
-        }
-        nvgSetColour(nvg, C_BG_LFO);
-        nvgFill(nvg);
-
-        nvgBeginPath(nvg);
-        for (int i = 0; i < xarr_len(glfo->skew_points); i++)
-        {
-            xvec2f pt = glfo->skew_points[i];
-            nvgCircle(nvg, pt.x, pt.y, LFO_SKEW_POINT_RADIUS);
-        }
-        nvgSetColour(nvg, C_LIGHT_BLUE_2);
-        nvgStroke(nvg, 1.5);
-        // regular points
-        uint64_t  selected_points_flags = 0;
-        const int num_slected_points    = xarr_len(glfo->selected_point_indexes);
-        if (num_slected_points == 1)
-        {
-            xassert(glfo->selected_point_idx >= 0 && glfo->selected_point_idx < xarr_len(glfo->points));
-            selected_points_flags |= 1llu << ((uint64_t)glfo->selected_point_idx);
-        }
-        else
-        {
-            for (int i = 0; i < num_slected_points; i++)
-            {
-                uint64_t idx = glfo->selected_point_indexes[i];
-                if (idx < 64)
-                    selected_points_flags |= 1llu << idx;
-            }
-        }
-
-        static const NVGcolour col_normal   = C_LIGHT_BLUE_2;
-        static const NVGcolour col_selected = nvgHexColour(0xffffff);
-        size_t                 num_points   = xarr_len(glfo->points);
-        for (uint64_t i = 0; i < num_points; i++)
-        {
-            xvec2f pt = glfo->points[i];
-
-            // First and last point are the same. Show both as selected
-            uint64_t pt_idx = i;
-            if (i == num_points - 1)
-                pt_idx = 0;
-
-            nvgBeginPath(nvg);
-            nvgCircle(nvg, pt.x, pt.y, LFO_POINT_RADIUS);
-            if (selected_points_flags & (1llu << pt_idx))
-                nvgSetColour(nvg, col_selected);
-            else
-                nvgSetColour(nvg, col_normal);
-            nvgFill(nvg);
-        }
-    }
+    imp_draw_points(&fstate);
 
     // Todo: make this a white line that follows the LFO path
     // if (playhead < pattern_length)
@@ -1780,34 +1537,35 @@ void draw_lfo_section(GUI* gui)
     //     nvgStroke(nvg, 1);
     // }
 
-    if (glfo->selection_start.u64 != 0 && glfo->selection_end.u64 != 0)
-    {
-        static const NVGcolour col  = {0, 0.5, 1, 1};
-        const imgui_rect       area = {
-            xm_minf(glfo->selection_start.x, glfo->selection_end.x),
-            xm_minf(glfo->selection_start.y, glfo->selection_end.y),
-            xm_maxf(glfo->selection_start.x, glfo->selection_end.x),
-            xm_maxf(glfo->selection_start.y, glfo->selection_end.y)};
+    // Draw cosine shape to LFO grid. Useful for approximating cosine shape
+    // nvgBeginPath(nvg);
+    // for (int i = 0; i <= (int)(grid_w / 4.0f); i++)
+    // {
+    //     float x  = grid_x + i;
+    //     float v  = cosf((float)i / floorf(grid_w / 2.0f) * XM_TAUf);
+    //     v       += 1;
+    //     v       *= 0.5f;
+    //     float y  = xm_lerpf(v, grid_b, grid_y);
 
-        NVGcolour bg_col = col;
-        bg_col.a         = 0.25f;
+    //     if (i == 0)
+    //         nvgMoveTo(nvg, x, y);
+    //     else
+    //         nvgLineTo(nvg, x, y);
+    // }
+    // nvgSetColour(nvg, C_WHITE);
+    // nvgStroke(nvg, 2);
+    // Skew values for 'cosine'
 
-        nvgBeginPath(nvg);
-        nvgRect2(nvg, area.x, area.y, area.r, area.b);
-        nvgSetColour(nvg, bg_col);
-        nvgFill(nvg);
+    // x = (1 / 7),     y = 0.05, skew = 0.731994
+    // x = 0.3333,      y = 0.25, skew = 0.56
+    // x = 0.6666,      y = 0.75, skew = 0.44
+    // x = 1 - (1 / 7), y = 0.96, skew = 1 - 0.731994
 
-        nvgBeginPath(nvg);
-        nvgRect2(nvg, area.x + 0.5f, area.y + 0.5f, area.r - 0.5f, area.b - 0.5f);
-        nvgSetColour(nvg, col);
-        nvgStroke(nvg, 1);
-    }
-
-    if (should_update_audio_lfo_points_with_gui_lfo_points)
+    if (fstate.should_update_audio_lfo_points_with_gui_lfo_points)
     {
         LFO*    lfo        = &gui->plugin->lfos[lfo_idx];
         xvec3f* old_array  = NULL;
-        size_t  num_points = xarr_len(glfo->main_lfo_points);
+        size_t  num_points = xarr_len(glfo->gui_lfo_points);
 
         // !!!
         {
@@ -1816,7 +1574,7 @@ void draw_lfo_section(GUI* gui)
             // if (next_pattern_length)
             //     xt_atomic_store_i32(&lfo->pattern_length[pattern_idx], next_pattern_length);
 
-            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], glfo->main_lfo_points);
+            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], glfo->gui_lfo_points);
 
             xt_spinlock_unlock(&lfo->spinlocks[pattern_idx]);
         }
@@ -1825,7 +1583,7 @@ void draw_lfo_section(GUI* gui)
         xarr_setlen(old_array, num_points);
         memcpy(old_array, lfo->points[pattern_idx], sizeof(*old_array) * num_points);
 
-        glfo->main_lfo_points = old_array;
+        glfo->gui_lfo_points = old_array;
     }
 
     LINKED_ARENA_LEAK_DETECT_END(gui->arena);
