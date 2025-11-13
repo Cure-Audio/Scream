@@ -1,5 +1,5 @@
-#ifndef GUI_LFO_POINTS_H
-#define GUI_LFO_POINTS_H
+#ifndef IM_POINTS_H
+#define IM_POINTS_H
 
 #include "dsp.h"
 #include <linked_arena.h>
@@ -139,7 +139,7 @@ void imp_handle_grid_events(
 
 void imp_draw_points(IMPointsFrameContext* fstate);
 
-#endif // GUI_LFO_POINTS_H
+#endif // IM_POINTS_H
 
 /*
 ██╗███╗   ███╗██████╗ ██╗     ███████╗███╗   ███╗███████╗███╗   ██╗████████╗ █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
@@ -150,8 +150,8 @@ void imp_draw_points(IMPointsFrameContext* fstate);
 ╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 */
 
-#ifdef GUI_LFO_POINTS_IMPL
-#undef GUI_LFO_POINTS_IMPL
+#ifdef IM_POINTS_IMPL
+#undef IM_POINTS_IMPL
 
 #include <xhl/array.h>
 #include <xhl/maths.h>
@@ -1275,4 +1275,4 @@ void imp_draw_points(IMPointsFrameContext* fstate)
     }
 }
 
-#endif // GUI_LFO_POINTS_IMPL
+#endif // IM_POINTS_IMPL

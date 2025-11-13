@@ -108,7 +108,7 @@ set(PLUGIN_SOURCES
     src/plugin.c
     src/gui.c
     src/gui_lfo.c
-    src/gui_lfo_points.c
+    src/im_points.c
     src/resource_manager.c
     src/state.c
     src/libs/texteditor.c

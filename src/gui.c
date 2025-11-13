@@ -2133,7 +2133,7 @@ void pw_tick(void* _gui)
     resources_end_frame(&gui->resource_manager, gui->nvg);
     imgui_end_frame(&gui->imgui);
 
-    // println("GPU upload: %llu", gui->nvg->frame_stats.uploaded_bytes);
+    println("GPU upload: %llu", gui->nvg->frame_stats.uploaded_bytes);
 
     sg_set_global(NULL);
     LINKED_ARENA_LEAK_DETECT_END(gui->arena);

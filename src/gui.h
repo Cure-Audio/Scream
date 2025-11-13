@@ -6,11 +6,11 @@
 
 #include "libs/texteditor.h"
 #include "libs/tooltip.h"
-#include "xhl/vector.h"
+#include <xhl/vector.h>
 
 #include "resource_manager.h"
 
-#include "gui_lfo_points.h"
+#include "im_points.h"
 
 typedef struct
 {
