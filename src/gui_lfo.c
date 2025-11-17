@@ -351,7 +351,7 @@ void draw_lfo_section(GUI* gui)
             nvgMoveTo(nvg, icon_r, icon_b);
             nvgLineTo(nvg, icon_r - LFO_TAB_ARROWBODY_LENGTH, icon_b - LFO_TAB_ARROWBODY_LENGTH);
 
-            // icon/text seperator
+            // icon/text separator
             nvgMoveTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_y - 2.5f);
             nvgLineTo(nvg, icon_r + LFO_TAB_ICON_PADDING + 1, icon_b + 2.5f);
 

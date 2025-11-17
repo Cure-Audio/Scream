@@ -27,7 +27,7 @@ IDEA:   This same system, or something like could be used for clever automatic c
         Rendering on the other hand is done back to front.
         This intriduces a problem for modal "views" (a popup window with its own background colour and foreground
         widgets).
-        One way to tackle that problem may be to render all these modal views to a seperate framebuffer, and composite
+        One way to tackle that problem may be to render all these modal views to a separate framebuffer, and composite
         them later. If we can depend on this strict order, and all framebuffers are stored in this resource manager, we
         could safely loop backwards through all "used" framebuffers and handle our compositing that way.
         This will require a rigid structure on behalf of the developer, but it's possible that its always fine in
@@ -61,7 +61,7 @@ IDEA:   This same system, or something like could be used for clever automatic c
         Presumably new framebuffers that are created this way will ALWAYS be expected to have the highest z-order at the
         time
 
-TODO: Build up a seperate array of pointers to items in the order they are accessed. Use this when defragging memory in
+TODO: Build up a separate array of pointers to items in the order they are accessed. Use this when defragging memory in
       order to ensure data access is contiguous in future frames.
 */
 
