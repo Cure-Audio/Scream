@@ -1115,6 +1115,7 @@ void draw_lfo_section(GUI* gui)
     const float grid_x = lm->content_x + CONTENT_PADDING_X;
     const float grid_r = lm->content_r - CONTENT_PADDING_X;
     const float grid_w = ceilf(grid_r - grid_x);
+    const float grid_h = ceilf(grid_b - grid_y);
 
     imp->area.x = grid_x;
     imp->area.y = grid_y;
@@ -1180,6 +1181,26 @@ void draw_lfo_section(GUI* gui)
 
     // Draw grid
     {
+        bool mouse_is_inside_grid =
+            imgui_hittest_rect(im->pos_mouse_move, &(imgui_rect){grid_x, grid_y, grid_r, grid_b});
+        if (current_shape != IMP_SHAPE_POINT && mouse_is_inside_grid)
+        {
+            float grid_x_inc = grid_w / num_grid_x;
+            float grid_y_inc = grid_h / num_grid_y;
+
+            float grid_rel_x = im->pos_mouse_move.x - grid_x;
+            float grid_rel_y = im->pos_mouse_move.y - grid_y;
+
+            float grid_index_x = floorf(grid_rel_x / grid_x_inc);
+            float grid_index_y = num_grid_y - floorf(grid_rel_y / grid_y_inc);
+            nvgBeginPath(nvg);
+            float grid_highlight_left = grid_x + grid_index_x * grid_x_inc;
+            float grid_highlight_top  = grid_b - grid_index_y * grid_y_inc;
+            nvgRect2(nvg, grid_highlight_left, grid_highlight_top, grid_highlight_left + grid_x_inc, grid_b);
+            nvgSetColour(nvg, (NVGcolour){1, 1, 1, 0.05});
+            nvgFill(nvg);
+        }
+
         nvgBeginPath(nvg);
         nvgRect(nvg, grid_x + 0.5f, grid_y + 0.5f, grid_r - grid_x - 1, grid_b - grid_y - 1);
         nvgSetColour(nvg, C_GRID_PRIMARY);
