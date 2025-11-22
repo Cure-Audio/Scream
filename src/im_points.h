@@ -59,7 +59,8 @@ typedef struct IMPointsData
     // Point multiselect
     xvec2f selection_start;
     xvec2f selection_end;
-    int*   selected_point_indexes; // indexes into points_copy
+    int*   selected_point_indexes;      // indexes into points_copy
+    int*   selected_point_indexes_copy; // backup of selection at beginning of selection drag
     // Used for hacks to make the current selection & hover work properly when previewing edits to points with the
     // drag-auto-erase feature
     int selected_point_idx;
@@ -163,15 +164,18 @@ void imp_render_y_values(const IMPointsData*, float* buffer, size_t bufferlen, f
 #include <xhl/debug.h>
 #include <xhl/maths.h>
 
+// TODO: a block allocator would be really nice for all of these points arrays.
+// They're all a similar size in bytes, except for the path cache
 void imp_deinit(IMPointsData* imp)
 {
     xarr_free(imp->main_points);
     xarr_free(imp->points);
     xarr_free(imp->skew_points);
-    xarr_free(imp->path_cache);
     xarr_free(imp->selected_point_indexes);
+    xarr_free(imp->selected_point_indexes_copy);
     xarr_free(imp->points_copy);
     xarr_free(imp->skew_points_copy);
+    xarr_free(imp->path_cache);
 }
 
 void imp_clear_selection(IMPointsData* imp)
@@ -339,18 +343,11 @@ void _imp_delete_point(IMPointsData* imp, int idx)
     _imp_update_skew_point(imp, idx - 1, 0.5f);
 }
 
-void _imp_save_points_to_copy(IMPointsData* imp)
+void _imp_save_points_to_copy(IMPointsData* imp) { xarr_copy(imp->points, imp->points_copy); }
+void _imp_save_skew_points_to_copy(IMPointsData* imp) { xarr_copy(imp->skew_points, imp->skew_points_copy); }
+void _imp_save_selection_to_copy(IMPointsData* imp)
 {
-    int N = xarr_len(imp->points);
-    xarr_setlen(imp->points_copy, N);
-    memcpy(imp->points_copy, imp->points, N * sizeof(*imp->points_copy));
-}
-
-void _imp_save_skew_points_to_copy(IMPointsData* imp)
-{
-    int N = xarr_len(imp->skew_points);
-    xarr_setlen(imp->skew_points_copy, N);
-    memcpy(imp->skew_points_copy, imp->skew_points, N * sizeof(*imp->skew_points_copy));
+    xarr_copy(imp->selected_point_indexes, imp->selected_point_indexes_copy);
 }
 
 void _imp_drag_and_draw(
@@ -1048,6 +1045,11 @@ void imp_handle_grid_events(
             if (shift_click == false)
             {
                 imp_clear_selection(imp);
+                xarr_setlen(imp->selected_point_indexes_copy, 0);
+            }
+            else
+            {
+                _imp_save_selection_to_copy(imp);
             }
 
             imp->selection_start.x = pos.x;
@@ -1122,14 +1124,23 @@ void imp_handle_grid_events(
                     xm_maxf(imp->selection_start.x, imp->selection_end.x) + 1,
                     xm_maxf(imp->selection_start.y, imp->selection_end.y) + 1};
 
-                const int N = xarr_len(imp->points);
-                xarr_setcap(imp->selected_point_indexes, N);
+                const int num_points = xarr_len(imp->points);
+                xarr_setcap(imp->selected_point_indexes, num_points);
 
-                for (int i = 0; i < N; i++)
+                imp_clear_selection(imp);
+
+                for (int i = 0; i < num_points; i++)
                 {
                     const xvec2f pt = imp->points[i];
                     if (imgui_hittest_rect((imgui_pt){pt.x, pt.y}, &area))
                         _imp_add_to_selection(imp, i);
+                }
+
+                const int num_prev_selected = xarr_len(imp->selected_point_indexes_copy);
+                for (int i = 0; i < num_prev_selected; i++)
+                {
+                    int idx = imp->selected_point_indexes_copy[i];
+                    _imp_add_to_selection(imp, idx);
                 }
             }
         }
