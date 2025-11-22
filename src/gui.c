@@ -452,9 +452,9 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events, float dr
     if (events & IMGUI_EVENT_MOUSE_WHEEL)
     {
         double delta = im->frame.delta_mouse_wheel * 0.1;
-        if (im->frame.modifiders_mouse_wheel & PW_MOD_PLATFORM_KEY_CTRL)
+        if (im->frame.modifiers_mouse_wheel & PW_MOD_PLATFORM_KEY_CTRL)
             delta *= 0.1;
-        if (im->frame.modifiders_mouse_wheel & PW_MOD_KEY_SHIFT)
+        if (im->frame.modifiers_mouse_wheel & PW_MOD_KEY_SHIFT)
             delta *= 0.1;
 
         double v  = gui->plugin->main_params[param_id];
@@ -1111,9 +1111,9 @@ void pw_tick(void* _gui)
                 if (events & IMGUI_EVENT_MOUSE_WHEEL)
                 {
                     double delta = im->frame.delta_mouse_wheel * 0.1;
-                    if (im->frame.modifiders_mouse_wheel & PW_MOD_PLATFORM_KEY_CTRL)
+                    if (im->frame.modifiers_mouse_wheel & PW_MOD_PLATFORM_KEY_CTRL)
                         delta *= 0.1;
-                    if (im->frame.modifiders_mouse_wheel & PW_MOD_KEY_SHIFT)
+                    if (im->frame.modifiers_mouse_wheel & PW_MOD_KEY_SHIFT)
                         delta *= 0.1;
 
                     *pValue = xm_clampf(*pValue + delta, -1, 1);

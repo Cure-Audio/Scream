@@ -1,6 +1,7 @@
 #ifndef IM_POINTS_H
 #define IM_POINTS_H
 
+#include <xhl/thread.h>
 #include <xhl/vector.h>
 
 enum
@@ -19,9 +20,9 @@ typedef enum IMPShapeType
     IMP_SHAPE_FLAT,
     IMP_SHAPE_LINEAR_ASC,
     IMP_SHAPE_LINEAR_DESC,
-    IMP_SHAPE_CONVEX_ASC,
-    IMP_SHAPE_CONCAVE_DESC,
     IMP_SHAPE_CONCAVE_ASC,
+    IMP_SHAPE_CONCAVE_DESC,
+    IMP_SHAPE_CONVEX_ASC,
     IMP_SHAPE_CONVEX_DESC,
     IMP_SHAPE_COSINE_ASC,
     IMP_SHAPE_COSINE_DESC,
@@ -38,6 +39,7 @@ typedef struct IMPointsArea
 typedef struct IMPointsData
 {
     IMPointsArea area;
+    xvec2f       area_last_click_pos;
 
     // If false, should copy over the points array from the audio thread to the main thread
     bool main_points_valid;
@@ -92,7 +94,7 @@ typedef struct IMPointsFrameContext
     // Recreate the cache
     bool should_update_cached_path;
     // If true, updates the main points
-    bool should_update_main_points_with_points; // place
+    bool should_update_main_points_with_points;
     bool should_update_audio_points_with_main_points;
     int  pt_hover_idx;
     int  pt_hover_skew_idx;
@@ -121,17 +123,22 @@ static IMPointsFrameContext imp_frame_context_new(
 
 void imp_deinit(IMPointsData*);
 
-void imp_clear_selection(IMPointsData* imp);
-
-void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int num_grid_y);
-void imp_handle_grid_events(
+// Returns true when p_audio_points is modified
+// Handles all mouse events, caching, and sychronisation with audio thread data
+void imp_run(
     IMPointsFrameContext* fstate,
-    IMPointsArea          selection_area,
+    IMPointsArea          area,
     int                   num_grid_x,
     int                   num_grid_y,
-    IMPShapeType          selected_shape);
+    IMPShapeType          current_shape,
 
-void imp_draw_points(IMPointsFrameContext* fstate);
+    xvec3f**       p_audio_points,
+    xt_spinlock_t* p_lock // optional
+);
+
+void imp_draw(IMPointsFrameContext* fstate);
+
+void imp_render_y_values(const IMPointsData*, float* buffer, size_t bufferlen, float y_range_min, float y_range_max);
 
 #endif // IM_POINTS_H
 
@@ -148,10 +155,12 @@ void imp_draw_points(IMPointsFrameContext* fstate);
 #undef IM_POINTS_IMPL
 
 #include "dsp.h"
+#include <cplug_extensions/window.h>
 #include <imgui.h>
 #include <nanovg2.h>
 #include <sort.h>
 #include <xhl/array.h>
+#include <xhl/debug.h>
 #include <xhl/maths.h>
 
 void imp_deinit(IMPointsData* imp)
@@ -1013,9 +1022,9 @@ void imp_handle_grid_events(
         selection_area.b,
     };
 
-    const unsigned grid_events = imgui_get_events_rect(im, 'lgbg', &sel_area);
+    const unsigned events = imgui_get_events_rect(im, 'pnbg', &sel_area);
 
-    if (grid_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+    if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
     {
         imgui_pt pos;
         pos.x = floorf(im->pos_mouse_down.x);
@@ -1044,8 +1053,11 @@ void imp_handle_grid_events(
             imp->selection_start.x = pos.x;
             imp->selection_start.y = pos.y;
             imp->selection_end.u64 = imp->selection_start.u64;
+
+            imp->area_last_click_pos.x = im->pos_mouse_down.x;
+            imp->area_last_click_pos.y = im->pos_mouse_down.y;
         }
-        else if (im->left_click_counter == 2)
+        else if (im->left_click_counter >= 2)
         {
             // add point
             imgui_pt mouse_down = im->pos_mouse_down;
@@ -1076,12 +1088,12 @@ void imp_handle_grid_events(
             }
         }
     }
-    if (grid_events & IMGUI_EVENT_MOUSE_LEFT_UP)
+    if (events & IMGUI_EVENT_MOUSE_LEFT_UP)
     {
         imp->selection_start.u64 = 0;
         imp->selection_end.u64   = 0;
     }
-    if (grid_events & IMGUI_EVENT_DRAG_MOVE)
+    if (events & IMGUI_EVENT_DRAG_MOVE)
     {
         // bool     should_draw_shape = im->frame.modifiers_mouse_move & PW_MOD_PLATFORM_KEY_CTRL;
         bool     should_draw_shape = selected_shape != IMP_SHAPE_POINT;
@@ -1122,7 +1134,23 @@ void imp_handle_grid_events(
             }
         }
     }
-    if (grid_events & IMGUI_EVENT_MOUSE_ENTER)
+
+    bool should_track_mouse  = events & IMGUI_EVENT_MOUSE_HOVER;
+    should_track_mouse      &= imp->area_last_click_pos.u64 != 0;
+    should_track_mouse      &= !!(im->frame.events & (1 << PW_EVENT_MOUSE_MOVE));
+    if (should_track_mouse)
+    {
+        float distance_x = im->pos_mouse_move.x - imp->area_last_click_pos.x;
+        float distance_y = im->pos_mouse_move.y - imp->area_last_click_pos.y;
+        float distance   = sqrtf(distance_x * distance_x + distance_y * distance_y);
+        if (distance > 16) // move threshold in pixels
+        {
+            im->left_click_counter       = 0;
+            imp->area_last_click_pos.u64 = 0;
+        }
+    }
+
+    if (events & IMGUI_EVENT_MOUSE_ENTER)
     {
         pw_set_mouse_cursor(fstate->pw, PW_CURSOR_DEFAULT);
     }
@@ -1158,7 +1186,7 @@ void imp_handle_grid_events(
 }
 
 // Draw points
-void imp_draw_points(IMPointsFrameContext* fstate)
+void imp_draw(IMPointsFrameContext* fstate)
 {
     IMPointsData* imp = fstate->imp;
     NVGcontext*   nvg = fstate->nvg;
@@ -1281,6 +1309,247 @@ void imp_draw_points(IMPointsFrameContext* fstate)
         nvgSetColour(nvg, col);
         nvgStroke(nvg, 1);
     }
+}
+
+void imp_run(
+    IMPointsFrameContext* fstate,
+    IMPointsArea          selection_area,
+    int                   num_grid_x,
+    int                   num_grid_y,
+    IMPShapeType          current_shape,
+
+    xvec3f**       p_audio_points,
+    xt_spinlock_t* p_lock)
+{
+    IMPointsData*  imp = fstate->imp;
+    imgui_context* im  = fstate->im;
+
+    // Handle clicks outside of the
+    bool should_clear = false;
+    enum
+    {
+        IMGUI_FLAGS_PW_MOUSE_DOWN_EVENTS =
+            (1 << PW_EVENT_MOUSE_LEFT_DOWN) | (1 << PW_EVENT_MOUSE_RIGHT_DOWN) | (1 << PW_EVENT_MOUSE_MIDDLE_DOWN),
+
+    };
+    if (im->frame.events & IMGUI_FLAGS_PW_MOUSE_DOWN_EVENTS)
+    {
+        bool hit =
+            imgui_hittest_rect(im->pos_mouse_down, &(imgui_rect){imp->area.x, imp->area.y, imp->area.r, imp->area.b});
+        if (!hit)
+            should_clear = true;
+    }
+    should_clear |= !!(im->frame.events & (1 << PW_EVENT_RESIZE));
+    if (should_clear)
+        imp_clear_selection(imp);
+
+    if (!imp->main_points_valid)
+    {
+        imp->main_points_valid = !imp->main_points_valid;
+        const xvec3f* ap       = *p_audio_points;
+
+        // deep copy audio lfo points array to gui
+        size_t N = xarr_len(ap);
+        xarr_setlen(imp->main_points, N);
+        _Static_assert(sizeof(*imp->main_points) == sizeof(*ap), "");
+        memcpy(imp->main_points, ap, sizeof(*ap) * N);
+
+        imp->points_valid = false;
+    }
+
+    if (!imp->points_valid)
+    {
+        imp->points_valid                 = !imp->points_valid;
+        fstate->should_update_cached_path = true;
+
+        imp_clear_selection(imp);
+
+        const int N = xarr_len(imp->main_points);
+
+        const xvec3f* it  = imp->main_points;
+        const xvec3f* end = it + N;
+
+        xarr_setlen(imp->points, (N + 1));
+        xarr_setlen(imp->skew_points, N);
+
+        xvec2f* p = imp->points;
+
+        while (it != end)
+        {
+            p->x = xm_lerpf(it->x, imp->area.x, imp->area.r);
+            p->y = xm_lerpf(it->y, imp->area.b, imp->area.y);
+            it++;
+            p++;
+        }
+        // last Y point matches first point
+        p->x = imp->area.r;
+        p->y = imp->points->y;
+
+        it         = imp->main_points;
+        p          = imp->points;
+        xvec2f* sp = imp->skew_points;
+
+        while (it != end)
+        {
+            xvec2f* next_p = p + 1;
+
+            if (p->x == next_p->x) // the line between point & next_p is vertical
+            {
+                sp->x = p->x;
+                // display skew point vertically, halfway between points
+                // skew amount not considered
+                sp->y = (p->y + next_p->y) * 0.5f;
+            }
+            else
+            {
+                float y = interp_points(0.5f, 1 - it->skew, p->y, next_p->y);
+
+                // x is always halfway between points
+                sp->x = (p->x + next_p->x) * 0.5f;
+                // skew amount controls y coord
+                sp->y = y;
+            }
+
+            it++;
+            p++;
+            sp++;
+        }
+
+        xarr_setlen(imp->points_copy, (N + 1));
+        xarr_setlen(imp->skew_points_copy, N);
+        memcpy(imp->points_copy, imp->points, sizeof(*imp->points) * (N + 1));
+        memcpy(imp->skew_points_copy, imp->skew_points, sizeof(*imp->skew_points_copy) * N);
+    }
+
+    if (current_shape == IMP_SHAPE_POINT)
+        imp_handle_point_events(fstate, num_grid_x, num_grid_y);
+
+    imp_handle_grid_events(fstate, selection_area, num_grid_x, num_grid_y, current_shape);
+
+    if (fstate->should_update_cached_path)
+    {
+        float     area_w     = imp->area.r - imp->area.x;
+        const int points_cap = area_w + xarr_len(imp->points);
+        xarr_setcap(imp->path_cache, points_cap);
+
+        xvec2f* points  = imp->path_cache;
+        int     npoints = 0;
+        int     ny      = 0;
+
+        xvec2f pos = {imp->area.x, imp->area.b};
+
+        const xvec2f* pt      = imp->points;
+        const xvec2f* next_pt = imp->points + 1;
+        const xvec2f* end     = imp->points + xarr_len(imp->points) - 1;
+        const xvec2f* skew_pt = imp->skew_points;
+
+        points[npoints++] = *pt;
+        while (pt != end)
+        {
+            if (pos.x >= next_pt->x)
+            {
+                points[npoints++] = *next_pt;
+                pt++;
+                next_pt++;
+                skew_pt++;
+            }
+            else
+            {
+                float skew_amt = 0.5f;
+                if (pt->y != next_pt->y)
+                    skew_amt = xm_normf(skew_pt->y, next_pt->y, pt->y);
+                if (pt->y < next_pt->y)
+                    skew_amt = 1 - skew_amt;
+
+                float norm_pos = xm_normf(pos.x, pt->x, next_pt->x);
+
+                // A smart person could turn this into a bezier curve with only a few points (destination point +
+                // control points). I am not a smart person who can do that.
+                pos.y = interp_points(norm_pos, skew_amt, pt->y, next_pt->y);
+
+                points[npoints++] = pos;
+
+                pos.x += 1.0f;
+            }
+        }
+
+        xvec2f(*view_points)[1024] = (void*)imp->path_cache;
+
+        xarr_header(imp->path_cache)->length = npoints;
+    }
+
+    if (fstate->should_update_audio_points_with_main_points)
+    {
+        xvec3f* old_array  = NULL;
+        size_t  num_points = xarr_len(imp->main_points);
+
+        // !!!
+        {
+            if (p_lock)
+                xt_spinlock_lock(p_lock);
+
+            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)p_audio_points, imp->main_points);
+
+            if (p_lock)
+                xt_spinlock_unlock(p_lock);
+        }
+
+        // Deep copy
+        xarr_setlen(old_array, num_points);
+        memcpy(old_array, *p_audio_points, sizeof(*old_array) * num_points);
+
+        imp->main_points = old_array;
+    }
+}
+
+void imp_render_y_values(const IMPointsData* imp, float* buffer, size_t bufferlen, float y_range_min, float y_range_max)
+{
+    float area_w = imp->area.r - imp->area.x;
+    float area_h = imp->area.b - imp->area.y;
+
+    float y_range = y_range_max - y_range_min;
+
+    float y_scale = y_range / area_h;
+
+    const float x_inc   = area_w / bufferlen;
+    int         npoints = 0;
+
+    const xvec2f* pt      = imp->points;
+    const xvec2f* next_pt = imp->points + 1;
+    const xvec2f* end     = imp->points + xarr_len(imp->points) - 1;
+    const xvec2f* skew_pt = imp->skew_points;
+
+    while (pt != end && npoints < bufferlen)
+    {
+        float x = imp->area.x + npoints * x_inc;
+        if (x >= next_pt->x)
+        {
+            pt++;
+            next_pt++;
+            skew_pt++;
+        }
+        else
+        {
+            float skew_amt = 0.5f;
+            if (pt->y != next_pt->y)
+                skew_amt = xm_normf(skew_pt->y, next_pt->y, pt->y);
+            if (pt->y < next_pt->y)
+                skew_amt = 1 - skew_amt;
+
+            float norm_pos = xm_normf(x, pt->x, next_pt->x);
+
+            // A smart person could turn this into a bezier curve with only a few points (destination point +
+            // control points). I am not a smart person who can do that.
+            float pt_y = interp_points(norm_pos, skew_amt, pt->y, next_pt->y);
+
+            float y_height   = (area_h - (pt_y - imp->area.y));
+            float y_rescaled = y_range_min + y_height * y_scale;
+            y_rescaled       = xm_clampf(y_rescaled, y_range_min, y_range_max);
+
+            buffer[npoints++] = y_rescaled;
+        }
+    }
+    xassert(npoints == bufferlen);
 }
 
 #endif // IM_POINTS_IMPL

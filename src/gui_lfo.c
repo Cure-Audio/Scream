@@ -1129,179 +1129,53 @@ void draw_lfo_section(GUI* gui)
     const int   num_grid_x     = pattern_length * gui->plugin->lfos[lfo_idx].grid_x[pattern_idx];
     const int   num_grid_y     = num_grid_x;
 
-    bool should_clear = false;
-    if (im->frame.events & IMGUI_FLAGS_PW_MOUSE_DOWN_EVENTS)
-    {
-        bool hit =
-            imgui_hittest_rect(im->pos_mouse_down, &(imgui_rect){imp->area.x, imp->area.y, imp->area.r, imp->area.b});
-        if (!hit)
-            should_clear = true;
-    }
-    should_clear |= !!(im->frame.events & (1 << PW_EVENT_RESIZE));
-    if (should_clear)
-        imp_clear_selection(imp);
-
-    if (!imp->main_points_valid)
-    {
-        imp->main_points_valid   = !imp->main_points_valid;
-        const xvec3f* lfo_points = gui->plugin->lfos[lfo_idx].points[pattern_idx];
-
-        // deep copy audio lfo points array to gui
-        size_t N = xarr_len(lfo_points);
-        xarr_setlen(imp->main_points, N);
-        _Static_assert(sizeof(*imp->main_points) == sizeof(*lfo_points), "");
-        memcpy(imp->main_points, lfo_points, sizeof(*lfo_points) * N);
-
-        imp->points_valid = false;
-    }
-
-    if (!imp->points_valid)
-    {
-        imp->points_valid                = !imp->points_valid;
-        fstate.should_update_cached_path = true;
-
-        imp_clear_selection(imp);
-
-        const int N = xarr_len(imp->main_points);
-
-        const xvec3f* it  = imp->main_points;
-        const xvec3f* end = it + N;
-
-        xarr_setlen(imp->points, (N + 1));
-        xarr_setlen(imp->skew_points, N);
-
-        xvec2f* p = imp->points;
-
-        // scale beat time to px with one multiply
-        const float beattime_scale = grid_w / pattern_length;
-
-        while (it != end)
-        {
-            p->x = grid_x + it->x * beattime_scale;
-            p->y = xm_lerpf(it->y, grid_b, grid_y);
-            it++;
-            p++;
-        }
-        // last Y point matches first point
-        p->x = grid_r;
-        p->y = imp->points->y;
-
-        it         = imp->main_points;
-        p          = imp->points;
-        xvec2f* sp = imp->skew_points;
-
-        while (it != end)
-        {
-            xvec2f* next_p = p + 1;
-
-            if (p->x == next_p->x) // the line between point & next_p is vertical
-            {
-                sp->x = p->x;
-                // display skew point vertically, halfway between points
-                // skew amount not considered
-                sp->y = (p->y + next_p->y) * 0.5f;
-            }
-            else
-            {
-                float y = interp_points(0.5f, 1 - it->skew, p->y, next_p->y);
-
-                // x is always halfway between points
-                sp->x = (p->x + next_p->x) * 0.5f;
-                // skew amount controls y coord
-                sp->y = y;
-            }
-
-            it++;
-            p++;
-            sp++;
-        }
-
-        xarr_setlen(imp->points_copy, (N + 1));
-        xarr_setlen(imp->skew_points_copy, N);
-        memcpy(imp->points_copy, imp->points, sizeof(*imp->points) * (N + 1));
-        memcpy(imp->skew_points_copy, imp->skew_points, sizeof(*imp->skew_points_copy) * N);
-    }
-
     const enum IMPShapeType current_shape = gui->plugin->lfo_shape_idx;
-    if (current_shape == IMP_SHAPE_POINT)
-        imp_handle_point_events(&fstate, num_grid_x, num_grid_y);
 
     const IMPointsArea selection_area =
         {lm->content_x + 16, display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT, lm->content_r - 16, pattern_area.y};
-    imp_handle_grid_events(&fstate, selection_area, num_grid_x, num_grid_y, current_shape);
 
-    if (fstate.should_update_cached_path)
+    imp_run(
+        &fstate,
+        selection_area,
+        num_grid_x,
+        num_grid_y,
+        current_shape,
+
+        &gui->plugin->lfos[lfo_idx].points[pattern_idx],
+        &gui->plugin->lfos[lfo_idx].spinlocks[pattern_idx]);
+
+    float playhead = (float)gui->plugin->lfos[lfo_idx].phase;
+    playhead       = fmodf(playhead, pattern_length);
+
+    lm->last_lfo_playhead    = lm->current_lfo_playhead;
+    lm->current_lfo_playhead = playhead;
+
+    bool       retrigger_flag = xt_atomic_exchange_u8(&gui->plugin->gui_retrig_flag, 0);
+    const bool has_resized    = !!(im->frame.events & (1 << PW_EVENT_RESIZE));
+
+    // Clear trail on resize
+    should_clear_lfo_trail |= has_resized;
+    // Clear trail on retrigger
+    should_clear_lfo_trail |= retrigger_flag;
+    // Sync prev playhead on retrigger
+    if (retrigger_flag)
+        lm->last_lfo_playhead = playhead;
+
+    if (should_clear_lfo_trail)
     {
-        const int points_cap = grid_w + xarr_len(imp->points);
-        xarr_setcap(imp->path_cache, points_cap);
+        size_t cap = xarr_cap(gui->lfo_playhead_trail);
+        xassert(cap);
+        memset(gui->lfo_playhead_trail, 0, cap * sizeof(*gui->lfo_playhead_trail));
+    }
 
-        xvec2f* points  = imp->path_cache;
-        int     npoints = 0;
-        int     ny      = 0;
-
-        xvec2f pos = {grid_x, grid_b};
-
-        const xvec2f* pt      = imp->points;
-        const xvec2f* next_pt = imp->points + 1;
-        const xvec2f* end     = imp->points + xarr_len(imp->points) - 1;
-        const xvec2f* skew_pt = imp->skew_points;
-
-        points[npoints++] = *pt;
-        while (pt != end)
-        {
-            if (pos.x >= next_pt->x)
-            {
-                points[npoints++] = *next_pt;
-                pt++;
-                next_pt++;
-                skew_pt++;
-            }
-            else
-            {
-                float skew_amt = 0.5f;
-                if (pt->y != next_pt->y)
-                    skew_amt = xm_normf(skew_pt->y, next_pt->y, pt->y);
-                if (pt->y < next_pt->y)
-                    skew_amt = 1 - skew_amt;
-
-                float norm_pos = xm_normf(pos.x, pt->x, next_pt->x);
-
-                // A smart person could turn this into a bezier curve with only a few points (destination point +
-                // control points). I am not a smart person who can do that.
-                pos.y = interp_points(norm_pos, skew_amt, pt->y, next_pt->y);
-
-                xassert(ny < xarr_cap(gui->lfo_ybuffer));
-
-                float y_norm           = xm_normf(pos.y, grid_b, grid_y);
-                gui->lfo_ybuffer[ny++] = xm_clampf(y_norm, 0, 1);
-
-                points[npoints++] = pos;
-
-                pos.x += 1.0f;
-            }
-
-            xarr_header(gui->lfo_ybuffer)->length = ny;
-        }
-
-        xvec2f(*view_points)[1024] = (void*)imp->path_cache;
-
-        xarr_header(imp->path_cache)->length = npoints;
-
-        // I don't believe this is good KISS code
-        // But it is an interesting proof of concept
-        // imgui_rect* grid_area = NULL;
-        // if (resource_get_data_fixed(
-        //         &gui->resource_manager,
-        //         RID_LFO_GRID_AREA,
-        //         (void**)&grid_area,
-        //         sizeof(*grid_area),
-        //         0))
-        // {
-        //     grid_area->x = grid_x;
-        //     grid_area->y = grid_y;
-        //     grid_area->r = grid_r;
-        //     grid_area->b = grid_b;
-        // }
+    if (has_resized || fstate.should_update_audio_points_with_main_points)
+    {
+        size_t len = xarr_len(gui->lfo_ybuffer);
+        size_t cap = xarr_cap(gui->lfo_ybuffer);
+        xassert(len <= cap);
+        size_t new_len = grid_w;
+        xarr_setlen(gui->lfo_ybuffer, new_len);
+        imp_render_y_values(&gui->imp, gui->lfo_ybuffer, new_len, 0, 1);
     }
 
     // Draw grid
@@ -1504,33 +1378,10 @@ void draw_lfo_section(GUI* gui)
         }
     }
 
-    float playhead = (float)gui->plugin->lfos[lfo_idx].phase;
-    playhead       = fmodf(playhead, pattern_length);
-
-    lm->last_lfo_playhead    = lm->current_lfo_playhead;
-    lm->current_lfo_playhead = playhead;
-
-    bool retrigger_flag = xt_atomic_exchange_u8(&gui->plugin->gui_retrig_flag, 0);
-
-    // Clear trail on resize
-    should_clear_lfo_trail |= !!(im->frame.events & (1 << PW_EVENT_RESIZE));
-    // Clear trail on retrigger
-    should_clear_lfo_trail |= retrigger_flag;
-    // Sync prev playhead on retrigger
-    if (retrigger_flag)
-        lm->last_lfo_playhead = playhead;
-
-    if (should_clear_lfo_trail)
-    {
-        size_t cap = xarr_cap(gui->lfo_playhead_trail);
-        xassert(cap);
-        memset(gui->lfo_playhead_trail, 0, cap * sizeof(*gui->lfo_playhead_trail));
-    }
-
     snvg_command_custom(nvg, gui, do_lfo_shaders, NVG_LABEL("LFO shaders"));
     snvg_command_draw_nvg(nvg, NVG_LABEL("LFO path"));
 
-    imp_draw_points(&fstate);
+    imp_draw(&fstate);
 
     // Todo: make this a white line that follows the LFO path
     // if (playhead < pattern_length)
@@ -1567,31 +1418,6 @@ void draw_lfo_section(GUI* gui)
     // x = 0.3333,      y = 0.25, skew = 0.56
     // x = 0.6666,      y = 0.75, skew = 0.44
     // x = 1 - (1 / 7), y = 0.96, skew = 1 - 0.731994
-
-    if (fstate.should_update_audio_points_with_main_points)
-    {
-        LFO*    lfo        = &gui->plugin->lfos[lfo_idx];
-        xvec3f* old_array  = NULL;
-        size_t  num_points = xarr_len(imp->main_points);
-
-        // !!!
-        {
-            xt_spinlock_lock(&lfo->spinlocks[pattern_idx]);
-
-            // if (next_pattern_length)
-            //     xt_atomic_store_i32(&lfo->pattern_length[pattern_idx], next_pattern_length);
-
-            old_array = xt_atomic_exchange_ptr((xt_atomic_ptr_t*)&lfo->points[pattern_idx], imp->main_points);
-
-            xt_spinlock_unlock(&lfo->spinlocks[pattern_idx]);
-        }
-
-        // Deep copy
-        xarr_setlen(old_array, num_points);
-        memcpy(old_array, lfo->points[pattern_idx], sizeof(*old_array) * num_points);
-
-        imp->main_points = old_array;
-    }
 
     LINKED_ARENA_LEAK_DETECT_END(gui->arena);
 }

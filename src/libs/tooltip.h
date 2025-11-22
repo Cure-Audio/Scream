@@ -2,6 +2,7 @@
 #include <imgui.h>
 #include <linked_arena.h>
 #include <nanovg2.h>
+#include <string.h>
 
 // clang-format off
 enum

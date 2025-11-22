@@ -1,4 +1,5 @@
 #include "tooltip.h"
+#include <string.h>
 
 void tooltip_draw(
     Tooltip*     tt,

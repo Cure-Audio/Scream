@@ -115,8 +115,9 @@ set(PLUGIN_SOURCES
     src/libs/tooltip.c
 
     src/libs/stb_image.c
-    modules/wip_libs/src/nanovg2.c
+    modules/wip_libs/src/imgui.c
     modules/wip_libs/src/linked_arena.c
+    modules/wip_libs/src/nanovg2.c
     )
 
 set(PLUGIN_INCLUDE
