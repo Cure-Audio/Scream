@@ -46,3 +46,7 @@ x test autogain works on a variety of sound sources
 
 - Add tooltip to LFO explaining the Alt/Option snap to grid behaviour
 - Allow users to manually enter rate values on the LFO
+
+- fix icons/text DPI scaling
+- keytracking option with MIDI input
+- keytracking option with audio input
