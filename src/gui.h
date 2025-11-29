@@ -135,7 +135,12 @@ static const NVGcolour C_RED          = nvgHexColour(0xFF4757FF);
 
 static const NVGcolour C_GRID_PRIMARY   = nvgHexColour(0x515762FF);
 static const NVGcolour C_GRID_SECONDARY = nvgHexColour(0x40464FFF);
-static const NVGcolour C_GRID_TERTIARY  = nvgHexColour(0x2C2F35FF);
+static const NVGcolour C_GRID_TERTIARY  = C_GRID_SECONDARY;
+// static const NVGcolour C_GRID_TERTIARY  = nvgHexColour(0x2C2F35FF);
 
 // For snapping to certain pixel boundaries
 #define snapf(val, interval) (roundf((val) / (interval)) * (interval))
+
+typedef imgui_rect  Rect;
+static inline float rect_cx(const Rect* r) { return (r->r + r->x) * 0.5f; }
+static inline float rect_cy(const Rect* r) { return (r->b + r->y) * 0.5f; }

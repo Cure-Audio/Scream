@@ -105,8 +105,9 @@ void* cplug_createPlugin(CplugHostContext* ctx)
     p->width  = GUI_INIT_WIDTH;
     p->height = GUI_INIT_HEIGHT * 2;
 
-    p->lfo_section_open = true;
-    p->autogain_on      = true;
+    p->lfo_section_open           = true;
+    p->autogain_on                = true;
+    p->keytracking_last_midi_note = -1;
 
     for (int i = 0; i < ARRLEN(p->main_params); i++)
         p->main_params[i] = cplug_getDefaultParameterValue(p, i);
@@ -398,6 +399,13 @@ void process_audio(Plugin* p, float** output, int start_sample, int num_frames)
     xassert(num_frames > 0);
     const float fs_inv = 1.0f / p->sample_rate;
 
+    float keytracking_offset = 0;
+    bool  keytracking_on     = p->midi_keytracking_on && p->keytracking_last_midi_note != -1;
+    if (keytracking_on)
+    {
+        keytracking_offset = p->keytracking_last_midi_note - 24;
+    }
+
     // These flags represent active LFO modulations on parameters
     // The index of the set bit corresponds to the parameter idx that is being modulated
     uint8_t lfo_1_mod_flags = 0;
@@ -474,7 +482,7 @@ void process_audio(Plugin* p, float** output, int start_sample, int num_frames)
         float lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
         float hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
 
-        lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX);
+        lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX) + keytracking_offset;
         hp_cutoff  = xm_lerpf(hp_cutoff, HP_CUTOFF_MIN, CUTOFF_MAX);
         hp_cutoff -= CUTOFF_MAX - lp_cutoff;
 
@@ -615,7 +623,7 @@ void process_audio(Plugin* p, float** output, int start_sample, int num_frames)
                 lp_Q = xm_lerpf(resonance, LP_Q_MIN, LP_Q_MAX);
                 hp_Q = xm_lerpf(resonance, HP_Q_MIN, HP_Q_MAX);
 
-                lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX);
+                lp_cutoff  = xm_lerpf(lp_cutoff, MIDI_NOTE_NUM_20Hz, CUTOFF_MAX) + keytracking_offset;
                 hp_cutoff  = xm_lerpf(hp_cutoff, HP_CUTOFF_MIN, CUTOFF_MAX);
                 hp_cutoff -= CUTOFF_MAX - lp_cutoff;
 
@@ -822,18 +830,38 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             should_post_to_global = true;
             break;
 
-#ifdef CPLUG_BUILD_STANDALONE
-
         case CPLUG_EVENT_MIDI:
         {
             if (event.midi.status == 128)
+            {
+                // if (p->keytracking_last_midi_note == event.midi.data1)
+                //     p->keytracking_last_midi_note = -1;
+
+#ifdef CPLUG_BUILD_STANDALONE
                 synth_note_off(&g_synth, event.midi.data1);
+#endif
+            }
             else if (event.midi.status == 144)
+            {
+                p->keytracking_last_midi_note = event.midi.data1;
+
+                for (int i = 0; i < ARRLEN(p->lfos); i++)
+                {
+                    ParamID retrig_param_id = PARAM_RETRIG_LFO_1 + i;
+                    bool    retrig_on       = p->audio_params[retrig_param_id] >= 0.5;
+                    if (retrig_on)
+                    {
+                        p->lfos[i].phase = 0;
+                        xt_atomic_store_u8(&p->gui_retrig_flag, 1);
+                    }
+                }
+
+#ifdef CPLUG_BUILD_STANDALONE
                 synth_note_on(&g_synth, p->sample_rate, event.midi.data1);
+#endif
+            }
             break;
         }
-
-#endif
 
         case CPLUG_EVENT_PROCESS_AUDIO:
         {
@@ -885,9 +913,11 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     if (in_peak_dB < -24)
                         in_peak_dB = -24;
                     // We want to bring the peak gain to approx. 0dB
-                    float autogain_dB            = -in_peak_dB;
+                    // Note we can read the boolean value toggled by the GUI here and this "smoothvalue" struct will
+                    // prevent any pops
+                    float autogain_target_dB     = p->autogain_on ? -in_peak_dB : 0;
                     int   smoothing_time_samples = xm_droundi(p->sample_rate * 0.005);
-                    smoothvalue_set_target(&s->autogain_dB, autogain_dB, smoothing_time_samples);
+                    smoothvalue_set_target(&s->autogain_dB, autogain_target_dB, smoothing_time_samples);
 
                     for (int i = 0; i < num_frames; i++)
                     {

@@ -29,7 +29,7 @@ typedef enum ParamID
     PARAM_SYNC_RATE_LFO_2,
     PARAM_SEC_RATE_LFO_1,
     PARAM_SEC_RATE_LFO_2,
-    PARAM_RETRIG_LFO_1,
+    PARAM_RETRIG_LFO_1, // I probably shouldn't have made these a parameter
     PARAM_RETRIG_LFO_2,
     PARAM_COUNT,
 } ParamID;
@@ -64,7 +64,7 @@ _Static_assert(ARRLEN(PARAM_STR) == PARAM_COUNT, "");
 
 enum
 {
-    NUM_AUTOMATABLE_PARAMS = PARAM_OUTPUT_GAIN + 1,
+    NUM_AUTOMATABLE_PARAMS = PARAM_WET + 1,
 
     NUM_LFO_PATTERNS = 8,
 
@@ -164,11 +164,15 @@ typedef struct Plugin
     uint64_t num_process_callbacks;
 #endif // DEBUG
 
-    // Retained data for GUI
-    void*             gui;
-    int               width, height;
-    bool              lfo_section_open;
-    uint8_t           selected_lfo_idx;
+    void*   gui;
+    int     width, height; // retained gui size
+    bool    lfo_section_open;
+    uint8_t selected_lfo_idx;
+    bool    autogain_on; // default on
+
+    bool midi_keytracking_on; // deafult off
+    int  keytracking_last_midi_note;
+
     enum IMPShapeType lfo_shape_idx;
     xvec2f            last_lfo_amount;
 
@@ -224,6 +228,7 @@ typedef struct Plugin
         float lp[2];
         float hp[2];
     } state[2];
+    SmoothedValue output_gain;
 
     // Event stuff
 

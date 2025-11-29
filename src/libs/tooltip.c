@@ -37,7 +37,9 @@ void tooltip_draw(
     nvgSetFontSize(nvg, FONT_SIZE);
 
     // measure dimensions
-    numrows = nvgTextBreakLines(nvg, tt->text, tt->text + strlen(tt->text), gui_width * 0.25, rows, numrows);
+    int text_len = strlen(tt->text);
+    xassert(text_len > 0);
+    numrows = nvgTextBreakLines(nvg, tt->text, tt->text + text_len, gui_width * 0.25, rows, numrows);
     xassert(numrows >= 1);
     float width = 1;
     for (int i = 0; i < numrows; i++)

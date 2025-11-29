@@ -759,34 +759,8 @@ void draw_lfo_section(GUI* gui)
         nvgSetColour(nvg, C_TEXT_DARK_BG);
         nvgText(nvg, btn_retrig.x, cy, "RETRIG", 0);
 
-        float       checkbox_height   = snapf(CHECKBOX_HEIGHT, 2);
-        const float stroke_width      = 1;
-        const float half_stroke_width = stroke_width * 0.5f;
-
-        NVGcolour checkbox_col = retrig_on ? C_LIGHT_BLUE_2 : C_GRID_SECONDARY;
-
-        imgui_rect checkbox = {
-            btn_retrig.r - checkbox_height,
-            cy - checkbox_height * 0.5f - 1, // -1 to sit well with text vertical alignment
-            btn_retrig.r,
-            cy + checkbox_height * 0.5f - 1};
-
-        nvgBeginPath(nvg);
-        nvgRect2(
-            nvg,
-            checkbox.x + half_stroke_width,
-            checkbox.y + half_stroke_width,
-            checkbox.r - half_stroke_width,
-            checkbox.b - half_stroke_width);
-        nvgSetColour(nvg, checkbox_col);
-        nvgStroke(nvg, stroke_width);
-
-        if (retrig_on)
-        {
-            nvgBeginPath(nvg);
-            nvgRect2(nvg, checkbox.x + 3, checkbox.y + 3, checkbox.r - 3, checkbox.b - 3);
-            nvgFill(nvg);
-        }
+        extern void draw_checkbox(NVGcontext * nvg, float width, float cy, float r, bool on);
+        draw_checkbox(nvg, floorf(SCALE * CHECKBOX_HEIGHT), cy, btn_retrig.r, retrig_on);
     }
 
     // LFO Draw shapes

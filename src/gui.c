@@ -585,6 +585,29 @@ void open_hyperlink(const char* url)
     xthread_detach(thread); // auto-destroy resources when thread ends
 }
 
+void draw_checkbox(NVGcontext* nvg, float width, float cy, float r, bool on)
+{
+    Rect box;
+    box.x = r - width;
+    box.r = r;
+    box.y = cy - width * 0.5f;
+    box.b = cy + width * 0.5f;
+
+    NVGcolour col = on ? C_LIGHT_BLUE_2 : C_GRID_SECONDARY;
+
+    nvgBeginPath(nvg);
+    nvgRect2(nvg, box.x + 0.5f, box.y + 0.5f, box.r - 0.5f, box.b - 0.5f);
+    nvgSetColour(nvg, col);
+    nvgStroke(nvg, 1);
+
+    if (on)
+    {
+        nvgBeginPath(nvg);
+        nvgRect2(nvg, box.x + 3, box.y + 3, box.r - 3, box.b - 3);
+        nvgFill(nvg);
+    }
+}
+
 void pw_tick(void* _gui)
 {
     GUI* gui = _gui;
@@ -795,10 +818,11 @@ void pw_tick(void* _gui)
         float     playhead       = (float)gui->plugin->lfos[lfo_idx].phase;
         lm->current_lfo_playhead = lm->last_lfo_playhead = playhead;
 
+        float      lfo_btn_width = 60 * lm->param_scale;
         imgui_rect lfo_btn;
-        lfo_btn.x              = (lm->width / 2) - 20;
+        lfo_btn.x              = (lm->width / 2) - lfo_btn_width * 0.5f;
         lfo_btn.y              = lm->top_content_bottom - 20;
-        lfo_btn.r              = lfo_btn.x + 40;
+        lfo_btn.r              = (lm->width / 2) + lfo_btn_width * 0.5f;
         lfo_btn.b              = lm->top_content_bottom;
         gui->lfo_toggle_button = lfo_btn;
     }
@@ -923,6 +947,117 @@ void pw_tick(void* _gui)
         nvgSetColour(nvg, C_TEXT_DARK_BG);
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         nvgText(nvg, rect.x, (rect.b - rect.y) * 0.5f, "OUTPUT", NULL);
+    }
+
+    // Footer bottom left
+    {
+        nvgSetFontSize(nvg, 12 * lm->content_scale);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
+        const float checkbox_height = floorf(12 * lm->content_scale);
+
+        // Autogain
+        Rect rect;
+        rect.x = 16;
+        rect.y = lm->content_b;
+        rect.r = rect.x + 96 * lm->param_scale;
+        rect.b = lm->height;
+
+        unsigned events = imgui_get_events_rect(im, 'auto', &rect);
+
+        static const char* DESCRIPTION_AUTOGAIN = "When Autogain is on it adjusts the input gain to a stable level "
+                                                  "that delivers a consistent sound inside Scream's "
+                                                  "internal saturation and feedback loop";
+        tooltip_handle_events(&gui->tooltip, rect, DESCRIPTION_AUTOGAIN, gui->frame_start_time, events);
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+            gui->plugin->autogain_on ^= 1;
+
+        float cy          = rect_cy(&rect);
+        bool  autogain_on = gui->plugin->autogain_on;
+        nvgSetColour(nvg, C_TEXT_DARK_BG);
+        nvgText(nvg, rect.x, cy, "AUTOGAIN", 0);
+        draw_checkbox(nvg, checkbox_height, cy, rect.r, autogain_on);
+
+        // Keytracking
+        rect.x = rect.r + BORDER_PADDING * 4;
+        rect.r = rect.x + 152 * lm->param_scale;
+
+        events = imgui_get_events_rect(im, 'ktrk', &rect);
+
+        static const char* DESCRIPTION_KEYTRACKING =
+            "When MIDI keytracking is on, the filters cutoff position will be offset relative to the last MIDI note "
+            "sent to the plugin. This feature likely requires routing MIDI to this plugin inside your DAW.";
+        tooltip_handle_events(&gui->tooltip, rect, DESCRIPTION_KEYTRACKING, gui->frame_start_time, events);
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+            gui->plugin->midi_keytracking_on ^= 1;
+
+        bool midi_keytracking_on = gui->plugin->midi_keytracking_on;
+        nvgSetColour(nvg, C_TEXT_DARK_BG);
+        nvgText(nvg, rect.x, cy, "MIDI KEYTRACKING", 0);
+        draw_checkbox(nvg, checkbox_height, cy, rect.r, midi_keytracking_on);
+    }
+
+    // Footer bottom right
+    {
+        nvgSetFontSize(nvg, 12 * lm->content_scale);
+
+        NVGcolour footer_col = C_TEXT_DARK_BG;
+        // footer_col.a         = 0.5f;
+        nvgSetColour(nvg, footer_col);
+        char text[64] = {0};
+        int  len      = 0;
+
+        // Show window dimensions w/h on resize
+        uint64_t time_since_creation_ns = gui->frame_start_time - gui->gui_create_time;
+        uint64_t time_since_resize_ns   = gui->frame_start_time - gui->last_resize_time;
+        uint64_t threshold_1sec         = 1000000000;
+        uint64_t threshold_1_2sec       = 1200000000;
+        if (time_since_resize_ns < threshold_1sec && time_since_creation_ns > threshold_1_2sec)
+        {
+            len = snprintf(text, sizeof(text), "%dx%d", lm->width, lm->height);
+            nvgSetTextAlign(nvg, NVG_ALIGN_BR);
+            nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
+            // nvgSetTextAlign(nvg, NVG_ALIGN_TL);
+            // nvgText(nvg, 8, 8, text, text + len);
+        }
+        else // shameless plug
+        {
+#define DEV_TAG "Developed by exacoustics"
+            const char*       devtag             = DEV_TAG;
+            const int         devtag_len         = STRLEN(DEV_TAG);
+            const int         devtag_company_len = STRLEN("exacoustics");
+            NVGglyphPosition* glyphs             = linked_arena_alloc(gui->arena, sizeof(*glyphs) * devtag_len);
+            nvgTextGlyphPositions(nvg, 0, 0, devtag, devtag + devtag_len, glyphs, devtag_len);
+
+            const NVGglyphPosition* name_start = &glyphs[devtag_len - devtag_company_len];
+            const NVGglyphPosition* name_end   = &glyphs[devtag_len - 1];
+            const float             name_width = name_end->maxx - name_start->minx;
+            const float             tag_width  = name_end->maxx - glyphs[0].minx;
+
+            imgui_rect tag_click_area = {lm->width - 8 - name_width, lm->content_b, lm->width - 8, lm->height};
+            unsigned   events         = imgui_get_events_rect(im, 'dtag', &tag_click_area);
+            if (events & IMGUI_EVENT_MOUSE_ENTER)
+                pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+            if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+                click_devtag = true;
+
+            nvgSetTextAlign(nvg, NVG_ALIGN_BL);
+            nvgText(nvg, lm->width - 8 - tag_width, lm->height - 8, devtag, devtag + devtag_len - devtag_company_len);
+
+            if (events & IMGUI_EVENT_MOUSE_HOVER)
+                nvgSetColour(nvg, C_GREY_1);
+            nvgText(
+                nvg,
+                lm->width - 8 - name_width,
+                lm->height - 8,
+                devtag + devtag_len - devtag_company_len,
+                devtag + devtag_len);
+
+            linked_arena_release(gui->arena, glyphs);
+        }
     }
 
     // Main content background
@@ -1480,8 +1615,8 @@ void pw_tick(void* _gui)
                     rect.r                 = rect_r;
 
                     static const char* input_gain_description =
-                        "Changing the input gain drastically changes the sound. It's recommended your try and keep the "
-                        "input gain close to 0dB.\n\n"
+                        "Changing the input gain drastically changes the sound. For the best sound, keep the input "
+                        "gain close to 0dB. Use Autogain to help you.\n\n"
                         "If your input is detected to be within a desirable range, the peak meter will show text in "
                         "green. If the input too loud or too quiet, then the text will be red. As always, trust your "
                         "ears first.";
@@ -1961,6 +2096,12 @@ void pw_tick(void* _gui)
     {
         imgui_rect rect = gui->lfo_toggle_button;
         snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
+
+        // nvgBeginPath(nvg);
+        // nvgRect2(nvg, rect.x, rect.y, rect.r, rect.b);
+        // nvgSetColour(nvg, C_RED);
+        // nvgFill(nvg);
+
         nvgBeginPath(nvg);
         nvgSetColour(nvg, C_TEXT_LIGHT_BG);
         nvgSetFontSize(nvg, lm->content_scale * 14);
@@ -2026,66 +2167,6 @@ void pw_tick(void* _gui)
     if (calls_synth_hud.start)
         snvg_calls_join(nvg, &calls_synth_hud);
 #endif // SYNTH_HUD
-
-    // Footer
-    {
-        nvgSetFontSize(nvg, 12 * lm->content_scale);
-
-        NVGcolour footer_col = C_BG_LIGHT;
-        footer_col.a         = 0.5f;
-        nvgSetColour(nvg, footer_col);
-        char text[64] = {0};
-        int  len      = 0;
-
-        // Show window dimensions w/h on resize
-        uint64_t time_since_creation_ns = gui->frame_start_time - gui->gui_create_time;
-        uint64_t time_since_resize_ns   = gui->frame_start_time - gui->last_resize_time;
-        uint64_t threshold_1sec         = 1000000000;
-        uint64_t threshold_1_2sec       = 1200000000;
-        if (time_since_resize_ns < threshold_1sec && time_since_creation_ns > threshold_1_2sec)
-        {
-            len = snprintf(text, sizeof(text), "%dx%d", lm->width, lm->height);
-            nvgSetTextAlign(nvg, NVG_ALIGN_BR);
-            nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
-            // nvgSetTextAlign(nvg, NVG_ALIGN_TL);
-            // nvgText(nvg, 8, 8, text, text + len);
-        }
-        else // shameless plug
-        {
-#define DEV_TAG "Developed by exacoustics"
-            const char*       devtag             = DEV_TAG;
-            const int         devtag_len         = STRLEN(DEV_TAG);
-            const int         devtag_company_len = STRLEN("exacoustics");
-            NVGglyphPosition* glyphs             = linked_arena_alloc(gui->arena, sizeof(*glyphs) * devtag_len);
-            nvgTextGlyphPositions(nvg, 0, 0, devtag, devtag + devtag_len, glyphs, devtag_len);
-
-            const NVGglyphPosition* name_start = &glyphs[devtag_len - devtag_company_len];
-            const NVGglyphPosition* name_end   = &glyphs[devtag_len - 1];
-            const float             name_width = name_end->maxx - name_start->minx;
-            const float             tag_width  = name_end->maxx - glyphs[0].minx;
-
-            imgui_rect tag_click_area = {lm->width - 8 - name_width, lm->content_b, lm->width - 8, lm->height};
-            unsigned   events         = imgui_get_events_rect(im, 'dtag', &tag_click_area);
-            if (events & IMGUI_EVENT_MOUSE_ENTER)
-                pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
-            if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
-                click_devtag = true;
-
-            nvgSetTextAlign(nvg, NVG_ALIGN_BL);
-            nvgText(nvg, lm->width - 8 - tag_width, lm->height - 8, devtag, devtag + devtag_len - devtag_company_len);
-
-            if (events & IMGUI_EVENT_MOUSE_HOVER)
-                nvgSetColour(nvg, C_GREY_1);
-            nvgText(
-                nvg,
-                lm->width - 8 - name_width,
-                lm->height - 8,
-                devtag + devtag_len - devtag_company_len,
-                devtag + devtag_len);
-
-            linked_arena_release(gui->arena, glyphs);
-        }
-    }
 
     if (gui->tooltip.text)
     {

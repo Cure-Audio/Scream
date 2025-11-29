@@ -47,10 +47,11 @@ x test autogain works on a variety of sound sources
 - Add tooltip to LFO explaining the Alt/Option snap to grid behaviour
 - Allow users to manually enter rate values on the LFO
 
-- Move output gain knob
-- autogain on/off mode
-- keytracking option with MIDI input
+x Move output gain knob
+x autogain on/off mode
+x keytracking option with MIDI input
 - keytracking option with audio input
 - LFO one shot mode?
 - fix icons/text DPI scaling on macOS
 - get state working in new version
+- visualise the keytracking offset
