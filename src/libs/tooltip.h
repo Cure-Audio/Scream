@@ -18,6 +18,7 @@ enum
                        | IMGUI_EVENT_DRAG_MOVE,
 
     TOOLTIP_SHOW_FLAGS = IMGUI_EVENT_MOUSE_ENTER
+                       | IMGUI_EVENT_MOUSE_MOVE
                        | IMGUI_EVENT_MOUSE_LEFT_UP
                        | IMGUI_EVENT_MOUSE_RIGHT_UP
                        | IMGUI_EVENT_MOUSE_MIDDLE_UP

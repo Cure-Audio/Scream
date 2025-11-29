@@ -184,7 +184,8 @@ void draw_lfo_section(GUI* gui)
 
     const float CHECKBOX_HEIGHT = floorf(12 * SCALE);
 
-    const float SHAPES_WIDTH         = floorf(40 * SCALE); // LFO shape buttons are square
+    // const float SHAPES_WIDTH         = floorf(40 * SCALE); // LFO shape buttons are square
+    const float SHAPES_WIDTH         = LFO_TAB_HEIGHT; // LFO shape buttons are square
     const float SHAPES_INNER_PADDING = floorf(8 * SCALE);
 
     const float CONTENT_PADDING_X = floorf(32 * lm->content_scale);
@@ -272,9 +273,10 @@ void draw_lfo_section(GUI* gui)
             }
             if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
             {
-                gui->plugin->selected_lfo_idx = i;
-                imp->main_points_valid        = false;
-                should_clear_lfo_trail        = true;
+                gui->plugin->selected_lfo_idx                = i;
+                imp->main_points_valid                       = false;
+                fstate.should_update_main_points_with_points = true;
+                should_clear_lfo_trail                       = true;
 
                 lm->current_lfo_playhead = lm->last_lfo_playhead = gui->plugin->lfos[i].phase;
             }
@@ -387,8 +389,8 @@ void draw_lfo_section(GUI* gui)
     // Grid slider
     {
         imgui_rect rect;
-        rect.x = content_x;
-        rect.r = ceilf(content_x + 76 * SCALE);
+        rect.x = content_r - ceilf(76 * SCALE);
+        rect.r = content_r;
         rect.y = button_top;
         rect.b = button_bottom;
 
@@ -413,11 +415,21 @@ void draw_lfo_section(GUI* gui)
 
             gui->plugin->lfos[lfo_idx].grid_x[pattern_idx] = ngrid;
         }
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        {
+            if (im->left_click_counter >= 2)
+            {
+                im->left_click_counter -= 2;
+                ngrid                   = 4;
+
+                gui->plugin->lfos[lfo_idx].grid_x[pattern_idx] = ngrid;
+            }
+        }
 
         nvgSetFontSize(nvg, FONT_SIZE);
         nvgSetColour(nvg, C_TEXT_DARK_BG);
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
-        nvgText(nvg, content_x, top_text_cy, "GRID", NULL);
+        nvgText(nvg, rect.x, top_text_cy, "GRID", NULL);
 
         // Up & down "buttons"
         float btn_left = floor(rect.r - 5 * SCALE);
@@ -583,7 +595,11 @@ void draw_lfo_section(GUI* gui)
     // LFO Rate
 
     // Rate
-    imgui_rect sl_rate = {content_r - 128 * SCALE, button_top, content_r, button_bottom};
+    imgui_rect sl_rate;
+    sl_rate.x = content_r - 128 * SCALE;
+    sl_rate.r = content_r;
+    sl_rate.b = display_b - CONTENT_PADDING_Y;
+    sl_rate.y = sl_rate.b - GRID_BUTTON_HEIGHT;
     imgui_rect btn_rate_type;
     btn_rate_type.y = sl_rate.y;
     btn_rate_type.b = sl_rate.b;
@@ -707,7 +723,8 @@ void draw_lfo_section(GUI* gui)
         nvgSetFontSize(nvg, FONT_SIZE);
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         nvgSetColour(nvg, C_TEXT_DARK_BG);
-        nvgText(nvg, sl_rate.x, top_text_cy, "RATE", NULL);
+        float cy = rect_cy(&sl_rate);
+        nvgText(nvg, sl_rate.x, cy, "RATE", NULL);
 
         char label[16] = {0};
 
@@ -715,7 +732,7 @@ void draw_lfo_section(GUI* gui)
 
         nvgSetTextAlign(nvg, NVG_ALIGN_CR);
         nvgSetColour(nvg, C_GREY_1);
-        nvgText(nvg, sl_rate.r - 12, top_text_cy, label, 0);
+        nvgText(nvg, sl_rate.r - 12, cy, label, 0);
 
         // nvgBeginPath(nvg);
         // nvgRect2(nvg, content_r - 80, button_top, content_r, button_bottom);
@@ -724,8 +741,8 @@ void draw_lfo_section(GUI* gui)
 
         // Up & down "buttons"
         float btn_left = floor(sl_rate.r - 5 * SCALE);
-        float btn_top  = floor(top_text_cy - FONT_SIZE * 0.4f);
-        float btn_bot  = ceilf(top_text_cy + FONT_SIZE * 0.35f);
+        float btn_top  = floor(cy - FONT_SIZE * 0.4f);
+        float btn_bot  = ceilf(cy + FONT_SIZE * 0.35f);
 
         nvgBeginPath(nvg);
         add_up_down_triangles(nvg, (imgui_rect){btn_left, btn_top, sl_rate.r, btn_bot});
@@ -767,17 +784,13 @@ void draw_lfo_section(GUI* gui)
     float shape_x = content_x;
     float shape_y = display_b - CONTENT_PADDING_Y - SHAPES_WIDTH;
     {
-        imgui_rect btns[IMP_SHAPE_COUNT];
-        unsigned   events[IMP_SHAPE_COUNT];
+        imgui_rect btns;
+        btns.x = content_x;
+        btns.r = content_x + IMP_SHAPE_COUNT * SHAPES_WIDTH;
+        btns.y = shape_y;
+        btns.b = shape_y + SHAPES_WIDTH;
 
-        layout_uniform_horizontal(btns, ARRLEN(btns), content_x, shape_y, SHAPES_WIDTH, SHAPES_WIDTH, LAYOUT_START, 0);
-
-        for (int i = 0; i < ARRLEN(btns); i++)
-        {
-            imgui_rect* rect = btns + i;
-
-            unsigned wid = 'lshp' + i;
-            events[i]    = imgui_get_events_rect(im, wid, rect);
+        unsigned events = imgui_get_events_rect(im, 'lshp', &btns);
 
 #if defined(_WIN32)
 #define PAINT_KEY "Ctrl"
@@ -785,73 +798,92 @@ void draw_lfo_section(GUI* gui)
 #define PAINT_KEY "Cmd"
 #endif
 
-            // Not currently how we paint to the grid
-            // tooltip_handle_events(
-            //     &gui->tooltip,
-            //     *rect,
-            //     "Hold the " PAINT_KEY " key on your keyboard while dragging your mouse inside empty space on the LFO
-            //     " "grid to paint the currently selected shape to the grid", gui->frame_start_time, events[i]);
-            tooltip_handle_events(
-                &gui->tooltip,
-                *rect,
-                "Select a draw mode and drag your mouse inside empty space on the LFO grid to paint the currently "
-                "selected shape to the grid.",
-                gui->frame_start_time,
-                events[i]);
+        // Not currently how we paint to the grid
+        // tooltip_handle_events(
+        //     &gui->tooltip,
+        //     *rect,
+        //     "Hold the " PAINT_KEY " key on your keyboard while dragging your mouse inside empty space on the LFO
+        //     " "grid to paint the currently selected shape to the grid", gui->frame_start_time, events[i]);
+        // unsigned tt_events = events;
+        // if ((tt_events & IMGUI_EVENT_MOUSE_HOVER) && (im->frame.events & (1 << PW_EVENT_MOUSE_MOVE)))
+        //     tt_events |= IMGUI_EVENT_MOUSE_ENTER;
+        tooltip_handle_events(
+            &gui->tooltip,
+            btns,
+            "Select a draw mode and drag your mouse inside empty space on the LFO grid to paint the currently "
+            "selected shape to the grid.",
+            gui->frame_start_time,
+            events);
 
-            if (events[i] & IMGUI_EVENT_MOUSE_ENTER)
-            {
-                pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
-            }
-            if (events[i] & IMGUI_EVENT_MOUSE_LEFT_DOWN)
-            {
-                gui->plugin->lfo_shape_idx = i;
-            }
+        int btn_hover_idx = -1;
+        int btn_hold_idx  = -1;
+        if (events & IMGUI_EVENT_MOUSE_HOVER)
+        {
+            float diff = im->pos_mouse_move.x - btns.x;
+            int   idx  = diff / SHAPES_WIDTH;
+            if (idx < IMP_SHAPE_COUNT)
+                btn_hover_idx = idx;
+        }
+        if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
+            btn_hold_idx = btn_hover_idx;
 
-            if (events[i] & IMGUI_EVENT_MOUSE_LEFT_HOLD)
-            {
-                rect->y += 1;
-                rect->b += 1;
-            }
-
-            if (events[i] & IMGUI_EVENT_MOUSE_HOVER)
-            {
-                NVGcolour col = C_GREY_2;
-                col.a         = 0.5f;
-                nvgBeginPath(nvg);
-                nvgSetColour(nvg, col);
-                nvgRoundedRect2(nvg, rect->x, rect->y, rect->r, rect->b, 4);
-                nvgFill(nvg);
-            }
-            else if (i == gui->plugin->lfo_shape_idx)
-            {
-                nvgBeginPath(nvg);
-                nvgSetColour(nvg, C_GREY_3);
-                nvgRoundedRect2(nvg, rect->x, rect->y, rect->r, rect->b, 4);
-                nvgFill(nvg);
-            }
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+        {
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+        }
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        {
+            float diff           = im->pos_mouse_move.x - btns.x;
+            int   mouse_down_idx = diff / SHAPES_WIDTH;
+            if (mouse_down_idx >= 0 && mouse_down_idx < IMP_SHAPE_COUNT)
+                gui->plugin->lfo_shape_idx = mouse_down_idx;
         }
 
+        IMPShapeType lfo_shape_idx = gui->plugin->lfo_shape_idx;
+        float        y             = btns.y;
+        if (btn_hold_idx == lfo_shape_idx)
+            y += 1;
         nvgBeginPath(nvg);
-        nvgSetColour(nvg, C_WHITE);
+        nvgRoundedRect(nvg, btns.x + SHAPES_WIDTH * lfo_shape_idx, y, SHAPES_WIDTH, SHAPES_WIDTH, 4);
+        nvgSetColour(nvg, C_LIGHT_BLUE_2);
+        nvgFill(nvg);
 
-        for (int i = 0; i < ARRLEN(btns); i++)
+        if (btn_hover_idx > -1)
         {
-            const imgui_rect* rect = btns + i;
+            nvgBeginPath(nvg);
+            y = btns.y;
+            if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
+                y += 1;
+            nvgRoundedRect(nvg, btns.x + SHAPES_WIDTH * btn_hover_idx, y, SHAPES_WIDTH, SHAPES_WIDTH, 4);
+            nvgSetColour(nvg, (NVGcolour){1, 1, 1, 0.1});
+            nvgFill(nvg);
+        }
 
-            imgui_rect inner  = *rect;
-            inner.x          += SHAPES_INNER_PADDING;
-            inner.y          += SHAPES_INNER_PADDING;
-            inner.r          -= SHAPES_INNER_PADDING;
-            inner.b          -= SHAPES_INNER_PADDING;
+        for (int i = 0; i < IMP_SHAPE_COUNT; i++)
+        {
+            imgui_rect inner;
+            inner.x = btns.x + i * SHAPES_WIDTH;
+            inner.r = btns.x + (i + 1) * SHAPES_WIDTH;
+            inner.y = btns.y;
+            inner.b = btns.b;
 
+            inner.x += SHAPES_INNER_PADDING;
+            inner.y += SHAPES_INNER_PADDING;
+            inner.r -= SHAPES_INNER_PADDING;
+            inner.b -= SHAPES_INNER_PADDING;
+
+            if (btn_hold_idx == i)
+            {
+                inner.y += 1;
+                inner.b += 1;
+            }
+
+            nvgBeginPath(nvg);
             const enum IMPShapeType type = i;
             switch (type)
             {
             case IMP_SHAPE_POINT:
                 nvgCircle(nvg, (inner.x + inner.r) * 0.5f, (inner.y + inner.b) * 0.5f, 2 * SCALE);
-                nvgFill(nvg);
-                nvgBeginPath(nvg);
                 break;
             case IMP_SHAPE_FLAT:
             {
@@ -919,82 +951,59 @@ void draw_lfo_section(GUI* gui)
             case IMP_SHAPE_COUNT:
                 break;
             }
+            bool      is_selected = type == lfo_shape_idx;
+            bool      is_hovering = i == btn_hover_idx;
+            NVGcolour col         = is_selected ? C_BG_LFO : is_hovering ? C_LIGHT_BLUE_2 : C_TEXT_DARK_BG;
+            nvgSetColour(nvg, col);
+
+            if (type == IMP_SHAPE_POINT)
+                nvgFill(nvg);
+            else
+                nvgStroke(nvg, 2.0f * SCALE);
         }
-        nvgStroke(nvg, 1.2f * SCALE);
     }
 
     // LFO pattern selector
-    const imgui_rect pattern_area = {
-        .x = xm_maxf(content_r - PATTERN_WIDTH - 4, shape_x),
-        .y = shape_y - 16,
-        .r = content_r - 4,
-        .b = display_b - CONTENT_PADDING_Y};
     {
-        imgui_rect sl_pattern  = pattern_area;
-        imgui_rect btn_pattern = pattern_area;
+        imgui_rect btn_pattern;
 
-        float pattern_area_height = pattern_area.b - pattern_area.y;
-        float third_height        = pattern_area_height / 3;
-        sl_pattern.b              = sl_pattern.y + third_height;
+        btn_pattern.x = lm->content_x + CONTENT_PADDING_X + SCALE * 80;
+        btn_pattern.y = display_y + CONTENT_PADDING_Y;
+        btn_pattern.b = btn_pattern.y + LFO_TAB_HEIGHT;
+        btn_pattern.r = btn_pattern.x + SCALE * 8 * 28;
 
-        btn_pattern.y = sl_pattern.b;
-        btn_pattern.b = btn_pattern.y + third_height;
+        const ParamID  param_id = PARAM_PATTERN_LFO_1 + gui->plugin->selected_lfo_idx;
+        const unsigned uid      = 'prm' + param_id;
+        const unsigned events   = imgui_get_events_rect(im, uid + 'btn', &btn_pattern);
 
-        const ParamID  param_id   = PARAM_PATTERN_LFO_1 + gui->plugin->selected_lfo_idx;
-        const unsigned uid        = 'prm' + param_id;
-        const unsigned sl_events  = imgui_get_events_rect(im, uid, &sl_pattern);
-        const unsigned btn_events = imgui_get_events_rect(im, uid + 'btn', &btn_pattern);
-
-        float w  = sl_pattern.r - sl_pattern.x;
+        float w  = btn_pattern.r - btn_pattern.x;
         float w8 = w / NUM_LFO_PATTERNS;
 
         tooltip_handle_events(
             &gui->tooltip,
-            pattern_area,
+            btn_pattern,
             "Switch between custom LFO shapes for this LFO",
             gui->frame_start_time,
-            sl_events);
+            events);
 
-        float pattern_cx = 0.5f * (pattern_area.x + pattern_area.r);
-        float pattern_cy = (pattern_area.y + pattern_area.b) * 0.5f;
+        float pattern_cx = 0.5f * (btn_pattern.x + btn_pattern.r);
+        float pattern_cy = 0.5f * (btn_pattern.y + btn_pattern.b);
 
         float value_f = (float)gui->plugin->main_params[param_id];
 
         float next_value = value_f;
 
         int btn_idx = -1;
-        if (btn_events & IMGUI_EVENT_MOUSE_HOVER)
+        if (events & IMGUI_EVENT_MOUSE_HOVER)
         {
-            float diff = im->pos_mouse_move.x - sl_pattern.x;
+            float diff = im->pos_mouse_move.x - btn_pattern.x;
             btn_idx    = diff / w8;
         }
 
-        if (sl_events & IMGUI_EVENT_MOUSE_ENTER)
-            pw_set_mouse_cursor(gui->pw, PW_CURSOR_RESIZE_WE);
-        if (btn_events & IMGUI_EVENT_MOUSE_ENTER)
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
             pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
 
-        if (sl_events & (IMGUI_EVENT_DRAG_BEGIN | IMGUI_EVENT_TOUCHPAD_BEGIN))
-        {
-            param_change_begin(gui->plugin, param_id);
-        }
-        if (sl_events & IMGUI_EVENT_DRAG_MOVE)
-            imgui_drag_value(im, &next_value, 0, 1, pattern_area.r - pattern_area.x, IMGUI_DRAG_HORIZONTAL);
-
-        if (sl_events & IMGUI_EVENT_TOUCHPAD_MOVE)
-        {
-            float delta = im->frame.delta_touchpad.x / PATTERN_WIDTH;
-            if (im->frame.modifiers_touchpad & PW_MOD_INVERTED_SCROLL)
-                delta = -delta;
-            if (im->frame.modifiers_touchpad & PW_MOD_PLATFORM_KEY_CTRL)
-                delta *= 0.1f;
-            if (im->frame.modifiers_touchpad & PW_MOD_KEY_SHIFT)
-                delta *= 0.1f;
-
-            next_value = xm_clampf(value_f + delta, 0, 1);
-        }
-
-        if (btn_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
         {
             xassert(btn_idx > -1);
             next_value = (float)btn_idx / (NUM_LFO_PATTERNS - 1);
@@ -1004,79 +1013,57 @@ void draw_lfo_section(GUI* gui)
         {
             value_f = next_value;
             param_change_update(gui->plugin, param_id, value_f);
-            imp->main_points_valid = false;
-            should_clear_lfo_trail = true;
+            imp->main_points_valid                       = false;
+            fstate.should_update_main_points_with_points = true;
+            should_clear_lfo_trail                       = true;
         }
 
-        if (sl_events & (IMGUI_EVENT_DRAG_END | IMGUI_EVENT_TOUCHPAD_END))
-        {
-            int vi  = xm_droundi(xm_lerpd(value_f, 1, NUM_LFO_PATTERNS));
-            value_f = xm_normf(vi, 1, NUM_LFO_PATTERNS);
-
-            param_change_update(gui->plugin, param_id, value_f);
-            param_change_end(gui->plugin, param_id);
-            imp->main_points_valid = false;
-        }
-
-        if (sl_events & IMGUI_EVENT_MOUSE_WHEEL)
-        {
-            int vi  = xm_droundi(xm_lerpd(value_f, 1, NUM_LFO_PATTERNS));
-            vi     += im->frame.delta_mouse_wheel;
-            vi      = xm_clampi(vi, 1, NUM_LFO_PATTERNS);
-
-            value_f = xm_normd(vi, 1, NUM_LFO_PATTERNS);
-
-            if (sl_events & IMGUI_EVENT_MOUSE_WHEEL)
-                param_set(gui->plugin, param_id, value_f);
-
-            imp->main_points_valid = false;
-        }
-
-        int vi  = xm_droundi(xm_lerpd(value_f, 1, NUM_LFO_PATTERNS));
-        value_f = xm_normd(vi, 1, NUM_LFO_PATTERNS);
+        // Selected background
+        int btn_mouse_down_idx = -1;
+        if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
+            btn_mouse_down_idx = btn_idx;
+        // int   vi = xm_droundi(xm_lerpd(value_f, 1, NUM_LFO_PATTERNS));
+        int   pattern_idx = main_get_lfo_pattern_idx(gui->plugin);
+        float y           = btn_pattern.y;
+        if (btn_mouse_down_idx == pattern_idx)
+            y += 1;
+        nvgBeginPath(nvg);
+        nvgRoundedRect(nvg, btn_pattern.x + w8 * pattern_idx, y, w8, w8, 4);
+        nvgSetColour(nvg, C_LIGHT_BLUE_2);
+        nvgFill(nvg);
 
         if (btn_idx > -1)
         {
             nvgBeginPath(nvg);
-            float y = btn_pattern.y;
-            if (btn_events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
+            y = btn_pattern.y;
+            if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
                 y += 1;
-            nvgRoundedRect(nvg, btn_pattern.x + w8 * btn_idx, y, w8, third_height, 4);
+            nvgRoundedRect(nvg, btn_pattern.x + w8 * btn_idx, y, w8, w8, 4);
             nvgSetColour(nvg, (NVGcolour){1, 1, 1, 0.1});
             nvgFill(nvg);
         }
 
-        nvgSetTextAlign(nvg, NVG_ALIGN_BC);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         nvgSetColour(nvg, C_TEXT_DARK_BG);
-        nvgText(nvg, pattern_cx, pattern_area.b + 4, "PATTERN", NULL);
+        nvgText(nvg, content_x, rect_cy(&btn_pattern), "PATTERN", NULL);
 
         nvgSetTextAlign(nvg, NVG_ALIGN_CC);
-        float btn_text_x         = pattern_area.x + w8 * 0.5f;
-        int   btn_mouse_down_idx = -1;
-        if (btn_events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
-            btn_mouse_down_idx = btn_idx;
+        float btn_text_x = btn_pattern.x + w8 * 0.5f;
+
         for (int i = 0; i < NUM_LFO_PATTERNS; i++)
         {
             char label[4]  = {'1', 0, 0, 0};
             label[0]      += i;
             xassert(i < 8); // oops you might be incrementing "1" past 10
-            float y = pattern_cy + 1;
+            y = pattern_cy + 1;
             if (i == btn_mouse_down_idx)
                 y += 1;
+            bool      is_selected = i == pattern_idx;
+            bool      is_hovering = i == btn_idx;
+            NVGcolour col         = is_selected ? C_BG_LFO : is_hovering ? C_LIGHT_BLUE_2 : C_TEXT_DARK_BG;
+            nvgSetColour(nvg, col);
             nvgText(nvg, btn_text_x + i * w8, y, label, label + 1);
         }
-
-        const float pattern_pos_x = xm_lerpf(value_f, pattern_area.x + w8 * 0.5f, pattern_area.r - w8 * 0.5f);
-
-        float tri_y = floorf(pattern_area.y);
-        float tri_b = tri_y + PATTERN_TRIANGLE_HEIGHT;
-
-        nvgBeginPath(nvg);
-        nvgMoveTo(nvg, pattern_pos_x, tri_b);
-        nvgLineTo(nvg, pattern_pos_x - PATTERN_TRIANGLE_HEIGHT + 2, tri_y);
-        nvgLineTo(nvg, pattern_pos_x + PATTERN_TRIANGLE_HEIGHT - 2, tri_y);
-        nvgClosePath(nvg);
-        nvgFill(nvg);
     }
 
     // Display grid
@@ -1104,8 +1091,7 @@ void draw_lfo_section(GUI* gui)
 
     const enum IMPShapeType current_shape = gui->plugin->lfo_shape_idx;
 
-    const IMPointsArea selection_area =
-        {lm->content_x + 16, display_y + CONTENT_PADDING_Y + LFO_TAB_HEIGHT, lm->content_r - 16, pattern_area.y};
+    const IMPointsArea selection_area = {lm->content_x + 16, grid_y - 32, lm->content_r - 16, grid_b + 24};
 
     imp_run(
         &fstate,
