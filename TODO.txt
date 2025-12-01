@@ -51,7 +51,8 @@ x Move output gain knob
 x autogain on/off mode
 x keytracking option with MIDI input
 - keytracking option with audio input
-- LFO one shot mode?
+x LFO one shot mode?
+- design icons for lfo loop, retrig loop, retrig one shot
 - fix icons/text DPI scaling on macOS
 - get state working in new version
 - visualise the keytracking offset

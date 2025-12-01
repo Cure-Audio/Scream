@@ -718,7 +718,7 @@ void draw_lfo_section(GUI* gui)
                 val             = next_val;
             }
             else
-                val = last_drag_val;
+                val = 1.0 - last_drag_val; // invert
             param_change_update(gui->plugin, param_id, val);
             val += 0;
         }
@@ -781,8 +781,8 @@ void draw_lfo_section(GUI* gui)
         nvgSetColour(nvg, C_TEXT_DARK_BG);
         nvgText(nvg, btn_retrig.x, cy, "RETRIG", 0);
 
-        extern void draw_checkbox(NVGcontext * nvg, float width, float cy, float r, bool on);
-        draw_checkbox(nvg, floorf(SCALE * CHECKBOX_HEIGHT), cy, btn_retrig.r, retrig_on);
+        extern void draw_checkbox(NVGcontext * nvg, float width, float cy, float r, float scale, bool on);
+        draw_checkbox(nvg, floorf(SCALE * CHECKBOX_HEIGHT), cy, btn_retrig.r, lm->param_scale, retrig_on);
     }
 
     // Loop Button
@@ -811,8 +811,8 @@ void draw_lfo_section(GUI* gui)
         nvgSetColour(nvg, C_TEXT_DARK_BG);
         nvgText(nvg, btn_loop.x, cy, "LOOP", 0);
 
-        extern void draw_checkbox(NVGcontext * nvg, float width, float cy, float r, bool on);
-        draw_checkbox(nvg, floorf(SCALE * CHECKBOX_HEIGHT), cy, btn_loop.r, loop_on);
+        extern void draw_checkbox(NVGcontext * nvg, float width, float cy, float r, float scale, bool on);
+        draw_checkbox(nvg, floorf(SCALE * CHECKBOX_HEIGHT), cy, btn_loop.r, lm->param_scale, loop_on);
     }
 
     // LFO Draw shapes

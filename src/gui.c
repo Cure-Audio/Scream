@@ -585,7 +585,7 @@ void open_hyperlink(const char* url)
     xthread_detach(thread); // auto-destroy resources when thread ends
 }
 
-void draw_checkbox(NVGcontext* nvg, float width, float cy, float r, bool on)
+void draw_checkbox(NVGcontext* nvg, float width, float cy, float r, float scale, bool on)
 {
     Rect box;
     box.x = floorf(r - width);
@@ -593,17 +593,26 @@ void draw_checkbox(NVGcontext* nvg, float width, float cy, float r, bool on)
     box.y = floorf(cy - width * 0.5f);
     box.b = ceilf(cy + width * 0.5f);
 
+    float stroke_width      = ceilf(scale);
+    float half_stroke_width = stroke_width * 0.5f;
+    float inner_padding     = ceilf(scale * 3);
+
     NVGcolour col = on ? C_LIGHT_BLUE_2 : C_GRID_SECONDARY;
 
     nvgBeginPath(nvg);
-    nvgRect2(nvg, box.x + 0.5f, box.y + 0.5f, box.r - 0.5f, box.b - 0.5f);
+    nvgRect2(
+        nvg,
+        box.x + half_stroke_width,
+        box.y + half_stroke_width,
+        box.r - half_stroke_width,
+        box.b - half_stroke_width);
     nvgSetColour(nvg, col);
-    nvgStroke(nvg, 1);
+    nvgStroke(nvg, stroke_width);
 
     if (on)
     {
         nvgBeginPath(nvg);
-        nvgRect2(nvg, box.x + 3, box.y + 3, box.r - 3, box.b - 3);
+        nvgRect2(nvg, box.x + inner_padding, box.y + inner_padding, box.r - inner_padding, box.b - inner_padding);
         nvgFill(nvg);
     }
 }
@@ -818,10 +827,10 @@ void pw_tick(void* _gui)
         float     playhead       = (float)gui->plugin->lfos[lfo_idx].phase;
         lm->current_lfo_playhead = lm->last_lfo_playhead = playhead;
 
-        float      lfo_btn_width = 60 * lm->param_scale;
+        float      lfo_btn_width = 48 * lm->param_scale;
         imgui_rect lfo_btn;
         lfo_btn.x              = (lm->width / 2) - lfo_btn_width * 0.5f;
-        lfo_btn.y              = lm->top_content_bottom - 20;
+        lfo_btn.y              = lm->top_content_bottom - 20 * lm->param_scale;
         lfo_btn.r              = (lm->width / 2) + lfo_btn_width * 0.5f;
         lfo_btn.b              = lm->top_content_bottom;
         gui->lfo_toggle_button = lfo_btn;
@@ -928,8 +937,8 @@ void pw_tick(void* _gui)
         // nvgFill(nvg);
 
         // Output gain
-        const int output_gain_with = 120 * lm->param_scale;
-        nvgSetFontSize(nvg, 12 * lm->param_scale);
+        const int output_gain_with = 120 * lm->content_scale;
+        nvgSetFontSize(nvg, 12 * lm->content_scale);
         imgui_rect rect = {0, 0, lm->width - 16, lm->height_header + 8};
         rect.x          = floorf(rect.r - output_gain_with);
         uint32_t events = imgui_get_events_rect(im, 'outg', &rect);
@@ -977,7 +986,7 @@ void pw_tick(void* _gui)
         bool  autogain_on = gui->plugin->autogain_on;
         nvgSetColour(nvg, C_TEXT_DARK_BG);
         nvgText(nvg, rect.x, cy, "AUTOGAIN", 0);
-        draw_checkbox(nvg, checkbox_height, cy, rect.r, autogain_on);
+        draw_checkbox(nvg, checkbox_height, cy, rect.r, lm->content_scale, autogain_on);
 
         // Keytracking
         rect.x = rect.r + BORDER_PADDING * 4;
@@ -997,7 +1006,7 @@ void pw_tick(void* _gui)
         bool midi_keytracking_on = gui->plugin->midi_keytracking_on;
         nvgSetColour(nvg, C_TEXT_DARK_BG);
         nvgText(nvg, rect.x, cy, "MIDI KEYTRACKING", 0);
-        draw_checkbox(nvg, checkbox_height, cy, rect.r, midi_keytracking_on);
+        draw_checkbox(nvg, checkbox_height, cy, rect.r, lm->content_scale, midi_keytracking_on);
     }
 
     // Footer bottom right
@@ -2097,21 +2106,21 @@ void pw_tick(void* _gui)
         imgui_rect rect = gui->lfo_toggle_button;
         snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
 
-        // nvgBeginPath(nvg);
-        // nvgRect2(nvg, rect.x, rect.y, rect.r, rect.b);
-        // nvgSetColour(nvg, C_RED);
-        // nvgFill(nvg);
+        nvgBeginPath(nvg);
+        nvgRect2(nvg, rect.x, rect.y, rect.r, rect.b);
+        nvgSetColour(nvg, C_RED);
+        nvgFill(nvg);
 
         nvgBeginPath(nvg);
         nvgSetColour(nvg, C_TEXT_LIGHT_BG);
-        nvgSetFontSize(nvg, lm->content_scale * 14);
-        nvgSetTextAlign(nvg, NVG_ALIGN_CC);
-        float cx = (rect.x + rect.r) * 0.5f - 10;
+        nvgSetFontSize(nvg, lm->param_scale * 12);
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         float cy = (rect.y + rect.b) * 0.5f;
-        nvgText(nvg, cx, cy, "LFO", 0);
+        nvgText(nvg, rect.x + 4, cy, "LFO", 0);
 
-        float y1 = cy + 2;
-        float y2 = cy - 4;
+        float tri_half_width = 5 * lm->param_scale;
+        float y1             = cy + tri_half_width * (1.0f / 3.0f);
+        float y2             = cy - tri_half_width * (2.0f / 3.0f);
         if (gui->plugin->lfo_section_open)
         {
             float tmp = y1;
@@ -2120,10 +2129,10 @@ void pw_tick(void* _gui)
         }
         nvgSetLineCap(nvg, NVG_ROUND);
         nvgBeginPath(nvg);
-        nvgMoveTo(nvg, cx + 22, y1);
-        nvgLineTo(nvg, cx + 28, y2);
-        nvgLineTo(nvg, cx + 34, y1);
-        nvgStroke(nvg, 2.5);
+        nvgMoveTo(nvg, rect.r - 4, y1);
+        nvgLineTo(nvg, rect.r - 4 - tri_half_width, y2);
+        nvgLineTo(nvg, rect.r - 4 - tri_half_width * 2, y1);
+        nvgStroke(nvg, 2 * lm->param_scale);
         nvgSetLineCap(nvg, NVG_BUTT);
         unsigned events = imgui_get_events_rect(im, 'lopn', &rect);
         if (events & IMGUI_EVENT_MOUSE_ENTER)
