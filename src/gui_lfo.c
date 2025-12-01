@@ -610,6 +610,11 @@ void draw_lfo_section(GUI* gui)
     btn_retrig.x = btn_retrig.r - 80 * SCALE;
     btn_retrig.y = btn_rate_type.y;
     btn_retrig.b = btn_rate_type.b;
+    imgui_rect btn_loop;
+    btn_loop.r = btn_retrig.x - 20 * SCALE;
+    btn_loop.x = btn_loop.r - 64 * SCALE;
+    btn_loop.y = btn_retrig.y;
+    btn_loop.b = btn_retrig.b;
     // Rate type buttons
     {
         int     lfo_idx  = gui->plugin->selected_lfo_idx;
@@ -778,6 +783,36 @@ void draw_lfo_section(GUI* gui)
 
         extern void draw_checkbox(NVGcontext * nvg, float width, float cy, float r, bool on);
         draw_checkbox(nvg, floorf(SCALE * CHECKBOX_HEIGHT), cy, btn_retrig.r, retrig_on);
+    }
+
+    // Loop Button
+    {
+        int lfo_idx = gui->plugin->selected_lfo_idx;
+        // ParamID param_id  = PARAM_RETRIG_LFO_1 + lfo_idx;
+        bool loop_on = gui->plugin->lfo_loop_on[lfo_idx];
+
+        unsigned events = imgui_get_events_rect(im, 'loop', &btn_loop);
+        if (events & IMGUI_EVENT_MOUSE_ENTER)
+            pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+
+        if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+        {
+            loop_on                            = !loop_on;
+            gui->plugin->lfo_loop_on[lfo_idx] ^= 1;
+        }
+        // if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
+        // {
+        //     btn_loop.y += 1;
+        //     btn_loop.b += 1;
+        // }
+        float cy = (btn_loop.y + btn_loop.b) * 0.5f;
+
+        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
+        nvgSetColour(nvg, C_TEXT_DARK_BG);
+        nvgText(nvg, btn_loop.x, cy, "LOOP", 0);
+
+        extern void draw_checkbox(NVGcontext * nvg, float width, float cy, float r, bool on);
+        draw_checkbox(nvg, floorf(SCALE * CHECKBOX_HEIGHT), cy, btn_loop.r, loop_on);
     }
 
     // LFO Draw shapes

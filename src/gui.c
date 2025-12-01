@@ -588,10 +588,10 @@ void open_hyperlink(const char* url)
 void draw_checkbox(NVGcontext* nvg, float width, float cy, float r, bool on)
 {
     Rect box;
-    box.x = r - width;
-    box.r = r;
-    box.y = cy - width * 0.5f;
-    box.b = cy + width * 0.5f;
+    box.x = floorf(r - width);
+    box.r = ceilf(r);
+    box.y = floorf(cy - width * 0.5f);
+    box.b = ceilf(cy + width * 0.5f);
 
     NVGcolour col = on ? C_LIGHT_BLUE_2 : C_GRID_SECONDARY;
 

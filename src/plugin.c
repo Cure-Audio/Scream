@@ -109,6 +109,9 @@ void* cplug_createPlugin(CplugHostContext* ctx)
     p->autogain_on                = true;
     p->keytracking_last_midi_note = -1;
 
+    p->lfo_loop_on[0] = true;
+    p->lfo_loop_on[1] = true;
+
     for (int i = 0; i < ARRLEN(p->main_params); i++)
         p->main_params[i] = cplug_getDefaultParameterValue(p, i);
 
@@ -300,12 +303,9 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
         xt_spinlock_unlock(&lfo->spinlocks[pattern_idx]);
     }
 
-    const xvec3f* points_start = points;
-    const xvec3f* points_end   = points_start + num_points;
-
-    // double beat_position = fmod(p->beat_position, pattern_length);
-    // xassert(beat_position < pattern_length);
-    // const double beat_inc = p->beat_inc;
+    const xvec3f* points_start     = points;
+    const xvec3f* points_end       = points_start + num_points;
+    const xvec3f(*points_view)[64] = (void*)points;
 
     ParamID sync_param_idx = PARAM_SYNC_RATE_LFO_1 + lfo_idx;
     ParamID sec_param_idx  = PARAM_SEC_RATE_LFO_1 + lfo_idx;
@@ -320,12 +320,11 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
     const double rate_sync_as_hz = p->bpm / (SYNC_VALUES[lfo_rate_idx] * 240);
     const double beat_inc        = (is_ms ? rate_sec_as_hz : rate_sync_as_hz) / p->sample_rate;
     const double pattern_length  = 1;
-
-#define beat_position lfo->phase
+    const bool   loop_on         = p->lfo_loop_on[lfo_idx];
 
     const xvec3f* it = points_end;
     while (it-- != points_start)
-        if (beat_position >= it->x)
+        if (lfo->phase >= it->x)
             break;
 
     xvec3f pt1 = *it;
@@ -345,11 +344,11 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
 
     for (int i = 0; i < num_samples; i++)
     {
-        xassert(beat_position >= pt1.x);
-        xassert(beat_position < pt2.x);
+        xassert(lfo->phase >= pt1.x);
+        xassert(lfo->phase <= pt2.x);
         xassert(it >= points_start && it < points_end);
 
-        float rel_position  = (float)beat_position - pt1.x;
+        float rel_position  = (float)lfo->phase - pt1.x;
         rel_position       /= pt2.x - pt1.x;
 
         // Calc LFO value
@@ -357,19 +356,22 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
 
         buffer[i] = v;
 
-        beat_position += beat_inc;
+        lfo->phase += beat_inc;
 
-        if (beat_position >= pt2.x)
+        if (lfo->phase >= pt2.x)
         {
-            if (beat_position >= pattern_length)
-                beat_position -= pattern_length;
+            if (loop_on)
+                lfo->phase -= (int)lfo->phase;
+            else
+                lfo->phase = xm_minf(1, lfo->phase);
 
             it = points_end;
             while (it-- != points_start)
-                if (beat_position >= it->x)
+                if (lfo->phase >= it->x)
                     break;
 
-            if (it == points_end)
+            bool wrap = loop_on & !!(it == points_end);
+            if (wrap)
                 it = points_start;
 
             pt1 = *it;
@@ -381,14 +383,13 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
             }
             else
             {
+                xassert((it + 1) < points_end);
                 // Next point
                 pt2.x = it[1].x;
                 pt2.y = it[1].y;
             }
         }
     }
-
-#undef beat_position
 
     linked_arena_release(p->audio_arena, points);
     LINKED_ARENA_LEAK_DETECT_END(p->audio_arena);
@@ -832,7 +833,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
 
         case CPLUG_EVENT_MIDI:
         {
-            if (event.midi.status == 128)
+            if (event.midi.status == 128) // note off, channel 0
             {
                 // if (p->keytracking_last_midi_note == event.midi.data1)
                 //     p->keytracking_last_midi_note = -1;
@@ -841,17 +842,17 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                 synth_note_off(&g_synth, event.midi.data1);
 #endif
             }
-            else if (event.midi.status == 144)
+            else if (event.midi.status == 144) // note on, channel 0
             {
                 p->keytracking_last_midi_note = event.midi.data1;
 
-                for (int i = 0; i < ARRLEN(p->lfos); i++)
+                for (int lfo_idx = 0; lfo_idx < ARRLEN(p->lfos); lfo_idx++)
                 {
-                    ParamID retrig_param_id = PARAM_RETRIG_LFO_1 + i;
+                    ParamID retrig_param_id = PARAM_RETRIG_LFO_1 + lfo_idx;
                     bool    retrig_on       = p->audio_params[retrig_param_id] >= 0.5;
                     if (retrig_on)
                     {
-                        p->lfos[i].phase = 0;
+                        p->lfos[lfo_idx].phase = 0;
                         xt_atomic_store_u8(&p->gui_retrig_flag, 1);
                     }
                 }

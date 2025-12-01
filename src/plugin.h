@@ -170,6 +170,8 @@ typedef struct Plugin
     uint8_t selected_lfo_idx;
     bool    autogain_on; // default on
 
+    bool lfo_loop_on[2];
+
     bool midi_keytracking_on; // deafult off
     int  keytracking_last_midi_note;
 
