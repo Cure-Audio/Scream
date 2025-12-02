@@ -6,11 +6,7 @@
 
 enum
 {
-    IMP_DEFAULT_POINT_CLICK_RADIUS = 12,
-    IMP_DEFAULT_POINT_RADIUS       = 4,
-    IMP_DEFAULT_SKEW_POINT_RADIUS  = 3,
-    IMP_DEFAULT_SKEW_DRAG_RANGE    = 250,
-
+    IMP_DEFAULT_SKEW_DRAG_RANGE           = 250,
     IMP_DEFAULT_POINT_DRAG_ERASE_DISTANCE = 24,
 };
 
@@ -71,12 +67,15 @@ typedef struct IMPointsData
     {
         uint32_t col_line;
         float    line_stroke_width;
+        float    point_click_radius; // recommended: 12px
+        float    point_radius;       // recommended: 4px
+        float    skew_point_radius;  // recommended: 3px
 
         uint32_t col_point_hover_bg;
 
         uint32_t col_skewpoint_inner;
         uint32_t col_skewpoint_outer;
-        float    skewpoint_stroke_width;
+        float    skewpoint_stroke_width; // recommended: 1.5px
 
         uint32_t col_point;
         uint32_t col_point_selected;
@@ -381,7 +380,7 @@ void _imp_drag_and_draw(
         for (int j = 0; j <= num_grid_y; j++)
         {
             float snap_y = imp->area.y + j * y_inc;
-            if (snap_y - IMP_DEFAULT_POINT_CLICK_RADIUS <= pos.y && pos.y <= snap_y + IMP_DEFAULT_POINT_CLICK_RADIUS)
+            if (snap_y - imp->theme.point_click_radius <= pos.y && pos.y <= snap_y + imp->theme.point_click_radius)
             {
                 y = snap_y;
                 break;
@@ -662,7 +661,7 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
             imgui_pt pt = was_dragged_last_frame ? im->pos_mouse_move
                                                  : (imgui_pt){imp->points_copy[pt_idx].x, imp->points_copy[pt_idx].y};
 
-            const unsigned pt_events = imgui_get_events_circle(im, uid, pt, IMP_DEFAULT_POINT_CLICK_RADIUS);
+            const unsigned pt_events = imgui_get_events_circle(im, uid, pt, imp->theme.point_click_radius);
 
             if (pt_events == 0)
                 continue;
@@ -753,8 +752,8 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
                         for (int j = 0; j <= num_grid_x; j++)
                         {
                             float x = imp->area.x + j * x_inc;
-                            if (x - IMP_DEFAULT_POINT_CLICK_RADIUS <= drag_pos.x &&
-                                drag_pos.x <= x + IMP_DEFAULT_POINT_CLICK_RADIUS)
+                            if (x - imp->theme.point_click_radius <= drag_pos.x &&
+                                drag_pos.x <= x + imp->theme.point_click_radius)
                             {
                                 drag_pos.x = x;
                                 break;
@@ -763,8 +762,8 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
                         for (int j = 0; j <= num_grid_y; j++)
                         {
                             float y = imp->area.y + j * y_inc;
-                            if (y - IMP_DEFAULT_POINT_CLICK_RADIUS <= drag_pos.y &&
-                                drag_pos.y <= y + IMP_DEFAULT_POINT_CLICK_RADIUS)
+                            if (y - imp->theme.point_click_radius <= drag_pos.y &&
+                                drag_pos.y <= y + imp->theme.point_click_radius)
                             {
                                 drag_pos.y = y;
                                 break;
@@ -951,7 +950,7 @@ void imp_handle_point_events(IMPointsFrameContext* fstate, int num_grid_x, int n
             unsigned       uid = 'lskp' + pt_idx;
             const xvec2f   pt  = imp->skew_points[pt_idx];
             const unsigned pt_events =
-                imgui_get_events_circle(im, uid, (imgui_pt){pt.x, pt.y}, IMP_DEFAULT_POINT_CLICK_RADIUS);
+                imgui_get_events_circle(im, uid, (imgui_pt){pt.x, pt.y}, imp->theme.point_click_radius);
             if (pt_events == 0)
                 continue;
 
@@ -1243,7 +1242,7 @@ void imp_draw(IMPointsFrameContext* fstate)
         {
             xassert(fstate->delete_pt_idx == -1);
             nvgBeginPath(nvg);
-            nvgCircle(nvg, hover_pt->x, hover_pt->y, IMP_DEFAULT_POINT_CLICK_RADIUS);
+            nvgCircle(nvg, hover_pt->x, hover_pt->y, imp->theme.point_click_radius);
             nvgSetColour(nvg, nvgHexColour(imp->theme.col_point_hover_bg));
             nvgFill(nvg);
         }
@@ -1255,7 +1254,7 @@ void imp_draw(IMPointsFrameContext* fstate)
         for (int i = 0; i < xarr_len(imp->skew_points); i++)
         {
             xvec2f pt = imp->skew_points[i];
-            nvgCircle(nvg, pt.x, pt.y, IMP_DEFAULT_SKEW_POINT_RADIUS);
+            nvgCircle(nvg, pt.x, pt.y, imp->theme.skew_point_radius);
         }
         nvgSetColour(nvg, nvgHexColour(imp->theme.col_skewpoint_inner));
         nvgFill(nvg);
@@ -1264,7 +1263,7 @@ void imp_draw(IMPointsFrameContext* fstate)
         for (int i = 0; i < xarr_len(imp->skew_points); i++)
         {
             xvec2f pt = imp->skew_points[i];
-            nvgCircle(nvg, pt.x, pt.y, IMP_DEFAULT_SKEW_POINT_RADIUS);
+            nvgCircle(nvg, pt.x, pt.y, imp->theme.skew_point_radius);
         }
         nvgSetColour(nvg, nvgHexColour(imp->theme.col_skewpoint_outer));
         nvgStroke(nvg, imp->theme.skewpoint_stroke_width);
@@ -1302,7 +1301,7 @@ void imp_draw(IMPointsFrameContext* fstate)
                 pt_idx = 0;
 
             nvgBeginPath(nvg);
-            nvgCircle(nvg, pt.x, pt.y, IMP_DEFAULT_POINT_RADIUS);
+            nvgCircle(nvg, pt.x, pt.y, imp->theme.point_radius);
             if (selected_points_flags & (1llu << pt_idx))
                 nvgSetColour(nvg, col_selected);
             else

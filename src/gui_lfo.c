@@ -202,14 +202,17 @@ void draw_lfo_section(GUI* gui)
 
     if (im->frame.events & ((1 << PW_EVENT_RESIZE) | (1 << PW_EVENT_DPI_CHANGED)))
     {
-        imp->theme.col_line          = nvgCompressColour(C_LIGHT_BLUE_2);
-        imp->theme.line_stroke_width = 2;
+        imp->theme.col_line           = nvgCompressColour(C_LIGHT_BLUE_2);
+        imp->theme.line_stroke_width  = 2 * SCALE;
+        imp->theme.point_click_radius = 12 * SCALE;
+        imp->theme.point_radius       = 4 * SCALE;
+        imp->theme.skew_point_radius  = 3 * SCALE;
 
         imp->theme.col_point_hover_bg = 0xffffff33;
 
         imp->theme.col_skewpoint_inner    = nvgCompressColour(C_BG_LFO);
         imp->theme.col_skewpoint_outer    = nvgCompressColour(C_LIGHT_BLUE_2);
-        imp->theme.skewpoint_stroke_width = 1.5f;
+        imp->theme.skewpoint_stroke_width = 1.5f * SCALE;
 
         imp->theme.col_point          = nvgCompressColour(C_LIGHT_BLUE_2);
         imp->theme.col_point_selected = 0xffff00ff;
@@ -1399,17 +1402,20 @@ void draw_lfo_section(GUI* gui)
 
     imp_draw(&fstate);
 
-    // Todo: make this a white line that follows the LFO path
-    // if (playhead < pattern_length)
-    // {
-    //     float x = xm_mapf(playhead, 0, pattern_length, grid_x, grid_r);
-    //     x       = floorf(x) + 0.5f;
-    //     nvgBeginPath(nvg);
-    //     nvgMoveTo(nvg, x, grid_y + 1);
-    //     nvgLineTo(nvg, x, grid_b - 1);
-    //     nvgSetColour(nvg, C_WHITE);
-    //     nvgStroke(nvg, 1);
-    // }
+    if (playhead < pattern_length)
+    {
+        float        x   = xm_lerpf(playhead, grid_x, grid_r);
+        size_t       idx = (size_t)(x - grid_x);
+        const size_t len = xarr_len(gui->lfo_ybuffer);
+        idx              = xm_minull(idx, len - 1);
+        float y_norm     = gui->lfo_ybuffer[idx];
+        float y          = xm_lerpf(y_norm, grid_b, grid_y);
+        nvgBeginPath(nvg);
+        nvgCircle(nvg, x, y, 3 * SCALE);
+        // nvgCircle(nvg, x, y, 3);
+        nvgSetColour(nvg, C_WHITE);
+        nvgFill(nvg);
+    }
 
     // Draw cosine shape to LFO grid. Useful for approximating cosine shape
     // nvgBeginPath(nvg);
