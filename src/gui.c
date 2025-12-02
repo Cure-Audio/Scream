@@ -1529,7 +1529,6 @@ void pw_tick(void* _gui)
             }
             case PARAM_INPUT_GAIN:
             case PARAM_WET:
-            case PARAM_OUTPUT_GAIN:
             {
                 float       param_width  = param_id == PARAM_INPUT_GAIN ? INPUT_WIDTH : WET_WIDTH;
                 const float meter_width  = snapf(param_width * lm->param_scale, 2);
@@ -1698,7 +1697,7 @@ void pw_tick(void* _gui)
                     const float peak_label_height = 16 * lm->param_scale;
 
                     const float ch_y    = rect.y + peak_label_height;
-                    const float ch_b    = rect.b - 4;
+                    const float ch_b    = rect.b - 4 * lm->param_scale;
                     const float ch_h    = ch_b - ch_y;
                     const float ch_x[2] = {
                         roundf(rect.x + meter_width * (8.0f / 32.0f)),
