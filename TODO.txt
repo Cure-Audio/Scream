@@ -59,5 +59,6 @@ x design icons for lfo loop, retrig loop, retrig one shot
 - really low pitch and quiet note causes retrig to rapidly trigger. often caused by saw waves
   support MIDI note 0 with init patch of popular synths
 - Redesign the LFO 1 & 2 tabs. The drag/expand icon is redundant and space consuming at best and confusing at worst
-- if someone has selected a LFO shape that is not the point shape and they click it again, return the selection to the point shape
+- Implement design for the seperator between the LFO and knob section
+x if someone has selected an LFO shape that is not the point shape and they click it again, return the selection to the point shape
 - get state working in new version

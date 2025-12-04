@@ -1015,72 +1015,52 @@ void draw_lfo_section(GUI* gui)
 
         unsigned events = imgui_get_events_rect(im, 'lshp', &btns);
 
+        int hover_idx = -1;
+        if (events & IMGUI_EVENT_MOUSE_HOVER)
+        {
+            float rel_x = im->pos_mouse_move.x - btns.x;
+            hover_idx   = xm_clampi(rel_x / SHAPES_WIDTH, 0, IMP_SHAPE_COUNT - 1);
+        }
+        int mouse_down_idx = -1;
+        if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
+        {
+            float rel_x    = im->pos_mouse_down.x - btns.x;
+            mouse_down_idx = xm_clampi(rel_x / SHAPES_WIDTH, 0, IMP_SHAPE_COUNT - 1);
+        }
+
 #if defined(_WIN32)
 #define PAINT_KEY "Ctrl"
 #elif defined(__APPLE__)
 #define PAINT_KEY "Cmd"
 #endif
 
-        // Not currently how we paint to the grid
-        // tooltip_handle_events(
-        //     &gui->tooltip,
-        //     *rect,
-        //     "Hold the " PAINT_KEY " key on your keyboard while dragging your mouse inside empty space on the LFO
-        //     " "grid to paint the currently selected shape to the grid", gui->frame_start_time, events[i]);
-        // unsigned tt_events = events;
-        // if ((tt_events & IMGUI_EVENT_MOUSE_HOVER) && (im->frame.events & (1 << PW_EVENT_MOUSE_MOVE)))
-        //     tt_events |= IMGUI_EVENT_MOUSE_ENTER;
+        int        desc_idx  = xm_clampi(hover_idx, 0, IMP_SHAPE_COUNT - 1);
+        imgui_rect btn       = btns;
+        btn.x               += SHAPES_WIDTH * desc_idx;
+        btn.r               -= SHAPES_WIDTH * (IMP_SHAPE_COUNT - 1 - desc_idx);
         tooltip_handle_events(
             &gui->tooltip,
-            btns,
+            btn,
             "Select a draw mode and drag your mouse inside empty space on the LFO grid to paint the currently "
             "selected shape to the grid.",
             gui->frame_start_time,
             events);
 
-        int btn_hover_idx = -1;
-        int btn_hold_idx  = -1;
-        if (events & IMGUI_EVENT_MOUSE_HOVER)
-        {
-            float diff = im->pos_mouse_move.x - btns.x;
-            int   idx  = diff / SHAPES_WIDTH;
-            if (idx < IMP_SHAPE_COUNT)
-                btn_hover_idx = idx;
-        }
-        if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
-            btn_hold_idx = btn_hover_idx;
-
         if (events & IMGUI_EVENT_MOUSE_ENTER)
-        {
             pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
-        }
         if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
         {
-            float diff           = im->pos_mouse_move.x - btns.x;
-            int   mouse_down_idx = diff / SHAPES_WIDTH;
-            if (mouse_down_idx >= 0 && mouse_down_idx < IMP_SHAPE_COUNT)
-                gui->plugin->lfo_shape_idx = mouse_down_idx;
+            // It was observed that some users clicked the active shape type button hoping to "reset" the shape back to
+            // default, and turn off drawing mode. They were confused when this behaviour didn't happen
+            // So here we're trying it and hoping that it's good UX
+            xassert(mouse_down_idx != -1);
+            IMPShapeType next_type = mouse_down_idx;
+            if (mouse_down_idx == p->lfo_shape_idx)
+                next_type = 0;
+            p->lfo_shape_idx = next_type;
         }
 
-        IMPShapeType lfo_shape_idx = gui->plugin->lfo_shape_idx;
-        float        y             = btns.y;
-        if (btn_hold_idx == lfo_shape_idx)
-            y += 1;
-        nvgBeginPath(nvg);
-        nvgRoundedRect(nvg, btns.x + SHAPES_WIDTH * lfo_shape_idx, y, SHAPES_WIDTH, SHAPES_WIDTH, 4);
-        nvgSetColour(nvg, C_LIGHT_BLUE_2);
-        nvgFill(nvg);
-
-        if (btn_hover_idx > -1)
-        {
-            nvgBeginPath(nvg);
-            y = btns.y;
-            if (events & IMGUI_EVENT_MOUSE_LEFT_HOLD)
-                y += 1;
-            nvgRoundedRect(nvg, btns.x + SHAPES_WIDTH * btn_hover_idx, y, SHAPES_WIDTH, SHAPES_WIDTH, 4);
-            nvgSetColour(nvg, (NVGcolour){1, 1, 1, 0.1});
-            nvgFill(nvg);
-        }
+        const IMPShapeType current_shape_type = p->lfo_shape_idx;
 
         for (int i = 0; i < IMP_SHAPE_COUNT; i++)
         {
@@ -1090,16 +1070,28 @@ void draw_lfo_section(GUI* gui)
             inner.y = btns.y;
             inner.b = btns.b;
 
-            inner.x += SHAPES_INNER_PADDING;
-            inner.y += SHAPES_INNER_PADDING;
-            inner.r -= SHAPES_INNER_PADDING;
-            inner.b -= SHAPES_INNER_PADDING;
-
-            if (btn_hold_idx == i)
+            if (mouse_down_idx == i)
             {
                 inner.y += 1;
                 inner.b += 1;
             }
+
+            bool is_selected = i == current_shape_type;
+            bool is_hovering = i == hover_idx;
+
+            if (is_selected || is_hovering)
+            {
+                NVGcolour bg_col = is_selected ? C_LIGHT_BLUE_2 : C_BTN_HOVER;
+                nvgBeginPath(nvg);
+                nvgRoundedRect(nvg, inner.x, inner.y, SHAPES_WIDTH, SHAPES_WIDTH, 4 * SCALE);
+                nvgSetColour(nvg, bg_col);
+                nvgFill(nvg);
+            }
+
+            inner.x += SHAPES_INNER_PADDING;
+            inner.y += SHAPES_INNER_PADDING;
+            inner.r -= SHAPES_INNER_PADDING;
+            inner.b -= SHAPES_INNER_PADDING;
 
             nvgBeginPath(nvg);
             const enum IMPShapeType type = i;
@@ -1174,10 +1166,8 @@ void draw_lfo_section(GUI* gui)
             case IMP_SHAPE_COUNT:
                 break;
             }
-            bool      is_selected = type == lfo_shape_idx;
-            bool      is_hovering = i == btn_hover_idx;
-            NVGcolour col         = is_selected ? C_BG_LFO : is_hovering ? C_LIGHT_BLUE_2 : C_TEXT_DARK_BG;
-            nvgSetColour(nvg, col);
+            NVGcolour icon_col = is_selected ? C_BG_LFO : is_hovering ? C_LIGHT_BLUE_2 : C_TEXT_DARK_BG;
+            nvgSetColour(nvg, icon_col);
 
             if (type == IMP_SHAPE_POINT)
                 nvgFill(nvg);
