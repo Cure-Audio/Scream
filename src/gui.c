@@ -829,7 +829,7 @@ void pw_tick(void* _gui)
         float     playhead       = (float)p->lfos[lfo_idx].phase;
         lm->current_lfo_playhead = lm->last_lfo_playhead = playhead;
 
-        float      lfo_btn_width = 48 * lm->param_scale;
+        float      lfo_btn_width = 64 * lm->param_scale;
         imgui_rect lfo_btn;
         lfo_btn.x              = (lm->width / 2) - lfo_btn_width * 0.5f;
         lfo_btn.y              = lm->top_content_bottom - 20 * lm->param_scale;
@@ -2107,22 +2107,71 @@ void pw_tick(void* _gui)
         imgui_rect rect = gui->lfo_toggle_button;
         snvg_command_draw_nvg(nvg, NVG_LABEL("ayy lmao"));
 
-        nvgBeginPath(nvg);
-        nvgRect2(nvg, rect.x, rect.y, rect.r, rect.b);
-        nvgSetColour(nvg, C_RED);
-        nvgFill(nvg);
+        bool lfo_open = p->lfo_section_open;
+
+        if (lfo_open)
+        {
+            // section seperator
+            nvgBeginPath(nvg);
+            float y = rect.b - 4;
+            float b = rect.b;
+            nvgRect2(nvg, lm->content_x, y, lm->content_r, b);
+            NVGpaint paint = nvgLinearGradient(nvg, 0, y, 0, b, (NVGcolour){0, 0, 0, 0}, (NVGcolour){0, 0, 0, 0.25f});
+            nvgSetPaint(nvg, paint);
+            nvgFill(nvg);
+        }
+
+        // Inlet
+        float h = rect.b - rect.y;
+        float w = rect.r - rect.x;
+        {
+            // Note: nanovg doesn't have a great way to make a rounded rectangle that looks like this:
+            //  _______
+            // /       \\
+            // ----------
+            // So we have to use a scissor and double the height of the rectangle we want to draw
+            nvgSetScissor(nvg, rect.x, rect.y, w, h);
+
+            const float radius = lm->param_scale * 12;
+            nvgBeginPath(nvg);
+            nvgRoundedRectVarying(nvg, rect.x, rect.y, w, h * 2, radius, radius, 0, 0);
+            nvgSetColour(nvg, C_BG_LIGHT);
+            nvgFill(nvg);
+
+            imgui_rect shadow_rect  = rect;
+            shadow_rect.y          += 2;
+            shadow_rect.b          += 2;
+            shadow_rect.x          += 2;
+            // shadow_rect.r          -= 2;
+
+            NVGpaint shadow_paint = nvgBoxGradient(
+                nvg,
+                shadow_rect.x,
+                shadow_rect.y,
+                w,
+                h * 2,
+                radius,
+                4,
+                (NVGcolour){0, 0, 0, 0},
+                (NVGcolour){0, 0, 0, 0.1f});
+            nvgSetPaint(nvg, shadow_paint);
+            nvgFill(nvg);
+
+            nvgResetScissor(nvg);
+        }
 
         nvgBeginPath(nvg);
         nvgSetColour(nvg, C_TEXT_LIGHT_BG);
         nvgSetFontSize(nvg, lm->param_scale * 12);
         nvgSetTextAlign(nvg, NVG_ALIGN_CL);
-        float cy = (rect.y + rect.b) * 0.5f;
-        nvgText(nvg, rect.x + 4, cy, "LFO", 0);
+        float cy            = (rect.y + rect.b) * 0.5f;
+        float inner_padding = 12 * lm->param_scale;
+        nvgText(nvg, rect.x + inner_padding, cy, "LFO", 0);
 
         float tri_half_width = 5 * lm->param_scale;
         float y1             = cy + tri_half_width * (1.0f / 3.0f);
         float y2             = cy - tri_half_width * (2.0f / 3.0f);
-        if (p->lfo_section_open)
+        if (!lfo_open)
         {
             float tmp = y1;
             y1        = y2;
@@ -2130,9 +2179,9 @@ void pw_tick(void* _gui)
         }
         nvgSetLineCap(nvg, NVG_ROUND);
         nvgBeginPath(nvg);
-        nvgMoveTo(nvg, rect.r - 4, y1);
-        nvgLineTo(nvg, rect.r - 4 - tri_half_width, y2);
-        nvgLineTo(nvg, rect.r - 4 - tri_half_width * 2, y1);
+        nvgMoveTo(nvg, rect.r - inner_padding, y1);
+        nvgLineTo(nvg, rect.r - inner_padding - tri_half_width, y2);
+        nvgLineTo(nvg, rect.r - inner_padding - tri_half_width * 2, y1);
         nvgStroke(nvg, 2 * lm->param_scale);
         nvgSetLineCap(nvg, NVG_BUTT);
         unsigned events = imgui_get_events_rect(im, 'lopn', &rect);
