@@ -1214,7 +1214,7 @@ void draw_lfo_section(GUI* gui)
             btn,
             "Switch between custom LFO shapes for this LFO\n"
             "\n"
-            "Try automating this parameter ",
+            "Try automating this parameter in your DAW",
             gui->frame_start_time,
             events);
 
