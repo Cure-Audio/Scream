@@ -936,7 +936,10 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
             const float pd_attack_time    = 0;
             // const float pd_release_time   = convert_compressor_time(p->sample_rate * 0.0025); // 2.5ms
             // const float pd_release_time = convert_compressor_time(p->sample_rate * 0.0035); // 3.5ms
-            const float pd_release_time = convert_compressor_time(p->sample_rate * 0.010); // 10ms
+            // const float pd_release_time = convert_compressor_time(p->sample_rate * 0.010); // 10ms
+            // 15ms does a "decent" job with a Saw playing MIDI note 0 at a low volume. If the decay is also low, the
+            // constant retrigger problem can still occur, but that's a very edge case and I'm happy enough with that.
+            const float pd_release_time = convert_compressor_time(p->sample_rate * 0.015); // 15ms
             const float pd_threshold    = xm_fast_dB_to_gain(-54);
             while (remaining_samples > 0)
             {

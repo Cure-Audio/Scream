@@ -56,7 +56,7 @@ x design icons for lfo loop, retrig loop, retrig one shot
 - fix icons/text DPI scaling on macOS
 - visualise the keytracking offset
 x add grid for ms rate
-- really low pitch and quiet note causes retrig to rapidly trigger. often caused by saw waves
+x really low pitch and quiet note causes retrig to rapidly trigger. often caused by saw waves
   support MIDI note 0 with init patch of popular synths
 x Redesign the LFO 1 & 2 tabs. The drag/expand icon is redundant and space consuming at best and confusing at worst
 x Implement design for the seperator between the LFO and knob section
