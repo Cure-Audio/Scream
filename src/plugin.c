@@ -993,7 +993,7 @@ void cplug_process(void* _p, CplugProcessContext* ctx)
                     &p->output_gain,
                     p->audio_params[PARAM_OUTPUT_GAIN],
                     xm_droundi(p->sample_rate * 0.05));
-                for (unsigned ch = 0; ch < ctx->numOutputs; ch++)
+                for (unsigned ch = 0; ch < 2; ch++)
                 {
                     float* buffer = output[ch];
 
