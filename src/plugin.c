@@ -102,8 +102,10 @@ void* cplug_createPlugin(CplugHostContext* ctx)
     p->audio_arena     = arena;
     p->cplug_ctx       = ctx;
 
-    p->width  = GUI_INIT_WIDTH;
-    p->height = GUI_INIT_HEIGHT * 2;
+    float system_get_content_scale();
+    float content_scale = system_get_content_scale();
+    p->width            = GUI_INIT_WIDTH * content_scale;
+    p->height           = GUI_INIT_HEIGHT * 2 * content_scale;
 
     p->lfo_section_open           = true;
     p->autogain_on                = true;

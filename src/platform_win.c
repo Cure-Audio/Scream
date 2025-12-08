@@ -68,6 +68,8 @@ void        TimerFunc(HWND unnamedParam1, UINT unnamedParam2, UINT_PTR unnamedPa
     dequeue_global_events();
 }
 
+float system_get_content_scale() { return (float)GetDpiForSystem() / (float)USER_DEFAULT_SCREEN_DPI; }
+
 void library_load_platform()
 {
     int refcount = xt_atomic_fetch_add_i32(&g_platform_init_counter, 1);

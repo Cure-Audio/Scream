@@ -38,6 +38,15 @@
 extern Synth g_synth;
 #endif
 
+enum
+{
+    HEIGHT_HEADER  = 32,
+    HEIGHT_FOOTER  = 20,
+    BORDER_PADDING = 8,
+
+    CONTENT_HEIGHT = GUI_INIT_HEIGHT - HEIGHT_HEADER - HEIGHT_FOOTER - 2 * BORDER_PADDING,
+};
+
 void gui_handle_param_change(void* _gui, ParamID param_id)
 {
     GUI* gui = _gui;
@@ -271,14 +280,18 @@ void pw_get_info(struct PWGetInfo* info)
         uint32_t width  = info->constrain_size.width;
         uint32_t height = info->constrain_size.height;
 
-        uint32_t min_height = GUI_MIN_HEIGHT;
+        float    dpi            = xm_maxf(1, gui->dpi);
+        uint32_t min_width      = (uint32_t)(GUI_MIN_WIDTH * dpi);
+        uint32_t min_height     = (uint32_t)(GUI_MIN_HEIGHT * dpi);
+        uint32_t content_height = (uint32_t)(CONTENT_HEIGHT * dpi);
+
         if (gui->plugin->lfo_section_open)
         {
-            min_height += gui->layout.top_content_height;
+            min_height += content_height;
         }
 
-        if (width < GUI_MIN_WIDTH)
-            width = GUI_MIN_WIDTH;
+        if (width < min_width)
+            width = min_width;
         if (height < min_height)
             height = min_height;
 
@@ -773,12 +786,6 @@ void pw_tick(void* _gui)
 
     enum
     {
-        HEIGHT_HEADER  = 32,
-        HEIGHT_FOOTER  = 20,
-        BORDER_PADDING = 8,
-
-        CONTENT_HEIGHT = GUI_INIT_HEIGHT - HEIGHT_HEADER - HEIGHT_FOOTER - 2 * BORDER_PADDING,
-
         PARAM_MOD_AMOUNT_RADIUS     = 14,
         PARAMS_BOUNDARY_LEFT        = 32,
         VERTICAL_SLIDER_WIDTH       = 60,
