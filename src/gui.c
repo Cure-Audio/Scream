@@ -2296,6 +2296,24 @@ void pw_tick(void* _gui)
     {
         extern void draw_lfo_section(GUI*);
         draw_lfo_section(gui);
+
+        // Test dithering quality on gradeints
+        // {
+        //     float top = lm->top_content_bottom;
+        //     float bot = lm->height;
+    
+        //     float ch0 = 0.3;
+        //     float ch1 = 0.1;
+    
+        //     NVGcolour col0 = {ch0, ch0, ch0, 1};
+        //     NVGcolour col1 = {ch1, ch1, ch1, 1};
+    
+        //     nvgBeginPath(nvg);
+        //     nvgRect2(nvg, 0, top, lm->width, bot);
+        //     NVGpaint paint = nvgLinearGradient(nvg, 0, top, 0, bot, col0, col1);
+        //     nvgSetPaint(nvg, paint);
+        //     nvgFill(nvg);
+        // }
     }
 
     // extern float g_pd_threshold;
