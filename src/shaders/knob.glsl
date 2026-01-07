@@ -143,14 +143,17 @@ layout(binding=0)uniform texture2D logo_tex;
 layout(binding=0)uniform sampler logo_smp;
 
 layout(binding = 1) uniform fs_logo_uniforms {
-    vec4 u_col;
+    vec4 u_col0;
+    vec4 u_col1;
 };
 
 in vec2 uv;
 out vec4 frag_col;
 
 void main() {
-    frag_col = u_col * texture(sampler2D(logo_tex, logo_smp), uv);
+    vec4 col = mix(u_col0, u_col1, uv.y);
+    col.a = texture(sampler2D(logo_tex, logo_smp), uv).a;
+    frag_col = col;
 }
 @end
 

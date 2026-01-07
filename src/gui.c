@@ -637,13 +637,20 @@ void do_logo_shader(void* uptr)
 
         const bool hover = gui->logo_events & IMGUI_EVENT_MOUSE_HOVER;
 
-        fs_logo_uniforms_t fs_uniforms  = {.u_col = {1, 1, 1, 1}};
-        NVGcolour          col_inactive = hexcol(0xC9D3DDFF);
-        if (hover)
-            memcpy(fs_uniforms.u_col, &C_WHITE, sizeof(C_WHITE));
-        else
-            memcpy(fs_uniforms.u_col, &col_inactive, sizeof(col_inactive));
-        _Static_assert(sizeof(fs_uniforms.u_col) == sizeof(col_inactive), "");
+        const NVGcolour stop0 = hover ? (NVGcolour){1, 1, 1, 1} : C_BG_LIGHT;
+        const NVGcolour stop1 = hover ? (NVGcolour){0.7, 0.7, 0.7, 1} : C_BG_LIGHT;
+
+        fs_logo_uniforms_t fs_uniforms = {
+            .u_col0[0] = stop0.r,
+            .u_col0[1] = stop0.g,
+            .u_col0[2] = stop0.b,
+            .u_col0[3] = stop0.a,
+
+            .u_col1[0] = stop1.r,
+            .u_col1[1] = stop1.g,
+            .u_col1[2] = stop1.b,
+            .u_col1[3] = stop1.a,
+        };
 
         sg_apply_pipeline(pip);
         sg_apply_bindings(&(sg_bindings){
@@ -654,6 +661,153 @@ void do_logo_shader(void* uptr)
         sg_apply_uniforms(UB_fs_logo_uniforms, &SG_RANGE(fs_uniforms));
         sg_draw(0, 6, 1);
     }
+}
+
+// 34x26 (+2 due to stroke width)
+void draw_exacoustics_logo_svg(NVGcontext* nvg, const float scale, float x, float y, bool hover)
+{
+    const NVGcolour stop1        = {1, 1, 1, 1};
+    const NVGcolour stop2        = {0.7, 0.7, 0.7, 1};
+    const float     stroke_width = scale * 2;
+
+    NVGpaint paint;
+    // clang-format off
+    // e
+    if (hover)
+    {
+        paint = nvgLinearGradient(nvg, x + scale * 16.0f, y + scale * 9.5f, x + scale * 24.0f, y + scale * 19.0f, stop1, stop2);
+        nvgSetPaint(nvg, paint);
+    }
+    else
+    {
+        nvgSetColour(nvg, C_BG_LIGHT);
+    }
+    nvgBeginPath(nvg);
+    nvgMoveTo(nvg, x + scale * 20.2822f, y + scale * 19.1758f);
+    nvgBezierTo(nvg, x + scale * 19.5791f, y + scale * 19.1758f, x + scale * 18.9434f, y + scale * 19.0615f, x + scale * 18.375f, y + scale * 18.833f);
+    nvgBezierTo(nvg, x + scale * 17.8125f, y + scale * 18.5986f, x + scale * 17.332f, y + scale * 18.2734f, x + scale * 16.9336f, y + scale * 17.8574f);
+    nvgBezierTo(nvg, x + scale * 16.541f, y + scale * 17.4414f, x + scale * 16.2393f, y + scale * 16.9521f, x + scale * 16.0283f, y + scale * 16.3896f);
+    nvgBezierTo(nvg, x + scale * 15.8174f, y + scale * 15.8271f, x + scale * 15.7119f, y + scale * 15.2207f, x + scale * 15.7119f, y + scale * 14.5703f);
+    nvgLineTo(nvg, x + scale * 15.7119f, y + scale * 14.2188f);
+    nvgBezierTo(nvg, x + scale * 15.7119f, y + scale * 13.4746f, x + scale * 15.8203f, y + scale * 12.8008f, x + scale * 16.0371f, y + scale * 12.1973f);
+    nvgBezierTo(nvg, x + scale * 16.2539f, y + scale * 11.5938f, x + scale * 16.5557f, y + scale * 11.0781f, x + scale * 16.9424f, y + scale * 10.6504f);
+    nvgBezierTo(nvg, x + scale * 17.3291f, y + scale * 10.2168f, x + scale * 17.7861f, y + scale * 9.88574f, x + scale * 18.3135f, y + scale * 9.65723f);
+    nvgBezierTo(nvg, x + scale * 18.8408f, y + scale * 9.42871f, x + scale * 19.4121f, y + scale * 9.31445f, x + scale * 20.0273f, y + scale * 9.31445f);
+    nvgBezierTo(nvg, x + scale * 20.707f, y + scale * 9.31445f, x + scale * 21.3018f, y + scale * 9.42871f, x + scale * 21.8115f, y + scale * 9.65723f);
+    nvgBezierTo(nvg, x + scale * 22.3213f, y + scale * 9.88574f, x + scale * 22.7432f, y + scale * 10.208f, x + scale * 23.0771f, y + scale * 10.624f);
+    nvgBezierTo(nvg, x + scale * 23.417f, y + scale * 11.0342f, x + scale * 23.6689f, y + scale * 11.5234f, x + scale * 23.833f, y + scale * 12.0918f);
+    nvgBezierTo(nvg, x + scale * 24.0029f, y + scale * 12.6602f, x + scale * 24.0879f, y + scale * 13.2871f, x + scale * 24.0879f, y + scale * 13.9727f);
+    nvgLineTo(nvg, x + scale * 24.0879f, y + scale * 14.8779f);
+    nvgLineTo(nvg, x + scale * 16.7402f, y + scale * 14.8779f);
+    nvgLineTo(nvg, x + scale * 16.7402f, y + scale * 13.3574f);
+    nvgLineTo(nvg, x + scale * 21.9961f, y + scale * 13.3574f);
+    nvgLineTo(nvg, x + scale * 21.9961f, y + scale * 13.1904f);
+    nvgBezierTo(nvg, x + scale * 21.9844f, y + scale * 12.8096f, x + scale * 21.9082f, y + scale * 12.4521f, x + scale * 21.7676f, y + scale * 12.1182f);
+    nvgBezierTo(nvg, x + scale * 21.6328f, y + scale * 11.7842f, x + scale * 21.4248f, y + scale * 11.5146f, x + scale * 21.1436f, y + scale * 11.3096f);
+    nvgBezierTo(nvg, x + scale * 20.8623f, y + scale * 11.1045f, x + scale * 20.4873f, y + scale * 11.002f, x + scale * 20.0186f, y + scale * 11.002f);
+    nvgBezierTo(nvg, x + scale * 19.667f, y + scale * 11.002f, x + scale * 19.3535f, y + scale * 11.0781f, x + scale * 19.0781f, y + scale * 11.2305f);
+    nvgBezierTo(nvg, x + scale * 18.8086f, y + scale * 11.377f, x + scale * 18.583f, y + scale * 11.5908f, x + scale * 18.4014f, y + scale * 11.8721f);
+    nvgBezierTo(nvg, x + scale * 18.2197f, y + scale * 12.1533f, x + scale * 18.0791f, y + scale * 12.4932f, x + scale * 17.9795f, y + scale * 12.8916f);
+    nvgBezierTo(nvg, x + scale * 17.8857f, y + scale * 13.2842f, x + scale * 17.8389f, y + scale * 13.7266f, x + scale * 17.8389f, y + scale * 14.2188f);
+    nvgLineTo(nvg, x + scale * 17.8389f, y + scale * 14.5703f);
+    nvgBezierTo(nvg, x + scale * 17.8389f, y + scale * 14.9863f, x + scale * 17.8945f, y + scale * 15.373f, x + scale * 18.0059f, y + scale * 15.7305f);
+    nvgBezierTo(nvg, x + scale * 18.123f, y + scale * 16.082f, x + scale * 18.293f, y + scale * 16.3896f, x + scale * 18.5156f, y + scale * 16.6533f);
+    nvgBezierTo(nvg, x + scale * 18.7383f, y + scale * 16.917f, x + scale * 19.0078f, y + scale * 17.125f, x + scale * 19.3242f, y + scale * 17.2773f);
+    nvgBezierTo(nvg, x + scale * 19.6406f, y + scale * 17.4238f, x + scale * 20.001f, y + scale * 17.4971f, x + scale * 20.4053f, y + scale * 17.4971f);
+    nvgBezierTo(nvg, x + scale * 20.915f, y + scale * 17.4971f, x + scale * 21.3691f, y + scale * 17.3945f, x + scale * 21.7676f, y + scale * 17.1895f);
+    nvgBezierTo(nvg, x + scale * 22.166f, y + scale * 16.9844f, x + scale * 22.5117f, y + scale * 16.6943f, x + scale * 22.8047f, y + scale * 16.3193f);
+    nvgLineTo(nvg, x + scale * 23.9209f, y + scale * 17.4004f);
+    nvgBezierTo(nvg, x + scale * 23.7158f, y + scale * 17.6992f, x + scale * 23.4492f, y + scale * 17.9863f, x + scale * 23.1211f, y + scale * 18.2617f);
+    nvgBezierTo(nvg, x + scale * 22.793f, y + scale * 18.5312f, x + scale * 22.3916f, y + scale * 18.751f, x + scale * 21.917f, y + scale * 18.9209f);
+    nvgClosePath(nvg);
+    nvgFill(nvg);
+
+    // a
+    if (hover)
+    {
+        paint = nvgLinearGradient(nvg, x + scale * 25.0f, y + scale * 3.0f, x + scale * 39.5f, y + scale * 22.5f,
+                nvgRGBAf(0.9686274509803922f, 0.8823529411764706f, 0.39215686274509803f, 1.0f),
+                nvgRGBAf(0.9215686274509803f, 0.20784313725490197f, 0.2f, 1.0f));
+        nvgSetPaint(nvg, paint);
+    }
+
+    nvgBeginPath(nvg);
+    nvgMoveTo(nvg, x + scale * 31.1016f, y + scale * 17.0928f);
+    nvgLineTo(nvg, x + scale * 31.1016f, y + scale * 12.5576f);
+    nvgBezierTo(nvg, x + scale * 31.1016f, y + scale * 12.2178f, x + scale * 31.04f, y + scale * 11.9248f, x + scale * 30.917f, y + scale * 11.6787f);
+    nvgBezierTo(nvg, x + scale * 30.7939f, y + scale * 11.4326f, x + scale * 30.6064f, y + scale * 11.2422f, x + scale * 30.3545f, y + scale * 11.1074f);
+    nvgBezierTo(nvg, x + scale * 30.1084f, y + scale * 10.9727f, x + scale * 29.7979f, y + scale * 10.9053f, x + scale * 29.4229f, y + scale * 10.9053f);
+    nvgBezierTo(nvg, x + scale * 29.0771f, y + scale * 10.9053f, x + scale * 28.7783f, y + scale * 10.9639f, x + scale * 28.5264f, y + scale * 11.0811f);
+    nvgBezierTo(nvg, x + scale * 28.2744f, y + scale * 11.1982f, x + scale * 28.0781f, y + scale * 11.3564f, x + scale * 27.9375f, y + scale * 11.5557f);
+    nvgBezierTo(nvg, x + scale * 27.7969f, y + scale * 11.7549f, x + scale * 27.7266f, y + scale * 11.9805f, x + scale * 27.7266f, y + scale * 12.2324f);
+    nvgLineTo(nvg, x + scale * 25.6172f, y + scale * 12.2324f);
+    nvgBezierTo(nvg, x + scale * 25.6172f, y + scale * 11.8574f, x + scale * 25.708f, y + scale * 11.4941f, x + scale * 25.8896f, y + scale * 11.1426f);
+    nvgBezierTo(nvg, x + scale * 26.0713f, y + scale * 10.791f, x + scale * 26.335f, y + scale * 10.4775f, x + scale * 26.6807f, y + scale * 10.2021f);
+    nvgBezierTo(nvg, x + scale * 27.0264f, y + scale * 9.92676f, x + scale * 27.4395f, y + scale * 9.70996f, x + scale * 27.9199f, y + scale * 9.55176f);
+    nvgBezierTo(nvg, x + scale * 28.4004f, y + scale * 9.39355f, x + scale * 28.9395f, y + scale * 9.31445f, x + scale * 29.5371f, y + scale * 9.31445f);
+    nvgBezierTo(nvg, x + scale * 30.252f, y + scale * 9.31445f, x + scale * 30.8848f, y + scale * 9.43457f, x + scale * 31.4355f, y + scale * 9.6748f);
+    nvgBezierTo(nvg, x + scale * 31.9922f, y + scale * 9.91504f, x + scale * 32.4287f, y + scale * 10.2783f, x + scale * 32.7451f, y + scale * 10.7646f);
+    nvgBezierTo(nvg, x + scale * 33.0674f, y + scale * 11.2451f, x + scale * 33.2285f, y + scale * 11.8486f, x + scale * 33.2285f, y + scale * 12.5752f);
+    nvgLineTo(nvg, x + scale * 33.2285f, y + scale * 16.8027f);
+    nvgBezierTo(nvg, x + scale * 33.2285f, y + scale * 17.2363f, x + scale * 33.2578f, y + scale * 17.626f, x + scale * 33.3164f, y + scale * 17.9717f);
+    nvgBezierTo(nvg, x + scale * 33.3809f, y + scale * 18.3115f, x + scale * 33.4717f, y + scale * 18.6074f, x + scale * 33.5889f, y + scale * 18.8594f);
+    nvgLineTo(nvg, x + scale * 33.5889f, y + scale * 19.0f);
+    nvgLineTo(nvg, x + scale * 31.418f, y + scale * 19.0f);
+    nvgBezierTo(nvg, x + scale * 31.3184f, y + scale * 18.7715f, x + scale * 31.2393f, y + scale * 18.4814f, x + scale * 31.1807f, y + scale * 18.1299f);
+    nvgClosePath(nvg);
+    nvgFill(nvg);
+
+    nvgBeginPath(nvg);
+    nvgMoveTo(nvg, x + scale * 31.4092f, y + scale * 13.2168f);
+    nvgLineTo(nvg, x + scale * 31.4268f, y + scale * 14.5264f);
+    nvgLineTo(nvg, x + scale * 29.9062f, y + scale * 14.5264f);
+    nvgBezierTo(nvg, x + scale * 29.5137f, y + scale * 14.5264f, x + scale * 29.168f, y + scale * 14.5645f, x + scale * 28.8691f, y + scale * 14.6406f);
+    nvgBezierTo(nvg, x + scale * 28.5703f, y + scale * 14.7109f, x + scale * 28.3213f, y + scale * 14.8164f, x + scale * 28.1221f, y + scale * 14.957f);
+    nvgBezierTo(nvg, x + scale * 27.9229f, y + scale * 15.0977f, x + scale * 27.7734f, y + scale * 15.2676f, x + scale * 27.6738f, y + scale * 15.4668f);
+    nvgBezierTo(nvg, x + scale * 27.5742f, y + scale * 15.666f, x + scale * 27.5244f, y + scale * 15.8916f, x + scale * 27.5244f, y + scale * 16.1436f);
+    nvgBezierTo(nvg, x + scale * 27.5244f, y + scale * 16.3955f, x + scale * 27.583f, y + scale * 16.627f, x + scale * 27.7002f, y + scale * 16.8379f);
+    nvgBezierTo(nvg, x + scale * 27.8174f, y + scale * 17.043f, x + scale * 27.9873f, y + scale * 17.2041f, x + scale * 28.21f, y + scale * 17.3213f);
+    nvgBezierTo(nvg, x + scale * 28.4385f, y + scale * 17.4385f, x + scale * 28.7139f, y + scale * 17.4971f, x + scale * 29.0361f, y + scale * 17.4971f);
+    nvgBezierTo(nvg, x + scale * 29.4697f, y + scale * 17.4971f, x + scale * 29.8477f, y + scale * 17.4092f, x + scale * 30.1699f, y + scale * 17.2334f);
+    nvgBezierTo(nvg, x + scale * 30.498f, y + scale * 17.0518f, x + scale * 30.7559f, y + scale * 16.832f, x + scale * 30.9434f, y + scale * 16.5742f);
+    nvgBezierTo(nvg, x + scale * 31.1309f, y + scale * 16.3105f, x + scale * 31.2305f, y + scale * 16.0615f, x + scale * 31.2422f, y + scale * 15.8271f);
+    nvgLineTo(nvg, x + scale * 31.9277f, y + scale * 16.7676f);
+    nvgBezierTo(nvg, x + scale * 31.8574f, y + scale * 17.0078f, x + scale * 31.7373f, y + scale * 17.2656f, x + scale * 31.5674f, y + scale * 17.541f);
+    nvgBezierTo(nvg, x + scale * 31.3975f, y + scale * 17.8164f, x + scale * 31.1748f, y + scale * 18.0801f, x + scale * 30.8994f, y + scale * 18.332f);
+    nvgBezierTo(nvg, x + scale * 30.6299f, y + scale * 18.5781f, x + scale * 30.3047f, y + scale * 18.7803f, x + scale * 29.9238f, y + scale * 18.9385f);
+    nvgBezierTo(nvg, x + scale * 29.5488f, y + scale * 19.0967f, x + scale * 29.1152f, y + scale * 19.1758f, x + scale * 28.623f, y + scale * 19.1758f);
+    nvgBezierTo(nvg, x + scale * 28.002f, y + scale * 19.1758f, x + scale * 27.4482f, y + scale * 19.0527f, x + scale * 26.9619f, y + scale * 18.8066f);
+    nvgBezierTo(nvg, x + scale * 26.4756f, y + scale * 18.5547f, x + scale * 26.0947f, y + scale * 18.2178f, x + scale * 25.8193f, y + scale * 17.7959f);
+    nvgBezierTo(nvg, x + scale * 25.5439f, y + scale * 17.3682f, x + scale * 25.4062f, y + scale * 16.8848f, x + scale * 25.4062f, y + scale * 16.3457f);
+    nvgBezierTo(nvg, x + scale * 25.4062f, y + scale * 15.8418f, x + scale * 25.5f, y + scale * 15.3965f, x + scale * 25.6875f, y + scale * 15.0098f);
+    nvgBezierTo(nvg, x + scale * 25.8809f, y + scale * 14.6172f, x + scale * 26.1621f, y + scale * 14.2891f, x + scale * 26.5312f, y + scale * 14.0254f);
+    nvgBezierTo(nvg, x + scale * 26.9062f, y + scale * 13.7617f, x + scale * 27.3633f, y + scale * 13.5625f, x + scale * 27.9023f, y + scale * 13.4277f);
+    nvgBezierTo(nvg, x + scale * 28.4414f, y + scale * 13.2871f, x + scale * 29.0566f, y + scale * 13.2168f, x + scale * 29.748f, y + scale * 13.2168f);
+    nvgClosePath(nvg);
+    nvgFill(nvg);
+
+    // Line L
+    if (hover)
+    {
+        paint = nvgLinearGradient(nvg, x, y, x + scale * 13.0f, y + scale * 28.0f, stop1, stop2);
+        nvgSetPaint(nvg, paint);
+    }
+
+    // Line R
+    nvgBeginPath(nvg);
+    nvgMoveTo(nvg, x + scale * 11.4957f, y + scale);
+    nvgBezierTo(nvg, x + scale * -1.89973f, y + scale * 3.06349f, x + scale * -3.23929f, y + scale * 23.6984f, x + scale * 11.9422f, y + scale * 27.0f);
+    nvgStroke(nvg, stroke_width);
+
+    if (hover)
+    {
+        nvgSetPaint(nvg, nvgLinearGradient(nvg, x + scale * 6.0f, y + scale * 6.0f, x + scale * 13.5f, y + scale * 22.0f, stop1, stop2));
+    }
+    nvgBeginPath(nvg);
+    nvgMoveTo(nvg, x + scale * 12.5802f, y + scale * 6.77779f);
+    nvgBezierTo(nvg, x + scale * 4.92746f, y + scale * 7.95692f, x + scale * 4.16218f, y + scale * 19.7483f, x + scale * 12.8352f, y + scale * 21.6349f);
+    nvgStroke(nvg, stroke_width);
+    // clang-format on
 }
 
 #ifdef _WIN32
@@ -752,7 +906,7 @@ void pw_tick(void* _gui)
     }
 
     bool click_curelogo = false;
-    bool click_devtag   = false;
+    bool click_exaclogo = false;
 
 #if defined(_WIN32)
     // Using the CPLUG window extension, we have configured our DXGI backbuffer count to a maximum of 2
@@ -1017,7 +1171,7 @@ void pw_tick(void* _gui)
         nvgSetTextAlign(nvg, NVG_ALIGN_CC);
         nvgText(nvg, lm->width * 0.5f, lm->height_header * 0.5f + 4, "SCREAM", NULL);
 
-        // Logo
+        // Cure Audio logo
         snvg_command_custom(nvg, gui, do_logo_shader, NVG_LABEL("Logo shader"));
         snvg_command_draw_nvg(nvg, NVG_LABEL("main framebuffer 2"));
 
@@ -1030,7 +1184,7 @@ void pw_tick(void* _gui)
         // x                = lm->width - 16 - w;
         x                = 16;
         gui->logo_area   = (imgui_rect){x, y, x + w, y + h};
-        gui->logo_events = imgui_get_events_rect(im, 'logo', &gui->logo_area);
+        gui->logo_events = imgui_get_events_rect(im, 'cure', &gui->logo_area);
         if (gui->logo_events & IMGUI_EVENT_MOUSE_ENTER)
             pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
         if (gui->logo_events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
@@ -1039,6 +1193,23 @@ void pw_tick(void* _gui)
         // nvgRect(nvg, x, y, w, h);
         // nvgSetPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, gui->logo_texview, 1, nvg->sampler_linear));
         // nvgFill(nvg);
+
+        // Exacoustics logo
+        {
+            float src_w = 34, src_h = 26 + 2;
+            float logo_x = x + w + BORDER_PADDING;
+
+            float logo_scale = h / src_h;
+
+            unsigned events = imgui_get_events_rect(im, 'exac', &(imgui_rect){logo_x, y, logo_x + w, b});
+            if (events & IMGUI_EVENT_MOUSE_ENTER)
+                pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
+            if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
+                click_exaclogo = true;
+
+            bool hover = !!(events & IMGUI_EVENT_MOUSE_HOVER);
+            draw_exacoustics_logo_svg(nvg, logo_scale, logo_x, y, hover);
+        }
 
         // Output gain
         const int output_gain_with = 120 * lm->param_scale;
@@ -1121,8 +1292,8 @@ void pw_tick(void* _gui)
         NVGcolour footer_col = C_TEXT_DARK_BG;
         // footer_col.a         = 0.5f;
         nvgSetColour(nvg, footer_col);
-        char text[64] = {0};
-        int  len      = 0;
+        char text[128] = {0};
+        int  len       = 0;
 
         // Show window dimensions w/h on resize
         uint64_t time_since_creation_ns = gui->frame_start_time - gui->gui_create_time;
@@ -1139,38 +1310,32 @@ void pw_tick(void* _gui)
         }
         else // shameless plug
         {
-#define DEV_TAG "Developed by exacoustics"
-            const char*       devtag             = DEV_TAG;
-            const int         devtag_len         = STRLEN(DEV_TAG);
-            const int         devtag_company_len = STRLEN("exacoustics");
-            NVGglyphPosition* glyphs             = linked_arena_alloc(gui->arena, sizeof(*glyphs) * devtag_len);
-            nvgTextGlyphPositions(nvg, 0, 0, devtag, devtag + devtag_len, glyphs, devtag_len);
+            // TODO: add version number here
 
-            const NVGglyphPosition* name_start = &glyphs[devtag_len - devtag_company_len];
-            const NVGglyphPosition* name_end   = &glyphs[devtag_len - 1];
-            const float             name_width = name_end->maxx - name_start->minx;
-            const float             tag_width  = name_end->maxx - glyphs[0].minx;
+#if defined(_WIN32)
+#define PLATFORM_NAME "Windows"
+#elif defined(__APPLE__)
+#define PLATFORM_NAME "macOS"
+#endif
 
-            imgui_rect tag_click_area = {lm->width - 8 - name_width, lm->content_b, lm->width - 8, lm->height};
-            unsigned   events         = imgui_get_events_rect(im, 'dtag', &tag_click_area);
-            if (events & IMGUI_EVENT_MOUSE_ENTER)
-                pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
-            if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
-                click_devtag = true;
-
-            nvgSetTextAlign(nvg, NVG_ALIGN_BL);
-            nvgText(nvg, lm->width - 8 - tag_width, lm->height - 8, devtag, devtag + devtag_len - devtag_company_len);
-
-            if (events & IMGUI_EVENT_MOUSE_HOVER)
-                nvgSetColour(nvg, C_GREY_1);
-            nvgText(
-                nvg,
-                lm->width - 8 - name_width,
-                lm->height - 8,
-                devtag + devtag_len - devtag_company_len,
-                devtag + devtag_len);
-
-            linked_arena_release(gui->arena, glyphs);
+            const char*    plugin_type_name = "";
+            const uint32_t plugin_type      = gui->plugin->cplug_ctx->type;
+            if (plugin_type == CPLUG_PLUGIN_IS_STANDALONE)
+                plugin_type_name = "Standalone";
+            if (plugin_type == CPLUG_PLUGIN_IS_VST3)
+                plugin_type_name = "VST3";
+            if (plugin_type == CPLUG_PLUGIN_IS_CLAP)
+                plugin_type_name = "CLAP";
+            if (plugin_type == CPLUG_PLUGIN_IS_AUV2)
+                plugin_type_name = "Audio Unit";
+#ifdef _WIN32
+            const char* os_name = "Windows";
+#elif __APPLE__
+            const char* os_name = "macOS";
+#endif
+            len = snprintf(text, sizeof(text), "v%s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
+            nvgSetTextAlign(nvg, NVG_ALIGN_BR);
+            nvgText(nvg, lm->width - 8, lm->height - 8, text, text + len);
         }
     }
 
@@ -1462,7 +1627,7 @@ void pw_tick(void* _gui)
 
                     static const NVGcolour stop100 = nvgHexColour(0x40454AFF);
                     static const NVGcolour stop90  = nvgHexColour(0xB7C7D7FF);
-                    static const NVGcolour stop80  = nvgHexColour(0xC9D3DDFF);
+                    static const NVGcolour stop80  = C_BG_LIGHT;
 
                     NVGpaint grad_100_90 = nvgRadialGradient(nvg, pt.x, pt.y, r90, r100, stop90, stop100);
                     nvgBeginPath(nvg);
@@ -2301,13 +2466,13 @@ void pw_tick(void* _gui)
         // {
         //     float top = lm->top_content_bottom;
         //     float bot = lm->height;
-    
+
         //     float ch0 = 0.3;
         //     float ch1 = 0.1;
-    
+
         //     NVGcolour col0 = {ch0, ch0, ch0, 1};
         //     NVGcolour col1 = {ch1, ch1, ch1, 1};
-    
+
         //     nvgBeginPath(nvg);
         //     nvgRect2(nvg, 0, top, lm->width, bot);
         //     NVGpaint paint = nvgLinearGradient(nvg, 0, top, 0, bot, col0, col1);
@@ -2447,6 +2612,6 @@ void pw_tick(void* _gui)
 
     if (click_curelogo)
         open_hyperlink("https://cure.audio");
-    if (click_devtag)
+    if (click_exaclogo)
         open_hyperlink("https://exacoustics.com");
 }
