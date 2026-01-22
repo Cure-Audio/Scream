@@ -1,5 +1,6 @@
 #include "texteditor.h"
-#include "../gui.h"
+#include <imgui.h>
+#include <nanovg2.h>
 #include <stdbool.h>
 #include <utf8.h>
 #include <xhl/array.h>
@@ -11,8 +12,6 @@ enum
     // TED_TEXT_ALIGN = NVG_ALIGN_CL,
     TED_TEXT_ALIGN = NVG_ALIGN_CC,
 };
-
-static inline GUI* ted_shift_ptr(TextEditor* ted) { return (GUI*)(((char*)ted) - offsetof(GUI, texteditor)); }
 
 // Doubly linked list stack. of state items
 typedef struct TextEditorUndoState
@@ -143,11 +142,9 @@ NVGglyphPosition* ted_get_text_layout(TextEditor* ted, const char* text, size_t 
 {
     NVGglyphPosition* glyphs = linked_arena_alloc(ted->undo_arena, sizeof(NVGglyphPosition) * text_len);
 
-    GUI* gui = ted_shift_ptr(ted);
-
-    nvgSetFontSize(gui->nvg, ted->font_size);
-    nvgSetTextAlign(gui->nvg, NVG_ALIGN_TL);
-    int num_glyphs = nvgTextGlyphPositions(gui->nvg, 0, 0, text, text + text_len, glyphs, text_len);
+    nvgSetFontSize(ted->nvg, ted->font_size);
+    nvgSetTextAlign(ted->nvg, NVG_ALIGN_TL);
+    int num_glyphs = nvgTextGlyphPositions(ted->nvg, 0, 0, text, text + text_len, glyphs, text_len);
     xassert(num_glyphs <= text_len);
 
     return glyphs;
@@ -159,8 +156,6 @@ void ted_handle_ibeam_moved(TextEditor* ted)
     LINKED_ARENA_LEAK_DETECT_BEGIN(ted->undo_arena)
 
     // Check if cursor has moved out of visible bounds
-    GUI* gui = ted_shift_ptr(ted);
-
     size_t total_chars = xarr_len(ted->codepoints);
 
     if (total_chars)
@@ -205,7 +200,7 @@ void ted_handle_ibeam_moved(TextEditor* ted)
         linked_arena_release(ted->undo_arena, alloc_text);
     }
 
-    ted->time_last_ibeam_move = gui->frame_start_time;
+    ted->time_last_ibeam_move = xtime_now_ns();
     LINKED_ARENA_LEAK_DETECT_END(ted->undo_arena)
 }
 
@@ -228,14 +223,13 @@ void ted_delete_selection(TextEditor* ted)
     ted->selection_end   = 0;
 }
 
-bool ted_handle_copy(TextEditor* ted)
+bool ted_handle_copy(TextEditor* ted, void* pw)
 {
     LINKED_ARENA_LEAK_DETECT_BEGIN(ted->undo_arena)
 
     const size_t num_characters = ted->selection_end - ted->selection_start;
     if (num_characters)
     {
-        GUI*   gui     = ted_shift_ptr(ted);
         size_t buf_len = 4 * num_characters + 1;
         char*  buf     = linked_arena_alloc(ted->undo_arena, buf_len);
 
@@ -243,28 +237,27 @@ bool ted_handle_copy(TextEditor* ted)
         const int* range_end   = ted->codepoints + ted->selection_end;
 
         ted_get_text_range(ted, buf, buf_len, range_start, range_end);
-        pw_set_clipboard_text(gui->pw, buf);
+        pw_set_clipboard_text(pw, buf);
         linked_arena_release(ted->undo_arena, buf);
     }
     LINKED_ARENA_LEAK_DETECT_END(ted->undo_arena)
     return true;
 }
 
-bool ted_handle_cut(TextEditor* ted)
+bool ted_handle_cut(TextEditor* ted, void* pw)
 {
-    ted_handle_copy(ted);
+    ted_handle_copy(ted, pw);
     ted_delete_selection(ted);
     ted_handle_ibeam_moved(ted);
     return true;
 }
 
-bool ted_handle_paste(TextEditor* ted)
+bool ted_handle_paste(TextEditor* ted, void* pw)
 {
     char*  buf    = NULL;
     size_t buflen = 0;
-    GUI*   gui    = ted_shift_ptr(ted);
 
-    pw_get_clipboard_text(gui->pw, &buf, &buflen);
+    pw_get_clipboard_text(pw, &buf, &buflen);
     if (buf && buflen)
     {
         ted_delete_selection(ted);
@@ -650,7 +643,7 @@ bool ted_handle_delete(TextEditor* ted, bool jump_word)
 // Returns true if event is consumed/used by our app
 // Behaviour modeled off of playing in Google Chrome HTML <input>
 // https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_input_test
-bool ted_handle_key_down(TextEditor* ted, const PWEvent* event)
+bool ted_handle_key_down(TextEditor* ted, void* pw, const PWEvent* event)
 {
     const enum PWVirtualKey key  = event->key.virtual_key;
     const uint32_t          mods = event->key.modifiers;
@@ -683,11 +676,11 @@ bool ted_handle_key_down(TextEditor* ted, const PWEvent* event)
             return true;
         }
         if (key == PW_KEY_C)
-            return ted_handle_copy(ted);
+            return ted_handle_copy(ted, pw);
         if (key == PW_KEY_X)
-            return ted_handle_cut(ted);
+            return ted_handle_cut(ted, pw);
         if (key == PW_KEY_V)
-            return ted_handle_paste(ted);
+            return ted_handle_paste(ted, pw);
         if (key == PW_KEY_Y)
             return ted_handle_redo(ted);
         if (key == PW_KEY_Z && shift)
@@ -698,7 +691,7 @@ bool ted_handle_key_down(TextEditor* ted, const PWEvent* event)
 
 #ifdef _WIN32
     if (key == PW_KEY_DELETE && mods == PW_MOD_KEY_SHIFT) // I cannot find a mac equivalent of this
-        return ted_handle_cut(ted);
+        return ted_handle_cut(ted, pw);
     if (key == PW_KEY_DELETE)
         return ted_handle_delete(ted, mods == PW_MOD_KEY_CTRL);
 #endif
@@ -719,9 +712,9 @@ bool ted_handle_key_down(TextEditor* ted, const PWEvent* event)
     if (key == PW_KEY_END && !alt_opt)
         return ted_handle_move_ibeam_right(ted, true, false, shift);
     if (key == PW_KEY_INSERT && mods == PW_MOD_KEY_SHIFT)
-        return ted_handle_paste(ted);
+        return ted_handle_paste(ted, pw);
     if (key == PW_KEY_INSERT && mods == PW_MOD_KEY_CTRL) // ctrl on mac (not cmd!) AND ctrl on windows
-        return ted_handle_copy(ted);
+        return ted_handle_copy(ted, pw);
 
     // Keypress not used. eg. PW_KEY_F1 - F12
 
@@ -748,8 +741,6 @@ int ted_get_text_idx(TextEditor* ted, float x)
     size_t total_chars = xarr_len(ted->codepoints);
     if (total_chars)
     {
-        GUI* gui = ted_shift_ptr(ted);
-
         size_t alloc_size = 4 * total_chars + 1;
         char*  alloc_text = linked_arena_alloc(ted->undo_arena, alloc_size);
         size_t text_len   = ted_get_text(ted, alloc_text, alloc_size);
@@ -785,22 +776,21 @@ int ted_get_text_idx(TextEditor* ted, float x)
     return idx;
 }
 
-void ted_handle_mouse_down(TextEditor* ted)
+void ted_handle_mouse_down(TextEditor* ted, imgui_context* im)
 {
-    GUI*     gui       = ted_shift_ptr(ted);
-    imgui_pt pos       = gui->imgui.pos_mouse_down;
-    uint32_t modifiers = gui->imgui.frame.modifiers_mouse_down;
+    const imgui_pt pos       = im->pos_mouse_down;
+    const uint32_t modifiers = im->frame.modifiers_mouse_down;
 
     ted_set_action(ted, TEXT_ACTION_MOVE);
     const int idx = ted_get_text_idx(ted, pos.x);
     if (idx != ted->ibeam_idx && ted->selection_start == ted->selection_end)
     {
-        gui->imgui.left_click_counter = 1;
+        im->left_click_counter = 1;
     }
     bool selecting = modifiers == (PW_MOD_LEFT_BUTTON | PW_MOD_KEY_SHIFT);
     ted_set_ibeam_idx(ted, idx, selecting);
 
-    if (gui->imgui.left_click_counter == 2)
+    if (im->left_click_counter == 2)
     {
         ted_set_action(ted, TEXT_ACTION_MOVE);
         int total_chars = xarr_len(ted->codepoints);
@@ -837,7 +827,7 @@ void ted_handle_mouse_down(TextEditor* ted)
             ted_handle_ibeam_moved(ted);
         }
     }
-    else if (gui->imgui.left_click_counter == 3)
+    else if (im->left_click_counter == 3)
     {
         ted_set_action(ted, TEXT_ACTION_MOVE);
         ted->ibeam_idx       = xarr_len(ted->codepoints);
@@ -847,21 +837,19 @@ void ted_handle_mouse_down(TextEditor* ted)
     }
 }
 
-void ted_handle_mouse_drag(TextEditor* ted)
+void ted_handle_mouse_drag(TextEditor* ted, imgui_context* im)
 {
-    GUI* gui = ted_shift_ptr(ted);
-
-    float drag_x = gui->imgui.pos_mouse_move.x;
+    float drag_x = im->pos_mouse_move.x;
     ted_set_action(ted, TEXT_ACTION_MOVE);
     int idx = ted_get_text_idx(ted, drag_x);
     ted_set_ibeam_idx(ted, idx, true);
 }
 
-void ted_init(TextEditor* ted)
+void ted_init(TextEditor* ted, NVGcontext* nvg)
 {
+    ted->nvg = nvg;
     xarr_setcap(ted->codepoints, 64);
-    ted->undo_arena   = linked_arena_create(1024 * 4 - sizeof(LinkedArena));
-    ted->active_param = -1;
+    ted->undo_arena = linked_arena_create(1024 * 4 - sizeof(LinkedArena));
     ted_push_state(ted);
 }
 
@@ -908,21 +896,23 @@ void ted_clear(TextEditor* ted)
     ted_push_state(ted);
 }
 
-void ted_draw(TextEditor* ted)
+void ted_draw(
+    TextEditor* ted,
+    uint64_t    frame_time_ns,
+    NVGcolour   col_text,
+    NVGcolour   col_selection_bg,
+    NVGcolour   col_ibeam)
 {
     LINKED_ARENA_LEAK_DETECT_BEGIN(ted->undo_arena)
+
+    NVGcontext* nvg = ted->nvg;
 
     xassert(ted->ibeam_idx >= 0);
     xassert(ted->selection_start >= 0);
     xassert(ted->selection_end >= 0);
     xassert(ted->selection_start <= ted->selection_end);
 
-    GUI* gui = ted_shift_ptr(ted);
-
-    const bool has_keyboard_focus = ted->active_param != -1;
-
-    NVGcontext*   nvg = gui->nvg;
-    const xvec4f* d   = &ted->dimensions;
+    const xvec4f* d = &ted->dimensions;
 
     float padding = roundf(ted->font_size * 0.1);
 
@@ -955,10 +945,7 @@ void ted_draw(TextEditor* ted)
         if (ted->selection_start != ted->selection_end)
         {
             xassert(ted->selection_start < ted->selection_end);
-            NVGcolour col = nvgHexColour(0x8BD1E4FF);
-            if (!has_keyboard_focus)
-                col.a = 0.5f;
-            nvgSetColour(nvg, col);
+            nvgSetColour(nvg, col_selection_bg);
             const float start_x = glyphs[ted->selection_start].minx;
             const float end_x   = glyphs[ted->selection_end - 1].maxx;
 
@@ -978,47 +965,48 @@ void ted_draw(TextEditor* ted)
         }
 
         nvgSetTextAlign(nvg, TED_TEXT_ALIGN);
-        nvgSetColour(nvg, C_TEXT_LIGHT_BG);
+        nvgSetColour(nvg, col_text);
         float cx = d->x + d->width * 0.5;
         float cy = d->y + d->height * 0.5;
         nvgText(nvg, cx + ted->text_offset, cy, text, NULL);
     }
 
     // Draw ibeam
-    if (has_keyboard_focus)
+    // if (has_keyboard_focus)
+    // {
+    uint64_t time_then = ted->time_last_ibeam_move;
+    uint64_t time_now  = frame_time_ns;
+    // uint64_t time_now  = gui->frame_start_time;
+    // Show every half second
+    uint64_t num_500ms_intervals = (time_now - time_then) / 500000000;
+
+    if (num_500ms_intervals == 0 || (num_500ms_intervals & 1))
     {
-        uint64_t time_then = ted->time_last_ibeam_move;
-        uint64_t time_now  = gui->frame_start_time;
-        // Show every half second
-        uint64_t num_500ms_intervals = (time_now - time_then) / 500000000;
-
-        if (num_500ms_intervals == 0 || (num_500ms_intervals & 1))
+        float ibeam_x = 0;
+        if (total_chars)
         {
-            float ibeam_x = 0;
-            if (total_chars)
-            {
-                int idx = ted->ibeam_idx;
-                if (idx >= total_chars)
-                    ibeam_x = text_width;
-                else
-                    ibeam_x = glyphs[idx].minx;
-                if (ibeam_x < 0)
-                    ibeam_x = 0;
-                ibeam_x += ted->text_offset;
-            }
-            // Centre alignment
-            ibeam_x += d->width * 0.5f;
-            ibeam_x -= text_width * 0.5f;
-
-            ibeam_x += d->x;
-            ibeam_x  = ceilf(ibeam_x);
-
-            nvgBeginPath(nvg);
-            nvgSetColour(nvg, (NVGcolour){0, 0, 0, 1});
-            nvgRect(nvg, ibeam_x, d->y - padding, 2, d->height);
-            nvgFill(nvg);
+            int idx = ted->ibeam_idx;
+            if (idx >= total_chars)
+                ibeam_x = text_width;
+            else
+                ibeam_x = glyphs[idx].minx;
+            if (ibeam_x < 0)
+                ibeam_x = 0;
+            ibeam_x += ted->text_offset;
         }
+        // Centre alignment
+        ibeam_x += d->width * 0.5f;
+        ibeam_x -= text_width * 0.5f;
+
+        ibeam_x += d->x;
+        ibeam_x  = ceilf(ibeam_x);
+
+        nvgBeginPath(nvg);
+        nvgSetColour(nvg, col_ibeam);
+        nvgRect(nvg, ibeam_x, d->y - padding, 2, d->height);
+        nvgFill(nvg);
     }
+    // }
 
     nvgResetScissor(nvg);
 
@@ -1028,49 +1016,32 @@ void ted_draw(TextEditor* ted)
     LINKED_ARENA_LEAK_DETECT_END(ted->undo_arena)
 }
 
-// ====================
-#include "../plugin.h"
-
-void ted_activate(TextEditor* ted, xvec4f dimensions, xvec2f pos, float _font_size, int param_id)
+void ted_activate(TextEditor* ted, xvec4f dimensions, xvec2f pos, float _font_size, const char* text)
 {
-    GUI* gui = ted_shift_ptr(ted);
-
-    char   text[24];
-    double value = main_get_param(gui->plugin, param_id);
-    cplug_parameterValueToString(gui->plugin, param_id, text, sizeof(text), value);
-
     ted_set_text(ted, text);
 
     ted->ref_current_state = NULL;
 
     ted->dimensions = dimensions;
 
-    ted->font_size    = _font_size;
-    ted->active_param = param_id;
+    ted->font_size = _font_size;
 
     ted->text_offset     = 0;
     ted->selection_start = 0;
     ted->selection_end   = 0;
 
     ted->ibeam_idx            = ted_get_text_idx(ted, pos.x);
-    ted->time_last_ibeam_move = gui->frame_start_time;
+    ted->time_last_ibeam_move = xtime_now_ns();
 
     linked_arena_clear(ted->undo_arena);
     ted->last_action = TEXT_ACTION_WRITE;
     ted_push_state(ted);
-
-    pw_get_keyboard_focus(gui->pw);
 }
 
 void ted_deactivate(TextEditor* ted)
 {
-    GUI* gui = ted_shift_ptr(ted);
-
-    ted->active_param = -1;
-
     ted->text_offset     = 0;
     ted->ibeam_idx       = 0;
     ted->selection_start = 0;
     ted->selection_end   = 0;
-    pw_release_keyboard_focus(gui->pw);
 }

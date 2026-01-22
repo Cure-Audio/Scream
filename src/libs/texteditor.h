@@ -3,6 +3,8 @@
 
 #include "linked_arena.h"
 #include <cplug_extensions/window.h>
+#include <imgui.h>
+#include <nanovg2.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <xhl/vector.h>
@@ -16,6 +18,8 @@ enum TextEditorAction
 
 typedef struct TextEditor
 {
+    NVGcontext* nvg;
+
     xvec4f dimensions;
 
     int* codepoints; // UTF32 format
@@ -35,24 +39,27 @@ typedef struct TextEditor
     // Nullable reference to data in the above arena.
     // Will be set to NULL on init
     struct TextEditorUndoState* ref_current_state;
-
-    int active_param; // enum ParamID
 } TextEditor;
 
-void ted_init(TextEditor*);
+void ted_init(TextEditor*, NVGcontext*);
 void ted_deinit(TextEditor*);
 
-void ted_activate(TextEditor* ted, xvec4f dimensions, xvec2f pos, float _font_size, int param_id);
+void ted_activate(TextEditor* ted, xvec4f dimensions, xvec2f pos, float _font_size, const char* text);
 void ted_deactivate(TextEditor* ted);
 
 // Returns true if event is consumed/used by our app
-bool ted_handle_key_down(TextEditor* ted, const PWEvent* event);
+bool ted_handle_key_down(TextEditor* ted, void* pw, const PWEvent* event);
 void ted_handle_text(TextEditor* ted, int codepoint); // utf32 codepoint
-void ted_handle_mouse_down(TextEditor* ted);
-void ted_handle_mouse_drag(TextEditor* ted);
+void ted_handle_mouse_down(TextEditor* ted, imgui_context* im);
+void ted_handle_mouse_drag(TextEditor* ted, imgui_context* im);
 
 // Returns number of bytes copied into 'buf', excluding the NULL terminating byte
 size_t ted_get_text(TextEditor*, char* buf, size_t buflen);
 void   ted_clear(TextEditor*);
 
-void ted_draw(TextEditor*);
+void ted_draw(
+    TextEditor* ted,
+    uint64_t    frame_time_ns,
+    NVGcolour   col_text,
+    NVGcolour   col_selection_bg,
+    NVGcolour   col_ibeam);

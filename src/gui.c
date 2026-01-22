@@ -202,7 +202,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
         }
     }
 
-    ted_init(&gui->texteditor);
+    gui->active_param_text_input = -1;
+    ted_init(&gui->texteditor, gui->nvg);
 
     uint64_t now_ns            = xtime_now_ns();
     gui->gui_create_time       = now_ns;
@@ -318,9 +319,12 @@ bool pw_event(const PWEvent* event)
         gui->last_resize_time = xtime_now_ns();
     }
 
-    if (gui->texteditor.active_param != -1)
+    if (gui->active_param_text_input != -1)
     {
         TextEditor* ted = &gui->texteditor;
+
+        bool ret               = false;
+        bool should_deactivate = false;
 
         if (event->type == PW_EVENT_MOUSE_LEFT_DOWN || event->type == PW_EVENT_MOUSE_RIGHT_DOWN ||
             event->type == PW_EVENT_MOUSE_MIDDLE_DOWN)
@@ -333,7 +337,7 @@ bool pw_event(const PWEvent* event)
             rect.b = ted->dimensions.y + ted->dimensions.height;
             if (false == imgui_hittest_rect(pos, &rect))
             {
-                ted->active_param = -1;
+                gui->active_param_text_input = -1;
                 if (gui->plugin->cplug_ctx->type != CPLUG_PLUGIN_IS_STANDALONE)
                     pw_release_keyboard_focus(gui->pw);
             }
@@ -341,8 +345,6 @@ bool pw_event(const PWEvent* event)
         else if (event->type == PW_EVENT_TEXT)
         {
             xassert(event->text.codepoint != 0x7f);
-
-            bool ret = false;
 
             if (event->text.codepoint > 31)
             {
@@ -359,40 +361,49 @@ bool pw_event(const PWEvent* event)
                 extern bool param_string_to_value(uint32_t param_id, const char* str, double* val);
 
                 double val = 0;
-                if (param_string_to_value(ted->active_param, text, &val))
+                if (param_string_to_value(gui->active_param_text_input, text, &val))
                 {
-                    param_set(gui->plugin, ted->active_param, val);
+                    param_set(gui->plugin, gui->active_param_text_input, val);
                 }
 
-                ted_deactivate(ted);
+                should_deactivate = true;
             }
             else if (event->text.codepoint == 27) // ESC
             {
                 // This is not how Chrome behaves, it just feels intuitive to me...
-                ted_deactivate(ted);
-                ret = true;
+                should_deactivate = true;
+                ret               = true;
             }
             else if (event->text.codepoint == 9) // TAB
             {
                 // Ignored
             }
+
             xassert(ted->ibeam_idx >= 0 && ted->ibeam_idx <= xarr_len(ted->codepoints));
-            return ret;
         }
         else if (event->type == PW_EVENT_KEY_DOWN)
         {
-            bool ret = ted_handle_key_down(ted, event);
+            ret = ted_handle_key_down(ted, gui->pw, event);
             xassert(ted->ibeam_idx >= 0 && ted->ibeam_idx <= xarr_len(ted->codepoints));
-            return ret;
         }
         else if (event->type == PW_EVENT_RESIZE_UPDATE)
         {
-            ted_deactivate(ted);
+            should_deactivate = true;
         }
         else if (event->type == PW_EVENT_KEY_FOCUS_LOST)
         {
-            ted_deactivate(ted);
+            should_deactivate = true;
         }
+
+        if (should_deactivate)
+        {
+            gui->active_param_text_input = -1;
+            ted_deactivate(ted);
+            if (event->type != PW_EVENT_KEY_FOCUS_LOST)
+                pw_release_keyboard_focus(gui->pw);
+        }
+        if (ret)
+            return ret;
     }
     else if (gui->plugin->cplug_ctx->type == CPLUG_PLUGIN_IS_STANDALONE)
     {
@@ -1449,17 +1460,17 @@ void pw_tick(void* _gui)
                 pw_set_mouse_cursor(gui->pw, PW_CURSOR_IBEAM);
 
             // Handle events
-            if (gui->texteditor.active_param == param_id)
+            if (gui->active_param_text_input == param_id)
             {
                 TextEditor* ted = &gui->texteditor;
                 // Text editor stuff
                 if (events & IMGUI_EVENT_MOUSE_LEFT_DOWN)
                 {
-                    ted_handle_mouse_down(ted);
+                    ted_handle_mouse_down(ted, &gui->imgui);
                 }
                 if (events & IMGUI_EVENT_DRAG_MOVE)
                 {
-                    ted_handle_mouse_drag(ted);
+                    ted_handle_mouse_drag(ted, &gui->imgui);
                 }
                 xassert(ted->ibeam_idx >= 0 && ted->ibeam_idx <= xarr_len(ted->codepoints));
             }
@@ -1470,14 +1481,27 @@ void pw_tick(void* _gui)
                 {
                     xvec4f dimensions = {rect.x, rect.y, rect.r - rect.x, rect.b - rect.y};
                     xvec2f pos        = {im->pos_mouse_down.x, im->pos_mouse_down.y};
-                    ted_activate(&gui->texteditor, dimensions, pos, param_font_size, param_id);
+
+                    gui->active_param_text_input = param_id;
+                    pw_get_keyboard_focus(gui->pw);
+
+                    char   text[24];
+                    double value = main_get_param(gui->plugin, param_id);
+                    cplug_parameterValueToString(gui->plugin, param_id, text, sizeof(text), value);
+
+                    ted_activate(&gui->texteditor, dimensions, pos, param_font_size, text);
                 }
             }
 
             // Draw
-            if (gui->texteditor.active_param == param_id)
+            if (gui->active_param_text_input == param_id)
             {
-                ted_draw(&gui->texteditor);
+                ted_draw(
+                    &gui->texteditor,
+                    gui->frame_start_time,
+                    C_TEXT_LIGHT_BG,
+                    nvgHexColour(0x8BD1E47F),
+                    (NVGcolour){0, 0, 0, 1});
             }
             else
             {

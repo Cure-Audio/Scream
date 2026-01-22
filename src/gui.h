@@ -71,6 +71,7 @@ typedef struct GUI
 
     ResourceManager resource_manager;
 
+    int        active_param_text_input; // enum ParamID, or -1 if inactive
     TextEditor texteditor;
 
     struct imgui_context imgui;
