@@ -917,6 +917,7 @@ void ted_draw(
     float padding = roundf(ted->font_size * 0.1);
 
     nvgSetScissor(nvg, d->x, d->y - padding, d->width, d->height + 2 * padding);
+    nvgSetFontSize(nvg, ted->font_size);
 
     size_t            total_chars = xarr_len(ted->codepoints);
     const char*       text        = NULL;
@@ -966,9 +967,13 @@ void ted_draw(
 
         nvgSetTextAlign(nvg, TED_TEXT_ALIGN);
         nvgSetColour(nvg, col_text);
-        float cx = d->x + d->width * 0.5;
+
+        // Centre alignment
+        float x = d->x + d->width * 0.5;
+        // Left alignment
+        // float x = d->x + ted->text_offset;
         float cy = d->y + d->height * 0.5;
-        nvgText(nvg, cx + ted->text_offset, cy, text, NULL);
+        nvgText(nvg, x + ted->text_offset, cy, text, NULL);
     }
 
     // Draw ibeam

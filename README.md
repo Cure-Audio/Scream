@@ -68,6 +68,10 @@ This is all a tech demo of work in progress GUI libraries I'm working on. The go
 
 I'm using a novel way write/use an immediate mode (IM) library. There are probably other small projects that use similar techniques to what I do, but I have not come across any. Let's coin the term "treeless immediate mode library" or "TIM" to discern this style of library.
 
+Update: Here are 2 YouTube streams I just found of people implementing what I have, but for mouse down/up events only 
+1. https://www.youtube.com/watch?v=go-h9c_h6Uw
+2. https://www.youtube.com/watch?v=8e56I1z9cn4
+
 Most IM libraries build a big retained mode (RM) like tree structure under the hood and use complicated diffs between tree structures from previous frames while offering a simple declarative IM interface.
 
 TIM calculates hit tests at runtime and stores ids that succeed on a first come first served (served = stores the id) basis. This has the advantage of skipping the enormous amount of state with the bugs and restrictions that come with developing and maintaining a big tree structure, while suffering from a few unique probelems. Here are some examples:
