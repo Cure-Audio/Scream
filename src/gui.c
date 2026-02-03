@@ -2340,7 +2340,7 @@ void pw_tick(void* _gui)
         // }
         // nvgText(nvg, 8, 8, text, text + len);
 
-        xvg_draw_text_ex(xvg, 8, 8, text, text + len, 14, XVG_ALIGN_TL, C_RED, 0, 1.5);
+        xvg_draw_text_ex(xvg, 8, 8, text, text + len, 14, XVG_ALIGN_TL, 0xff007fff, 0, 1.5);
     }
 #endif // SHOW_FPS
 

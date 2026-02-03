@@ -1211,10 +1211,10 @@ void imp_draw(IMPointsFrameContext* fstate)
     XVG*          xvg = fstate->xvg;
     xassert(xvg);
 
-    // TODO: XVG
-    /*
     // Draw path
     {
+        // TODO: XVG
+        /*
         const int     N   = xarr_len(imp->path_cache);
         const xvec2f* it  = imp->path_cache;
         const xvec2f* end = it + N;
@@ -1225,7 +1225,8 @@ void imp_draw(IMPointsFrameContext* fstate)
 
         NVGcolour col = nvgHexColour(imp->theme.col_line);
         nvgSetColour(xvg, col);
-        nvgStroke(xvg, imp->theme.line_stroke_width);
+        nvgStroke(xvg, imp->theme.line_stroke_width)
+        */
     }
 
     // Hover point
@@ -1239,32 +1240,26 @@ void imp_draw(IMPointsFrameContext* fstate)
         if (hover_pt)
         {
             xassert(fstate->delete_pt_idx == -1);
-            nvgBeginPath(xvg);
-            nvgCircle(xvg, hover_pt->x, hover_pt->y, imp->theme.point_click_radius);
-            nvgSetColour(xvg, nvgHexColour(imp->theme.col_point_hover_bg));
-            nvgFill(xvg);
+            unsigned col = imp->theme.col_point_hover_bg;
+            xvg_draw_circle(xvg, hover_pt->x, hover_pt->y, imp->theme.point_click_radius, 0, col);
         }
     }
 
     // Skew points
     {
-        nvgBeginPath(xvg);
+        float stroke = imp->theme.skewpoint_stroke_width;
+        float radius = imp->theme.skew_point_radius;
         for (int i = 0; i < xarr_len(imp->skew_points); i++)
         {
             xvec2f pt = imp->skew_points[i];
-            nvgCircle(xvg, pt.x, pt.y, imp->theme.skew_point_radius);
+            xvg_draw_circle(xvg, pt.x, pt.y, radius, 0, imp->theme.col_skewpoint_inner);
+            xvg_draw_circle(xvg, pt.x, pt.y, radius, stroke, imp->theme.col_skewpoint_outer);
         }
-        nvgSetColour(xvg, nvgHexColour(imp->theme.col_skewpoint_inner));
-        nvgFill(xvg);
 
-        nvgBeginPath(xvg);
         for (int i = 0; i < xarr_len(imp->skew_points); i++)
         {
             xvec2f pt = imp->skew_points[i];
-            nvgCircle(xvg, pt.x, pt.y, imp->theme.skew_point_radius);
         }
-        nvgSetColour(xvg, nvgHexColour(imp->theme.col_skewpoint_outer));
-        nvgStroke(xvg, imp->theme.skewpoint_stroke_width);
     }
 
     // Regular points
@@ -1286,9 +1281,9 @@ void imp_draw(IMPointsFrameContext* fstate)
             }
         }
 
-        size_t    num_points   = xarr_len(imp->points);
-        NVGcolour col_selected = nvgHexColour(imp->theme.col_point_selected);
-        NVGcolour col_normal   = nvgHexColour(imp->theme.col_point);
+        size_t   num_points   = xarr_len(imp->points);
+        unsigned col_selected = imp->theme.col_point_selected;
+        unsigned col_normal   = imp->theme.col_point;
         for (uint64_t i = 0; i < num_points; i++)
         {
             xvec2f pt = imp->points[i];
@@ -1298,39 +1293,27 @@ void imp_draw(IMPointsFrameContext* fstate)
             if (i == num_points - 1)
                 pt_idx = 0;
 
-            nvgBeginPath(xvg);
-            nvgCircle(xvg, pt.x, pt.y, imp->theme.point_radius);
-            if (selected_points_flags & (1llu << pt_idx))
-                nvgSetColour(xvg, col_selected);
-            else
-                nvgSetColour(xvg, col_normal);
-            nvgFill(xvg);
+            const bool is_selected = !!(selected_points_flags & (1llu << pt_idx));
+            unsigned   col         = is_selected ? col_selected : col_normal;
+            xvg_draw_circle(xvg, pt.x, pt.y, imp->theme.point_radius, 0, col);
         }
     }
 
     if (imp->selection_start.u64 != 0 && imp->selection_end.u64 != 0)
     {
-        const NVGcolour  col  = nvgHexColour(imp->theme.col_selection_box);
+        const unsigned   col  = imp->theme.col_selection_box;
         const imgui_rect area = {
             xm_minf(imp->selection_start.x, imp->selection_end.x),
             xm_minf(imp->selection_start.y, imp->selection_end.y),
             xm_maxf(imp->selection_start.x, imp->selection_end.x),
             xm_maxf(imp->selection_start.y, imp->selection_end.y)};
 
-        NVGcolour bg_col = col;
-        bg_col.a         = 0.25f;
+        unsigned bg_col = (col & 0xffffff00) | 0x40; // 25% opacity
 
-        nvgBeginPath(xvg);
-        nvgRect2(xvg, area.x, area.y, area.r, area.b);
-        nvgSetColour(xvg, bg_col);
-        nvgFill(xvg);
-
-        nvgBeginPath(xvg);
-        nvgRect2(xvg, area.x + 0.5f, area.y + 0.5f, area.r - 0.5f, area.b - 0.5f);
-        nvgSetColour(xvg, col);
-        nvgStroke(xvg, 1);
+        float stroke = 1;
+        xvg_draw_rectangle(xvg, area.x, area.y, area.r - area.x, area.b - area.y, 0, 0, bg_col);
+        xvg_draw_rectangle(xvg, area.x, area.y, area.r - area.x, area.b - area.y, 0, stroke, col);
     }
-    */
 }
 
 void imp_run(
