@@ -2091,66 +2091,60 @@ void pw_tick(void* _gui)
         }
     }
     xvg_command_custom(xvg, gui, do_knob_shader, XVG_LABEL("Knob shader"));
-    // TODO: XVG
-    /*
 
-//     const float peak_gain = p->gui_output_peak_gain;
-//     if (peak_gain > 1)
-//     {
-//         nvgSetTextAlign(nvg, NVG_ALIGN_BR);
-//         nvgSetColour(nvg, nvgRGBAf(1, 0.1, 0.1, 1));
-//         float dB = xm_fast_gain_to_dB(peak_gain);
-//         char  label[48];
-//         snprintf(label, sizeof(label), "[WARNING] Auto hardclipper: ON. %.2fdB", dB);
-//         nvgText(nvg, lm->width - 20, gui_height - 20, label, NULL);
-//     }
+    //     const float peak_gain = p->gui_output_peak_gain;
+    //     if (peak_gain > 1)
+    //     {
+    //         nvgSetTextAlign(nvg, NVG_ALIGN_BR);
+    //         nvgSetColour(nvg, nvgRGBAf(1, 0.1, 0.1, 1));
+    //         float dB = xm_fast_gain_to_dB(peak_gain);
+    //         char  label[48];
+    //         snprintf(label, sizeof(label), "[WARNING] Auto hardclipper: ON. %.2fdB", dB);
+    //         nvgText(nvg, lm->width - 20, gui_height - 20, label, NULL);
+    //     }
 
-// #ifdef CPLUG_BUILD_STANDALONE
-//     {
-//         Plugin* p = p;
-//         // plot_expander(nvg, lm->width, gui_height);
-//         // plot_peak_detection(nvg, lm->width, gui_height);
-//         // plot_peak_distortion(nvg, im, lm->width, gui_height);
-//         // plot_peak_upwards_compression(nvg, im, lm->width, gui_height);
-//         float midi  = xt_atomic_load_f32(&p->gui_osc_midi);
-//         float phase = xt_atomic_load_f32(&p->gui_osc_phase);
-//         plot_oscilloscope(nvg, lm->width - 230, 10, 220, 180, p->sample_rate, midi, phase);
+    // #ifdef CPLUG_BUILD_STANDALONE
+    //     {
+    //         Plugin* p = p;
+    //         // plot_expander(nvg, lm->width, gui_height);
+    //         // plot_peak_detection(nvg, lm->width, gui_height);
+    //         // plot_peak_distortion(nvg, im, lm->width, gui_height);
+    //         // plot_peak_upwards_compression(nvg, im, lm->width, gui_height);
+    //         float midi  = xt_atomic_load_f32(&p->gui_osc_midi);
+    //         float phase = xt_atomic_load_f32(&p->gui_osc_phase);
+    //         plot_oscilloscope(nvg, lm->width - 230, 10, 220, 180, p->sample_rate, midi, phase);
 
-//         imgui_rect  rect   = {lm->width - 220, 10, lm->width - 60, 25};
-//         const float offset = 10 + (rect.b - rect.y);
-//         im_slider(nvg, im, rect, &g_output_gain_dB, -24, 0, "%.2fdB", "Output");
-//         // rect.y += offset;
-//         // rect.b += offset;
-//         // im_slider(nvg, im, rect, &g_attack_ms, 0, 50, "%.2fms", "Attack");
-//         // rect.y += offset;
-//         // rect.b += offset;
-//         // im_slider(nvg, im, rect, &g_release_ms, 0, 50, "%.2fms", "Release");
-//         // rect.y += offset;
-//         // rect.b += offset;
-//         // im_slider(nvg, im, rect, &g_lp_Q, 0.01, 10, "%.3f", "LP Q");
-//         // rect.y += offset;
-//         // rect.b += offset;
-//         // im_slider(nvg, im, rect, &g_hp_Q, 0.05, 2, "%.3f", "HP Q");
-//     }
-// #endif
+    //         imgui_rect  rect   = {lm->width - 220, 10, lm->width - 60, 25};
+    //         const float offset = 10 + (rect.b - rect.y);
+    //         im_slider(nvg, im, rect, &g_output_gain_dB, -24, 0, "%.2fdB", "Output");
+    //         // rect.y += offset;
+    //         // rect.b += offset;
+    //         // im_slider(nvg, im, rect, &g_attack_ms, 0, 50, "%.2fms", "Attack");
+    //         // rect.y += offset;
+    //         // rect.b += offset;
+    //         // im_slider(nvg, im, rect, &g_release_ms, 0, 50, "%.2fms", "Release");
+    //         // rect.y += offset;
+    //         // rect.b += offset;
+    //         // im_slider(nvg, im, rect, &g_lp_Q, 0.01, 10, "%.3f", "LP Q");
+    //         // rect.y += offset;
+    //         // rect.b += offset;
+    //         // im_slider(nvg, im, rect, &g_hp_Q, 0.05, 2, "%.3f", "HP Q");
+    //     }
+    // #endif
 
     // LFO toggle button
     {
         imgui_rect rect = gui->lfo_toggle_button;
-        snvg_command_draw_nvg(nvg, XVG_LABEL("ayy lmao"));
+        // snvg_command_draw_nvg(nvg, XVG_LABEL("ayy lmao"));
 
         bool lfo_open = p->lfo_section_open;
 
-        if (lfo_open)
+        if (lfo_open) // section seperator
         {
-            // section seperator
-            nvgBeginPath(nvg);
-            float y = rect.b - 4;
-            float b = rect.b;
-            nvgRect2(nvg, lm->content_x, y, lm->content_r, b);
-            NVGpaint paint = nvgLinearGradient(nvg, 0, y, 0, b, (NVGcolour){0, 0, 0, 0}, (NVGcolour){0, 0, 0, 0.25f});
-            nvgSetPaint(nvg, paint);
-            nvgFill(nvg);
+            float       y = rect.b - 4;
+            float       b = rect.b;
+            XVGGradient g = xvg_make_linear_gradient(0x0, 0x40, 0, y, 0, b);
+            xvg_draw_solid_rectangle_with_gradient(xvg, lm->content_x, y, lm->content_r - lm->content_x, b - y, g);
         }
 
         // Inlet
@@ -2161,45 +2155,20 @@ void pw_tick(void* _gui)
             //  _______
             // /       \\
             // ----------
-            // So we have to use a scissor and double the height of the rectangle we want to draw
-            nvgSetScissor(nvg, rect.x, rect.y, w, h);
-
             const float radius = lm->param_scale * 12;
-            nvgBeginPath(nvg);
-            nvgRoundedRectVarying(nvg, rect.x, rect.y, w, h * 2, radius, radius, 0, 0);
-            nvgSetColour(nvg, C_BG_LIGHT);
-            nvgFill(nvg);
-
-            imgui_rect shadow_rect  = rect;
-            shadow_rect.y          += 2;
-            shadow_rect.b          += 2;
-            shadow_rect.x          += 2;
-            // shadow_rect.r          -= 2;
-
-            NVGpaint shadow_paint = nvgBoxGradient(
-                nvg,
-                shadow_rect.x,
-                shadow_rect.y,
-                w,
-                h * 2,
-                radius,
-                4,
-                (NVGcolour){0, 0, 0, 0},
-                (NVGcolour){0, 0, 0, 0.1f});
-            nvgSetPaint(nvg, shadow_paint);
-            nvgFill(nvg);
-
-            nvgResetScissor(nvg);
+            XVGGradient g      = {.colour1 = C_BG_LIGHT};
+            xvg_draw_rectangle_with_gradient_ex(xvg, rect.x, rect.y, w, h, radius, 0, radius, 0, 0, g);
+            float blur = 6;
+            g          = xvg_make_shadow(0x40, 0x0, 0, 0, blur, -blur, true);
+            xvg_draw_rectangle_with_gradient_ex(xvg, rect.x, rect.y, w, h, radius, 0, radius, 0, 0, g);
         }
 
-        nvgBeginPath(nvg);
-        nvgSetColour(nvg, C_TEXT_LIGHT_BG);
-        nvgSetFontSize(nvg, lm->param_scale * 12);
-        nvgSetTextAlign(nvg, NVG_ALIGN_CL);
         float cy            = (rect.y + rect.b) * 0.5f;
         float inner_padding = 12 * lm->param_scale;
-        nvgText(nvg, rect.x + inner_padding, cy, "LFO", 0);
+        float fsize         = lm->param_scale * 12;
+        xvg_draw_text(xvg, rect.x + inner_padding, cy, "LFO", 0, fsize, XVG_ALIGN_CL, C_TEXT_LIGHT_BG);
 
+        // Arrow
         float tri_half_width = 5 * lm->param_scale;
         float y1             = cy + tri_half_width * (1.0f / 3.0f);
         float y2             = cy - tri_half_width * (2.0f / 3.0f);
@@ -2209,18 +2178,21 @@ void pw_tick(void* _gui)
             y1        = y2;
             y2        = tmp;
         }
-        nvgSetLineCap(nvg, NVG_ROUND);
-        nvgBeginPath(nvg);
-        nvgMoveTo(nvg, rect.r - inner_padding, y1);
-        nvgLineTo(nvg, rect.r - inner_padding - tri_half_width, y2);
-        nvgLineTo(nvg, rect.r - inner_padding - tri_half_width * 2, y1);
-        nvgStroke(nvg, 2 * lm->param_scale);
-        nvgSetLineCap(nvg, NVG_BUTT);
+        y1           += 1;
+        y2           += 1;
+        float x1      = rect.r - inner_padding;
+        float x2      = rect.r - inner_padding - tri_half_width;
+        float x3      = rect.r - inner_padding - tri_half_width * 2;
+        float stroke  = 2 * lm->param_scale;
+        xvg_draw_line_round(xvg, x1, y1, x2, y2, stroke, C_TEXT_LIGHT_BG);
+        xvg_draw_line_round(xvg, x2, y2, x3, y1, stroke, C_TEXT_LIGHT_BG);
         unsigned events = imgui_get_events_rect(im, 'lopn', &rect);
         if (events & IMGUI_EVENT_MOUSE_ENTER)
             pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
     }
 
+    // TODO: XVG
+    /*
     if (p->lfo_section_open)
     {
         extern void draw_lfo_section(GUI*);
