@@ -202,8 +202,8 @@ void* pw_create_gui(void* _plugin, void* _pw)
         }
     }
 
-    resources_init(&gui->resource_manager, 4096);
     */
+    resources_init(&gui->resource_manager, 4096);
     gui->active_param_text_input = -1;
     ted_init(&gui->texteditor, &gui->xvg);
 
@@ -228,14 +228,11 @@ void pw_destroy_gui(void* _gui)
     xarr_free(gui->lfo_ybuffer);
     xarr_free(gui->lfo_playhead_trail);
     ted_deinit(&gui->texteditor);
+    resources_deinit(&gui->resource_manager, &gui->xvg);
+
     // TODO: XVG
     /*
-
     imp_deinit(&gui->imp);
-
-    resources_deinit(&gui->resource_manager, gui->nvg);
-
-    nvgDestroyContext(gui->nvg);
     */
     xvg_deinit(&gui->xvg);
     sg_shutdown(gui->sg);
@@ -590,8 +587,6 @@ double handle_param_events(GUI* gui, ParamID param_id, uint32_t events, float dr
     return value_d;
 }
 
-// TODO: XVG
-/*
 void do_knob_shader(void* uptr)
 {
     GUI*           gui = uptr;
@@ -606,6 +601,13 @@ void do_knob_shader(void* uptr)
 
         float radius = lm->knob_outer_radius;
         xassert(radius != 0);
+        float feather = 1.0f / radius;
+
+        fs_knob_uniforms_t fs_uniforms = {
+            .u_colour     = {0.7098039215686275, 0.7450980392156863, 0.7803921568627451, 1},
+            .fan_feather  = 0.15,
+            .ring_feather = 0.002,
+        };
 
         for (int i = 0; i < 3; i++)
         {
@@ -619,9 +621,6 @@ void do_knob_shader(void* uptr)
                 .size        = {lm->width, lm->height},
             };
 
-            fs_knob_uniforms_t fs_uniforms = {
-                .u_colour = {0.7098039215686275, 0.7450980392156863, 0.7803921568627451, 1}};
-
             sg_apply_uniforms(UB_vs_knob_uniforms, &SG_RANGE(vs_uniforms));
             sg_apply_uniforms(UB_fs_knob_uniforms, &SG_RANGE(fs_uniforms));
 
@@ -632,6 +631,8 @@ void do_knob_shader(void* uptr)
     }
 }
 
+// TODO: XVG
+/*
 // This should be a nvgImagePattern draw call but somehow I keep breaking nanovg...
 void do_logo_shader(void* uptr)
 {
@@ -2089,9 +2090,9 @@ void pw_tick(void* _gui)
             }
         }
     }
+    xvg_command_custom(xvg, gui, do_knob_shader, XVG_LABEL("Knob shader"));
     // TODO: XVG
     /*
-    snvg_command_custom(nvg, gui, do_knob_shader, XVG_LABEL("Knob shader"));
 
 //     const float peak_gain = p->gui_output_peak_gain;
 //     if (peak_gain > 1)

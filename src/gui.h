@@ -4,12 +4,10 @@
 #include <xhl/vector.h>
 #include <xvg.h>
 
-// #include <sokol_gfx.h>
-// #include <nanovg2.h>
 #include "libs/texteditor.h"
 #include "libs/tooltip.h"
 
-// #include "resource_manager.h"
+#include "resource_manager.h"
 
 // #include "im_points.h"
 
@@ -60,7 +58,6 @@ typedef struct GUI
     Plugin* plugin;
     void*   pw;
     void*   sg;
-    // NVGcontext* nvg;
     XVGFont font;
     float   content_scale;
 
@@ -91,14 +88,13 @@ typedef struct GUI
     unsigned   logo_events;
     imgui_rect logo_area;
 
-    int        active_param_text_input; // enum ParamID, or -1 if inactive
-    TextEditor texteditor;
-    /*
+    int             active_param_text_input; // enum ParamID, or -1 if inactive
+    TextEditor      texteditor;
     ResourceManager resource_manager;
 
-
+    // TODO: XVG
+    /*
     IMPointsData imp;
-
     */
     Tooltip tooltip;
 

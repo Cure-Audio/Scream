@@ -113,15 +113,15 @@ set(PLUGIN_SOURCES
 
     # src/gui_lfo.c
     # src/im_points.c
-    # src/resource_manager.c
+    src/resource_manager.c
     src/libs/texteditor.c
     src/libs/tooltip.c
-    # modules/wip_libs/src/nanovg2.c
-    modules/xvg/xvg.c
     src/libs/freetype_scu.c
     src/libs/stb_rect_pack.c
-
     src/libs/stb_image.c
+    
+    # modules/wip_libs/src/nanovg2.c
+    modules/xvg/xvg.c
     modules/wip_libs/src/imgui.c
     modules/wip_libs/src/linked_arena.c
     )

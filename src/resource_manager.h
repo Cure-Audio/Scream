@@ -65,8 +65,8 @@ TODO: Build up a separate array of pointers to items in the order they are acces
       order to ensure data access is contiguous in future frames.
 */
 
-#include <nanovg2.h>
 #include <xhl/debug.h>
+#include <xvg.h>
 
 typedef enum ResourceType
 {
@@ -75,7 +75,7 @@ typedef enum ResourceType
     // sg_pipeline
     RESOURCE_TYPE_PIPELINE,
     // SGNVGframebuffer
-    RESOURCE_TYPE_FRAMEBUFFER,
+    // RESOURCE_TYPE_FRAMEBUFFER, // TODO: replace
     // void*, size_t
     RESOURCE_TYPE_DATA_FIXED,
     // RESOURCE_TYPE_DATA_DYNAMIC,
@@ -138,24 +138,24 @@ typedef struct ResourceManager
 } ResourceManager;
 
 void resources_init(ResourceManager* rm, size_t init_size);
-void resources_deinit(ResourceManager* rm, NVGcontext* nvg);
-void resources_end_frame(ResourceManager* rm, NVGcontext* nvg);
+void resources_deinit(ResourceManager* rm, XVG* xvg);
+void resources_end_frame(ResourceManager* rm, XVG* xvg);
 
 ResourceHeader* resource_find(ResourceManager* rm, ResourceID id);
-void            _resource_destroy(ResourceHeader* res, NVGcontext* nvg);
-void            resources_destroy_type(ResourceManager* rm, NVGcontext* nvg, ResourceType type);
+void            _resource_destroy(ResourceHeader* res, XVG* xvg);
+void            resources_destroy_type(ResourceManager* rm, XVG* xvg, ResourceType type);
 
 typedef const sg_shader_desc* (*sokol_shdc_shader_t)(sg_backend backend);
 bool resource_get_pipeline(ResourceManager* rm, sg_pipeline* pipelne, sokol_shdc_shader_t method, uint32_t flags);
 
-bool resource_get_framebuffer(
-    ResourceManager*  rm,
-    uint32_t          id,
-    SGNVGframebuffer* fb,
-    NVGcontext*       nvg,
-    unsigned          w,
-    unsigned          h,
-    uint32_t          flags);
+// bool resource_get_framebuffer(
+//     ResourceManager*  rm,
+//     uint32_t          id,
+//     SGNVGframebuffer* fb,
+//     NVGcontext*       nvg,
+//     unsigned          w,
+//     unsigned          h,
+//     uint32_t          flags);
 
 bool resource_get_data_fixed(ResourceManager* rm, ResourceID id, void** data, size_t size, uint32_t flags);
 

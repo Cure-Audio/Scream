@@ -124,32 +124,32 @@ bool resource_get_pipeline(ResourceManager* rm, sg_pipeline* pipelne, sokol_shdc
     return res != NULL;
 }
 
-bool resource_get_framebuffer(
-    ResourceManager*  rm,
-    uint32_t          id,
-    SGNVGframebuffer* fb,
-    NVGcontext*       nvg,
-    unsigned          w,
-    unsigned          h,
-    uint32_t          flags)
-{
-    xassert(w <= 0xffff);
-    xassert(h <= 0xffff);
-    ResourceID      res_id = {.u32_1 = id, .u32_2 = w | (h << 16)};
-    ResourceHeader* res    = resource_find(rm, res_id);
-    if (res == NULL)
-    {
-        res = resource_create(rm, sizeof(*fb), res_id, RESOURCE_TYPE_FRAMEBUFFER, flags);
+// bool resource_get_framebuffer(
+//     ResourceManager*  rm,
+//     uint32_t          id,
+//     SGNVGframebuffer* fb,
+//     XVG*       xvg,
+//     unsigned          w,
+//     unsigned          h,
+//     uint32_t          flags)
+// {
+//     xassert(w <= 0xffff);
+//     xassert(h <= 0xffff);
+//     ResourceID      res_id = {.u32_1 = id, .u32_2 = w | (h << 16)};
+//     ResourceHeader* res    = resource_find(rm, res_id);
+//     if (res == NULL)
+//     {
+//         res = resource_create(rm, sizeof(*fb), res_id, RESOURCE_TYPE_FRAMEBUFFER, flags);
 
-        SGNVGframebuffer* res_fb  = (void*)&res->payload;
-        *res_fb                   = snvgCreateFramebuffer(nvg, w, h);
-        res_fb                   += 0;
-    }
-    xassert(res->type == RESOURCE_TYPE_FRAMEBUFFER);
-    *fb = *(SGNVGframebuffer*)&res->payload;
+//         SGNVGframebuffer* res_fb  = (void*)&res->payload;
+//         *res_fb                   = snvgCreateFramebuffer(xvg, w, h);
+//         res_fb                   += 0;
+//     }
+//     xassert(res->type == RESOURCE_TYPE_FRAMEBUFFER);
+//     *fb = *(SGNVGframebuffer*)&res->payload;
 
-    return res != NULL;
-}
+//     return res != NULL;
+// }
 
 bool resource_get_data_fixed(ResourceManager* rm, ResourceID id, void** data, size_t size, uint32_t flags)
 {
@@ -170,7 +170,7 @@ bool resource_get_data_fixed(ResourceManager* rm, ResourceID id, void** data, si
 // bool resource_get_texture();
 // bool resource_get_storagebuffer();
 
-void _resource_destroy(ResourceHeader* res, NVGcontext* nvg)
+void _resource_destroy(ResourceHeader* res, XVG* xvg)
 {
     if (res->flags & RESOURCE_FLAG_DESTROYED)
         return;
@@ -191,13 +191,13 @@ void _resource_destroy(ResourceHeader* res, NVGcontext* nvg)
         sg_destroy_pipeline(*pip);
         break;
     }
-    case RESOURCE_TYPE_FRAMEBUFFER:
-    {
-        // println("Destroy RESOURCE_TYPE_FRAMEBUFFER");
-        SGNVGframebuffer* fb = data;
-        snvgDestroyFramebuffer(nvg, fb);
-        break;
-    }
+    // case RESOURCE_TYPE_FRAMEBUFFER:
+    // {
+    //     // println("Destroy RESOURCE_TYPE_FRAMEBUFFER");
+    //     SGNVGframebuffer* fb = data;
+    //     snvgDestroyFramebuffer(xvg, fb);
+    //     break;
+    // }
     case RESOURCE_TYPE_DATA_FIXED:
         break;
         // case RESOURCE_TYPE_STORAGEBUFFER:
@@ -210,7 +210,7 @@ void _resource_destroy(ResourceHeader* res, NVGcontext* nvg)
     res->flags |= RESOURCE_FLAG_DESTROYED;
 }
 
-void resources_destroy_type(ResourceManager* rm, NVGcontext* nvg, ResourceType type)
+void resources_destroy_type(ResourceManager* rm, XVG* xvg, ResourceType type)
 {
     ResourceList* list = rm->list_current;
     xassert(list);
@@ -218,12 +218,12 @@ void resources_destroy_type(ResourceManager* rm, NVGcontext* nvg, ResourceType t
     {
         ResourceHeader* res = list->items[i];
         if (res->type == type)
-            _resource_destroy(res, nvg);
+            _resource_destroy(res, xvg);
     }
 }
 
 // Destroy unused resources & defrag memory
-void resources_end_frame(ResourceManager* rm, NVGcontext* nvg)
+void resources_end_frame(ResourceManager* rm, XVG* xvg)
 {
     ResourceList* src = rm->list_current;
     ResourceList* dst = rm->list_current == &rm->list_a ? &rm->list_b : &rm->list_a;
@@ -245,7 +245,7 @@ void resources_end_frame(ResourceManager* rm, NVGcontext* nvg)
         ResourceHeader* src_res = src->items[i];
         if (src_res->flags == 0) // unsused resource. destroy
         {
-            _resource_destroy(src_res, nvg);
+            _resource_destroy(src_res, xvg);
         }
         else
         {
@@ -270,14 +270,14 @@ void resources_init(ResourceManager* rm, size_t init_size)
     rm->list_current = &rm->list_a;
 }
 
-void resources_deinit(ResourceManager* rm, NVGcontext* nvg)
+void resources_deinit(ResourceManager* rm, XVG* xvg)
 {
     ResourceList* list = rm->list_current;
     xassert(list);
     for (int i = 0; i < list->num_items; i++)
     {
         ResourceHeader* res = list->items[i];
-        _resource_destroy(res, nvg);
+        _resource_destroy(res, xvg);
     }
     linked_arena_destroy(rm->list_b.arena);
     linked_arena_destroy(rm->list_a.arena);

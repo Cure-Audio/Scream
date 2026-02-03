@@ -33,6 +33,8 @@ void main() {
 
 layout(binding = 1) uniform fs_knob_uniforms {
     vec4 u_colour;
+    float fan_feather;
+    float ring_feather;
 };
 
 in vec2 uv;
@@ -86,7 +88,6 @@ void main() {
     float angle_norm = acos_approx(hyp > 0 ? (adj / hyp) : 0);
 
     // Fan
-    float fan_feather = 0.02;
     float fan = mod(angle_norm * NUM_FANS, 2);
     fan = smoothstep(0.5 - fan_feather, 0.5 + fan_feather, abs(fan - 1));
 
@@ -96,7 +97,6 @@ void main() {
     vec2 cs = vec2(cos(rad), sin(rad));
     float ring_width = 0.08;
     float d = sdRing(uv, cs, 1 - ring_width / 2, ring_width);
-    float ring_feather = 0.002;
     float arc = 1 - smoothstep(-ring_feather, ring_feather, d);
 
     float a = arc * fan;
