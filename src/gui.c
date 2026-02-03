@@ -1519,38 +1519,7 @@ void pw_tick(void* _gui)
 
                 float amt = modamt.data[j];
                 if (fabsf(amt) != 0)
-                {
-                    float start_radians = 0;
-                    float end_radians   = XM_TAUf * amt;
-                    // float start_radians = -XM_HALF_PIf;
-                    // float end_radians   = -XM_HALF_PIf + XM_TAUf * amt;
-                    println("amt %f", amt);
-                    // nvgBeginPath(nvg);
-                    // nvgArc(
-                    //     nvg,
-                    //     c.x,
-                    //     c.y,
-                    //     mod_amt_radius - 2,
-                    //     xm_minf(start_radians, end_radians),
-                    //     xm_maxf(start_radians, end_radians),
-                    //     NVG_CW);
-                    // nvgSetColour(nvg, C_DARK_BLUE);
-                    // nvgStroke(nvg, mod_amt_stroke_width);
-                    xvg_draw_arc(
-                        xvg,
-                        c.x,
-                        c.y,
-                        mod_amt_radius,
-                        start_radians,
-                        end_radians,
-                        // xm_minf(start_radians, end_radians),
-                        // xm_maxf(start_radians, end_radians),
-                        // XM_TAUf * -0.375,
-                        // XM_TAUf * 0.375,
-                        mod_amt_stroke_width,
-                        true,
-                        C_DARK_BLUE);
-                }
+                    xvg_draw_arc(xvg, c.x, c.y, mod_amt_radius, 0, amt, mod_amt_stroke_width, true, C_DARK_BLUE);
             }
         }
         // TODO: XVG
