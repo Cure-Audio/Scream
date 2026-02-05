@@ -1545,21 +1545,19 @@ void imp_run(
                 }
                 else if (skew_amt == 0 || skew_amt == 1)
                 {
-                    float x = skew_amt == 0 ? x1 : x2;
-                    float y = skew_amt == 0 ? y2 : y1;
+                    float x3 = y1 > y2 ? x1 : x2;
+                    float x4 = y1 > y2 ? x2 : x1;
+                    float y3 = y1 > y2 ? y2 : y1;
+                    float y4 = y1 > y2 ? y1 : y2;
 
-                    imp->line_cache->lines[imp->line_cache->num_lines++] = (IMPointsLineCacheStraight){
-                        .x1 = x,
-                        .y1 = y1,
-                        .x2 = x,
-                        .y2 = y2,
-                    };
-                    imp->line_cache->lines[imp->line_cache->num_lines++] = (IMPointsLineCacheStraight){
-                        .x1 = x1,
-                        .y1 = y,
-                        .x2 = x2,
-                        .y2 = y,
-                    };
+                    float x = skew_amt == 0 ? x4 : x3;
+                    float y = skew_amt == 0 ? y4 : y3;
+
+                    IMPointsLineCacheStraight l1 = {x, y3, x, y4};
+                    IMPointsLineCacheStraight l2 = {x3, y, x4, y};
+
+                    imp->line_cache->lines[imp->line_cache->num_lines++] = l1;
+                    imp->line_cache->lines[imp->line_cache->num_lines++] = l2;
                 }
                 else // Make plot
                 {
