@@ -2037,7 +2037,7 @@ void pw_tick(void* _gui)
         XVGGradient ifill = {.colour1 = C_TEXT_DARK_BG};
         if (hover)
         {
-            ifill = xvg_make_linear_gradient(C_WHITE, 0xb2b2b2ff, 0, y, 0, b);
+            ifill = xvg_make_linear_gradient(C_WHITE, 0xb3b3b3ff, 0, y, 0, b);
         }
         xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, icon.x, icon.y, icon.width, icon.height);
         xvg_draw_solid_rectangle_with_gradient(xvg, x, y, w, h, ifill);
@@ -2052,32 +2052,16 @@ void pw_tick(void* _gui)
             click_exaclogo = true;
 
         hover = !!(e_logo & IMGUI_EVENT_MOUSE_HOVER);
-        icon  = icon_get_coords(&gui->icons, ICON_EXACOUSTICS);
+        icon  = icon_get_coords(&gui->icons, hover ? ICON_EXACOUSTICS_COLOUR : ICON_EXACOUSTICS);
         xassert(icon.x == 0);
         xassert(icon.width == 128);
         const int   offset_a   = 96;
         const int   width_a    = icon.width - offset_a;
         const float proportion = (float)offset_a / 128.0f;
 
-        if (hover)
-        {
-            ifill = xvg_make_linear_gradient(C_WHITE, 0xb2b2b2ff, 0, y, 0, b);
-            xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, 0, icon.y, offset_a, icon.height);
-            xvg_draw_solid_rectangle_with_gradient(xvg, rect.x, y, w * proportion, h, ifill);
-
-            float    cx     = rect_cx(&rect);
-            unsigned yellow = 0xF7E164ff;
-            unsigned red    = 0xEB3533ff;
-            ifill           = xvg_make_linear_gradient(yellow, red, cx + w * 0.2f, y + h * 0.25f, cx + w * 0.6f, y + h);
-            xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, offset_a, icon.y, width_a, icon.height);
-            xvg_draw_solid_rectangle_with_gradient(xvg, rect.x + w * proportion, y, w - w * proportion, h, ifill);
-        }
-        else
-        {
-            ifill = (XVGGradient){.colour1 = C_TEXT_DARK_BG};
-            xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, icon.x, icon.y, icon.width, icon.height);
-            xvg_draw_solid_rectangle_with_gradient(xvg, rect.x, y, w, h, ifill);
-        }
+        ifill = (XVGGradient){.colour1 = hover ? C_WHITE : C_TEXT_DARK_BG};
+        xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, icon.x, icon.y, icon.width, icon.height);
+        xvg_draw_solid_rectangle_with_gradient(xvg, rect.x, y, w, h, ifill);
     }
 
     // extern float g_pd_threshold;

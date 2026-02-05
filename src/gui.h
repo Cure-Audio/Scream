@@ -11,7 +11,7 @@
 
 // #include "im_points.h"
 
-#define SHOW_FPS
+// #define SHOW_FPS
 
 // Assortment of cached lengths of things in the GUI
 typedef struct LayoutMetrics
@@ -56,6 +56,7 @@ enum IconID
     ICON_NONE,
     ICON_CURE_AUDIO,
     ICON_EXACOUSTICS,
+    ICON_EXACOUSTICS_COLOUR,
     ICON_IMP_POINTS,
     ICON_IMP_FLAT,
     ICON_IMP_LINEAR_ASC,

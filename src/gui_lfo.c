@@ -231,8 +231,7 @@ void draw_lfo_section(GUI* gui)
     const float CHECKBOX_HEIGHT = floorf(12 * SCALE);
 
     // const float SHAPES_WIDTH         = floorf(40 * SCALE); // LFO shape buttons are square
-    const float SHAPES_WIDTH         = LFO_TAB_HEIGHT; // LFO shape buttons are square
-    const float SHAPES_INNER_PADDING = floorf(8 * SCALE);
+    const float SHAPES_WIDTH = snapf(LFO_TAB_HEIGHT, 2); // LFO shape buttons are square
 
     const float CONTENT_PADDING_X = floorf(32 * lm->content_scale);
     const float CONTENT_PADDING_Y = floorf(16 * lm->content_scale);
