@@ -93,6 +93,14 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
     # list(APPEND PLUGIN_OPTIONS -flto)
 endif()
 
+set(SRC_DIR ${PROJECT_SOURCE_DIR})
+set(BIN_DIR ${CMAKE_BINARY_DIR})
+if (WIN32)
+    # Windows paths are complicated
+    string(REPLACE "/" "\\\\" SRC_DIR ${SRC_DIR})
+    string(REPLACE "/" "\\\\" BIN_DIR ${BIN_DIR})
+endif()
+
 set(PLUGIN_DEFINITIONS
     CPLUG_COMPANY_NAME="${COMPANY_NAME}"
     CPLUG_COMPANY_EMAIL="contact@cure.audio"
@@ -103,6 +111,8 @@ set(PLUGIN_DEFINITIONS
     STBI_NO_STDIO
     STBI_NO_LINEAR
     NVG_NO_STB
+    SRC_DIR="${SRC_DIR}"
+    BIN_DIR="${BIN_DIR}"
     )
 
 set(PLUGIN_SOURCES
@@ -119,6 +129,7 @@ set(PLUGIN_SOURCES
     src/libs/freetype_scu.c
     src/libs/stb_rect_pack.c
     src/libs/stb_image.c
+    src/libs/stb_image_resize2.c
     
     # modules/wip_libs/src/nanovg2.c
     modules/xvg/xvg.c
