@@ -4,7 +4,6 @@
 #include <string.h>
 #include <xvg.h>
 
-
 // clang-format off
 enum
 {
@@ -62,8 +61,8 @@ static void tooltip_init(Tooltip* tt)
 {
     tt->settings.box_height      = 20;
     tt->settings.window_boundary = 8;
-    tt->settings.arrow_length    = 10;
-    tt->settings.arrow_width     = 10;
+    tt->settings.arrow_length    = 12;
+    tt->settings.arrow_width     = 12;
     tt->settings.text_padding_x  = 10;
     tt->settings.text_padding_y  = 6;
     tt->settings.gap             = 4;

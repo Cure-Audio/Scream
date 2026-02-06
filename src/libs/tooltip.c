@@ -32,7 +32,6 @@ void tooltip_draw(
     const float TOOLTIP_TEXT_PADDING_Y = scale * tt->settings.text_padding_y;
     const float TOOLTIP_GAP            = scale * tt->settings.gap;
     const float FONT_SIZE              = scale * tt->settings.font_size;
-    const float STROKE_WIDTH           = 1;
 
     // nvgSetTextAlign(nvg, NVG_ALIGN_TL);
     // nvgSetFontSize(nvg, FONT_SIZE);
@@ -98,10 +97,10 @@ void tooltip_draw(
         d.b         -= delta;
     }
 
-    d.x = floorf(d.x) + STROKE_WIDTH * 0.5f;
-    d.y = floorf(d.y) + STROKE_WIDTH * 0.5f;
-    d.r = floorf(d.r) - STROKE_WIDTH * 0.5f;
-    d.b = floorf(d.b) - STROKE_WIDTH * 0.5f;
+    d.x = floorf(d.x);
+    d.y = floorf(d.y);
+    d.r = ceilf(d.r);
+    d.b = ceilf(d.b);
 
     xassert(d.y >= 0);
     xassert(d.b >= d.y);
@@ -118,43 +117,49 @@ void tooltip_draw(
         0,
         xvg_make_shadow(0x0, 0x40, 0, 0, shadow_blur, 0, false));
 
-    // nvgBeginPath(nvg);
-    // nvgMoveTo(nvg, d.x, d.y);
-    // nvgLineTo(nvg, d.x, d.b);
-    // if (d.b < widget_top) // tooltip above widget
-    // {
-    //     nvgLineTo(nvg, widget_cx - TOOLTIP_ARROW_WIDTH * 0.5f, d.b);
-    //     nvgLineTo(nvg, widget_cx, d.b + TOOLTIP_ARROW_LENGTH);
-    //     nvgLineTo(nvg, widget_cx + TOOLTIP_ARROW_WIDTH * 0.5f, d.b);
-    // }
-    // nvgLineTo(nvg, d.r, d.b);
-    // nvgLineTo(nvg, d.r, d.y);
-    // if (d.y > widget_bottom) // tooltip below widget
-    // {
-    //     nvgLineTo(nvg, widget_cx + TOOLTIP_ARROW_WIDTH * 0.5f, d.y);
-    //     nvgLineTo(nvg, widget_cx, d.y - TOOLTIP_ARROW_LENGTH);
-    //     nvgLineTo(nvg, widget_cx - TOOLTIP_ARROW_WIDTH * 0.5f, d.y);
-    // }
-    // nvgClosePath(nvg);
+    float w = d.r - d.x;
+    float h = d.b - d.y;
+
     unsigned col_tt = tt->settings.colour_bg;
-    // unsigned col_tt = 0xff0000ff;
-    float offset = TOOLTIP_ARROW_LENGTH * 0.28;
-    xvg_draw_rectangle(xvg, d.x, d.y, d.r - d.x, d.b - d.y, 0, 0, col_tt);
+    float    offset = TOOLTIP_ARROW_LENGTH * 0.33;
+    xvg_draw_rectangle(xvg, d.x, d.y, w, h, 0, 0, col_tt);
+
+    xvg_draw_solid_rectangle(xvg, d.x, d.y, 1, h, tt->settings.colour_border);
+    xvg_draw_solid_rectangle(xvg, d.r - 1, d.y, 1, h, tt->settings.colour_border);
+    xvg_draw_solid_rectangle(xvg, d.x, d.y, w, 1, tt->settings.colour_border);
+    xvg_draw_solid_rectangle(xvg, d.x, d.b - 1, w, 1, tt->settings.colour_border);
+
+    float arrow_left     = widget_cx - TOOLTIP_ARROW_WIDTH * 0.5f;
+    float arrow_right    = widget_cx + TOOLTIP_ARROW_WIDTH * 0.5f;
+    float arrow_border_h = TOOLTIP_ARROW_LENGTH * 0.66;
+
     if (d.b < widget_top) // tooltip above widget
     {
-        xvg_draw_triangle(xvg, widget_cx, d.b - offset, TOOLTIP_ARROW_WIDTH, TOOLTIP_ARROW_LENGTH, 0.5f, 0, col_tt);
+        xvg_draw_triangle(
+            xvg,
+            arrow_left - 2,
+            d.b - offset - 2,
+            TOOLTIP_ARROW_WIDTH + 4,
+            TOOLTIP_ARROW_LENGTH + 2,
+            0.5f,
+            0,
+            col_tt);
+        xvg_draw_line_round(xvg, arrow_left, d.b, widget_cx, d.b + arrow_border_h, 1, tt->settings.colour_border);
+        xvg_draw_line_round(xvg, arrow_right, d.b, widget_cx, d.b + arrow_border_h, 1, tt->settings.colour_border);
     }
     else // tooltip below widget
     {
         xvg_draw_triangle(
             xvg,
-            widget_cx,
+            arrow_left - 2,
             d.y + offset - TOOLTIP_ARROW_LENGTH,
-            TOOLTIP_ARROW_WIDTH,
-            TOOLTIP_ARROW_LENGTH,
+            TOOLTIP_ARROW_WIDTH + 4,
+            TOOLTIP_ARROW_LENGTH + 2,
             0.0f,
             0,
             col_tt);
+        xvg_draw_line_round(xvg, arrow_left, d.y, widget_cx, d.y - arrow_border_h, 1, tt->settings.colour_border);
+        xvg_draw_line_round(xvg, arrow_right, d.y, widget_cx, d.y - arrow_border_h, 1, tt->settings.colour_border);
     }
 
     // nvgSetColour(nvg, tt->settings.colour_bg);
@@ -165,12 +170,7 @@ void tooltip_draw(
     // nvgSetColour(nvg, tt->settings.colour_text);
 
     float text_x = d.x + TOOLTIP_TEXT_PADDING_X;
-    float text_y = d.y + TOOLTIP_TEXT_PADDING_Y;
-    // float text_y = (d.b + d.y) * 0.5f;
-    // text_y += layout->metrics.ascender / nvg->backingScaleFactor;
-    // nvgSetTextAlign(nvg, NVG_ALIGN_CL);
-    // nvgDrawLayout(nvg, layout, text_x, text_y);
-    // nvgReleaseLayout(nvg, layout);
+    float text_y = (d.b + d.y) * 0.5f;
     xvg_draw_text_layout(xvg, layout, text_x, text_y, XVG_ALIGN_CL, tt->settings.colour_text);
     xvg_release_text_layout(xvg, layout);
 
