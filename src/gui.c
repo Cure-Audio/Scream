@@ -124,13 +124,23 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->tooltip.settings.colour_bg     = 0xD4D7DEff;
 
     xvg_init(&gui->xvg);
-    // Load font
+    // Load assets
     {
+        // Font
         char path[1024];
-        int  len = xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_APPDATA);
+#ifdef NDEBUG
+        // Requires installer putting assets in correct folder
+        int         len             = xfiles_get_user_directory(path, sizeof(path), XFILES_USER_DIRECTORY_APPDATA);
+        const char* relpath_plugin  = XFILES_DIR_STR "Cure Audio" XFILES_DIR_STR "Scream" XFILES_DIR_STR;
+        len                        += snprintf(path + len, sizeof(path) - len, "%s", relpath_plugin);
+#else
+        // Load from assets dir
+        int         len             = snprintf(path, sizeof(path), "%s", SRC_DIR);
+        const char* relpath_plugin  = XFILES_DIR_STR "assets" XFILES_DIR_STR;
+        len                        += snprintf(path + len, sizeof(path) - len, "%s", relpath_plugin);
+#endif
 
-        const char* cat = XFILES_DIR_STR "Cure Audio" XFILES_DIR_STR "Scream" XFILES_DIR_STR "Tomorrow-SemiBold.ttf";
-        snprintf(path + len, sizeof(path) - len, "%s", cat);
+        snprintf(path + len, sizeof(path) - len, "%s", "Tomorrow-SemiBold.ttf");
 
         const char* font_paths[] = {
             path,
@@ -156,16 +166,14 @@ void* pw_create_gui(void* _plugin, void* _pw)
         while (font.id == 0 && font_idx < ARRLEN(font_paths));
 
         gui->font = font;
-    }
 
-    // Icons & logos
-    {
+        // Icons
         void*  file_data     = NULL;
         size_t file_data_len = 0;
         bool   ok            = false;
-        // TODO: add this to installer
-        const char* path = SRC_DIR XFILES_DIR_STR "assets" XFILES_DIR_STR "icons.png";
-        ok               = xfiles_read(path, &file_data, &file_data_len);
+        snprintf(path + len, sizeof(path) - len, "%s", "icons.png");
+
+        ok = xfiles_read(path, &file_data, &file_data_len);
         xassert(ok);
         if (ok)
         {

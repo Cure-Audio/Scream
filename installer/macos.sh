@@ -92,7 +92,7 @@ chmod +x "${SCRIPT_DIR}/scripts/postinstall"
 mkdir -p "${SCRIPT_DIR}/../build/installer_assets/"
 cp "${SCRIPT_DIR}/../assets/Tomorrow-SemiBold.ttf" "${SCRIPT_DIR}/../build/installer_assets/"
 cp "${SCRIPT_DIR}/../assets/OFL.txt"               "${SCRIPT_DIR}/../build/installer_assets/"
-cp "${SCRIPT_DIR}/../assets/cureaudiologo_new.png" "${SCRIPT_DIR}/../build/installer_assets/cureaudio.png"
+cp "${SCRIPT_DIR}/../assets/icons.png" "${SCRIPT_DIR}/../build/installer_assets/icons.png"
 
 pkgbuild --root "${SCRIPT_DIR}/../build/installer_assets/" \
          --identifier "com.CureAudio.Scream.pkg.assets" \
