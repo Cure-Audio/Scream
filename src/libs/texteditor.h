@@ -33,7 +33,7 @@ typedef struct TextEditorTheme
 
 typedef struct TextEditor
 {
-    XVG* xvg;
+    XVGCommandList* xvg;
 
     xvec4f dimensions;
 
@@ -56,7 +56,7 @@ typedef struct TextEditor
     struct TextEditorUndoState* ref_current_state;
 } TextEditor;
 
-void ted_init(TextEditor*, XVG*);
+void ted_init(TextEditor*, XVGCommandList*);
 void ted_deinit(TextEditor*);
 
 // Returns true if event is consumed/used by our app

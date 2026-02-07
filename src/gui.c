@@ -123,6 +123,9 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->tooltip.settings.colour_bg     = 0xD4D7DEff;
 
     xvg_init(&gui->xvg);
+    gui->xvg_anim = xvg_command_list_create(&gui->xvg);
+    gui->_xvg_bg0 = xvg_command_list_create(&gui->xvg);
+    gui->_xvg_bg1 = xvg_command_list_create(&gui->xvg);
     // Load assets
     {
         // Font
@@ -214,7 +217,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
     }
     resources_init(&gui->resource_manager, 4096);
     gui->active_param_text_input = -1;
-    ted_init(&gui->texteditor, &gui->xvg);
+    ted_init(&gui->texteditor, gui->xvg_anim);
 
     uint64_t now_ns            = xtime_now_ns();
     gui->gui_create_time       = now_ns;
@@ -240,6 +243,9 @@ void pw_destroy_gui(void* _gui)
     resources_deinit(&gui->resource_manager, &gui->xvg);
 
     imp_deinit(&gui->imp);
+    xvg_command_list_destroy(gui->xvg_anim);
+    xvg_command_list_destroy(gui->_xvg_bg0);
+    xvg_command_list_destroy(gui->_xvg_bg1);
     xvg_deinit(&gui->xvg);
     sg_shutdown(gui->sg);
 
@@ -674,7 +680,7 @@ void open_hyperlink(const char* url)
     xthread_detach(thread); // auto-destroy resources when thread ends
 }
 
-void draw_checkbox(XVG* xvg, float width, float cy, float r, float scale, bool on)
+void draw_checkbox(XVGCommandList* xvg, float width, float cy, float r, float scale, bool on)
 {
     imgui_rect box;
     box.x = floorf(r - width);
@@ -734,12 +740,11 @@ void do_background_shader(void* _gui)
 
 void draw_background(GUI* gui, bool bg)
 {
-    XVG*           xvg = &gui->xvg;
-    LayoutMetrics* lm  = &gui->layout;
+    XVGCommandList* xvg = gui->xvg_bg;
+    LayoutMetrics*  lm  = &gui->layout;
 
     if (bg)
     {
-
         XVGGradient bg_grad = xvg_make_linear_gradient(0x151B33FF, 0x090E1FFF, 0, 0, 0, lm->height);
         xvg_draw_solid_rectangle_with_gradient(xvg, 0, 0, lm->width, lm->height, bg_grad);
 
@@ -807,6 +812,36 @@ void draw_background(GUI* gui, bool bg)
     }
 }
 
+bool do_bg_command_lists_match(GUI* gui)
+{
+    XVGCommandList* l1 = gui->_xvg_bg0;
+    XVGCommandList* l2 = gui->_xvg_bg1;
+
+    bool match = true;
+    // Shapes
+    match &= l1->shapes_buffer_len == l2->shapes_buffer_len;
+    if (!match)
+        return match;
+    match &= 0 == memcmp(l1->shapes_buffer, l2->shapes_buffer, sizeof(l2->shapes_buffer[0]) * l2->shapes_buffer_len);
+    if (!match)
+        return match;
+
+    // Lines
+    match &= l1->line_buffer_len == l2->line_buffer_len;
+    if (!match)
+        return match;
+    match &= 0 == memcmp(l1->line_buffer, l2->line_buffer, sizeof(l2->line_buffer[0]) * l2->line_buffer_len);
+    if (!match)
+        return match;
+    // Text
+    match &= l1->text_buffer_len == l2->text_buffer_len;
+    if (!match)
+        return match;
+    match &= 0 == memcmp(l1->text_buffer, l2->text_buffer, sizeof(l2->text_buffer[0]) * l2->text_buffer_len);
+
+    return match;
+}
+
 void pw_tick(void* _gui)
 {
     GUI*    gui = _gui;
@@ -817,6 +852,10 @@ void pw_tick(void* _gui)
 #endif
     gui->last_frame_start_time = gui->frame_start_time;
     gui->frame_start_time      = xtime_now_ns();
+
+    gui->xvg_bg        = (gui->frame_counter & 1) ? gui->_xvg_bg1 : gui->_xvg_bg0;
+    XVGCommandList* bg = gui->xvg_bg;
+    gui->frame_counter++;
 
     {
         uint32_t head = xt_atomic_load_u32(&p->queue_main_head) & EVENT_QUEUE_MASK;
@@ -850,9 +889,9 @@ void pw_tick(void* _gui)
 
     const uint64_t time_since_last_frame = gui->frame_start_time - gui->last_frame_start_time;
 
-    XVG*           xvg = &gui->xvg;
-    imgui_context* im  = &gui->imgui;
-    LayoutMetrics* lm  = &gui->layout;
+    XVGCommandList* xvg = gui->xvg_anim;
+    imgui_context*  im  = &gui->imgui;
+    LayoutMetrics*  lm  = &gui->layout;
 
     sg_set_global(gui->sg);
 
@@ -895,7 +934,7 @@ void pw_tick(void* _gui)
         lm->content_scale    = content_scale;
         lm->devicePixelRatio = 1;
 #endif
-        xvg->backingScaleFactor = pw_get_backing_scale_factor(gui->pw);
+        gui->xvg.backingScaleFactor = pw_get_backing_scale_factor(gui->pw);
 
         lm->param_scale = xm_maxf(1, xm_minf(lm->scale_x, lm->scale_y));
         lm->param_scale = xm_maxf(lm->param_scale, lm->content_scale);
@@ -1010,6 +1049,33 @@ void pw_tick(void* _gui)
         lfo_btn.r              = (lm->width / 2) + lfo_btn_width * 0.5f;
         lfo_btn.b              = lm->top_content_bottom;
         gui->lfo_toggle_button = lfo_btn;
+
+        // Framebuffer
+        sg_destroy_view(gui->bg_framebuffer.depth_view);
+        sg_destroy_view(gui->bg_framebuffer.img_texview);
+        sg_destroy_view(gui->bg_framebuffer.img_colview);
+        sg_destroy_image(gui->bg_framebuffer.img);
+        sg_destroy_image(gui->bg_framebuffer.depth);
+        gui->bg_framebuffer.width       = gui->plugin->width * gui->xvg.backingScaleFactor;
+        gui->bg_framebuffer.height      = gui->plugin->height * gui->xvg.backingScaleFactor;
+        gui->bg_framebuffer.img         = sg_make_image(&(sg_image_desc){
+                    .usage.color_attachment = true,
+                    .width                  = gui->bg_framebuffer.width,
+                    .height                 = gui->bg_framebuffer.height,
+                    .pixel_format           = SG_PIXELFORMAT_RGBA8,
+                    .sample_count           = 1,
+        });
+        gui->bg_framebuffer.depth       = sg_make_image(&(sg_image_desc){
+                  .usage.depth_stencil_attachment = true,
+                  .width                          = gui->bg_framebuffer.width,
+                  .height                         = gui->bg_framebuffer.height,
+                  .pixel_format                   = SG_PIXELFORMAT_DEPTH_STENCIL,
+                  .sample_count                   = 1,
+        });
+        gui->bg_framebuffer.img_colview = sg_make_view(&(sg_view_desc){.color_attachment = gui->bg_framebuffer.img});
+        gui->bg_framebuffer.img_texview = sg_make_view(&(sg_view_desc){.texture = gui->bg_framebuffer.img});
+        gui->bg_framebuffer.depth_view =
+            sg_make_view(&(sg_view_desc){.depth_stencil_attachment = gui->bg_framebuffer.depth});
     }
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
@@ -1033,10 +1099,35 @@ void pw_tick(void* _gui)
 
     imgui_begin_frame(im);
 
-    xvg_begin_frame(xvg);
+    xvg_begin_frame(&gui->xvg);
+    xvg_command_list_begin_frame(gui->xvg_anim, &gui->xvg);
+    xvg_command_list_begin_frame(bg, &gui->xvg);
+
+    // TODO: replace with framebuffer
+    xvg_command_begin_pass(
+        bg,
+        &(sg_pass){
+            .attachments.colors[0]     = gui->bg_framebuffer.img_colview,
+            .attachments.depth_stencil = gui->bg_framebuffer.depth_view,
+            //             .swapchain =
+            //                 {
+            //                     .width  = gui->plugin->width,
+            //                     .height = gui->plugin->height,
+            // #if __APPLE__
+            //                     .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
+            //                     .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
+            // #endif
+            // #if _WIN32
+            //                     .d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw),
+            //                     .d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw),
+            // #endif
+            //                 },
+            .action = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0.0f, 0.0f, 0.0f, 1.0}}},
+            .label  = XVG_LABEL("swapchain-pass-begin")},
+        XVG_LABEL("swapchain-pass-begin"));
 
     xvg_command_begin_pass(
-        &gui->xvg,
+        gui->xvg_anim,
         &(sg_pass){
             .swapchain =
                 {
@@ -1081,15 +1172,30 @@ void pw_tick(void* _gui)
     bool draw_bg = true;
     if (draw_bg == false)
     {
-        xvg_command_custom(xvg, gui, do_background_shader, XVG_LABEL("BG Shader"));
+        xvg_command_custom(bg, gui, do_background_shader, XVG_LABEL("BG Shader"));
     }
     draw_background(gui, draw_bg);
+
+    xvg_draw_solid_rectangle_with_gradient(
+        xvg,
+        0,
+        0,
+        lm->width,
+        lm->height,
+        xvg_make_image_fill(
+            gui->bg_framebuffer.img_texview,
+            gui->xvg.smp_linear,
+            0,
+            0,
+            gui->bg_framebuffer.width,
+            gui->bg_framebuffer.height,
+            0xffffffff));
 
     // Header
     {
         float cx = lm->width * 0.5f;
         float cy = lm->height_header * 0.5f + 4;
-        xvg_draw_text(xvg, cx, cy, "SCREAM", 0, 24 * lm->param_scale, XVG_ALIGN_CC, C_BG_LIGHT);
+        xvg_draw_text(bg, cx, cy, "SCREAM", 0, 24 * lm->param_scale, XVG_ALIGN_CC, C_BG_LIGHT);
 
         // Output gain
         const int  output_gain_with = 120 * lm->param_scale;
@@ -1106,7 +1212,7 @@ void pw_tick(void* _gui)
         int    label_len = param_value_to_string(PARAM_OUTPUT_GAIN, label, sizeof(label), value);
 
         xvg_draw_text(xvg, rect.r, (rect.b - rect.y) * 0.5f, label, label + label_len, fsize, XVG_ALIGN_CR, C_GREY_1);
-        xvg_draw_text(xvg, rect.x, (rect.b - rect.y) * 0.5f, "OUTPUT", NULL, fsize, XVG_ALIGN_CL, C_TEXT_DARK_BG);
+        xvg_draw_text(bg, rect.x, (rect.b - rect.y) * 0.5f, "OUTPUT", NULL, fsize, XVG_ALIGN_CL, C_TEXT_DARK_BG);
     }
 
     // Params
@@ -1125,7 +1231,7 @@ void pw_tick(void* _gui)
             const ParamID param_id = param_ids[i];
             const float   param_cx = lm->param_positions_cx[i];
 
-            xvg_draw_text(xvg, param_cx, lm->cy_param_title, NAMES[i], NULL, fsize, XVG_ALIGN_CC, C_TEXT_LIGHT_BG);
+            xvg_draw_text(bg, param_cx, lm->cy_param_title, NAMES[i], NULL, fsize, XVG_ALIGN_CC, C_TEXT_LIGHT_BG);
 
             imgui_rect rect;
             rect.x = param_cx - 50;
@@ -1269,8 +1375,8 @@ void pw_tick(void* _gui)
 
                 char label  = '1';
                 label      += j;
-                xvg_draw_text(xvg, c.x, c.y, &label, &label + 1, fsize, XVG_ALIGN_CC_TIGHT, C_TEXT_LIGHT_BG);
-                xvg_draw_circle(xvg, c.x, c.y, mod_amt_radius, mod_amt_stroke_width, C_GREY_1);
+                xvg_draw_text(bg, c.x, c.y, &label, &label + 1, fsize, XVG_ALIGN_CC_TIGHT, C_TEXT_LIGHT_BG);
+                xvg_draw_circle(bg, c.x, c.y, mod_amt_radius, mod_amt_stroke_width, C_GREY_1);
 
                 float amt = modamt.data[j];
                 if (fabsf(amt) != 0)
@@ -1321,10 +1427,10 @@ void pw_tick(void* _gui)
                     float                 blur2   = r90 - r80;
 
                     XVGGradient grad_100_90 = xvg_make_shadow(stop100, stop90, 0, 0, blur1, -blur1 * 0.5, true);
-                    xvg_draw_circle_with_gradient(xvg, pt.x, pt.y, r100, 0, grad_100_90);
+                    xvg_draw_circle_with_gradient(bg, pt.x, pt.y, r100, 0, grad_100_90);
 
                     XVGGradient grad_90_80 = xvg_make_shadow(stop90, stop80, 0, 0, blur2, 0, true);
-                    xvg_draw_circle_with_gradient(xvg, pt.x, pt.y, r90, 0, grad_90_80);
+                    xvg_draw_circle_with_gradient(bg, pt.x, pt.y, r90, 0, grad_90_80);
                 }
 
                 // Outer knob
@@ -1336,18 +1442,18 @@ void pw_tick(void* _gui)
                     const float y         = pt.y + 16 * lm->param_scale;
                     const float drop_blur = 8 * lm->param_scale;
                     XVGGradient drop      = xvg_make_shadow(0x0, 0x40, 0, 0, drop_blur, 0, false);
-                    xvg_draw_circle_with_gradient(xvg, pt.x, y, radius_outer + drop_blur, 0, drop);
+                    xvg_draw_circle_with_gradient(bg, pt.x, y, radius_outer + drop_blur, 0, drop);
 
                     const float top     = outer_y + outer_h * 0.13f;
                     const float bottom  = outer_y + outer_h * 0.84f;
                     XVGGradient lingrad = xvg_make_linear_gradient(0xD4DFEAFF, 0xB5BFC8FF, 0, top, 0, bottom);
-                    xvg_draw_circle_with_gradient(xvg, pt.x, pt.y, radius_outer, 0, lingrad);
+                    xvg_draw_circle_with_gradient(bg, pt.x, pt.y, radius_outer, 0, lingrad);
 
                     float       y_offset = 1;
                     float       in_blur  = 2;
                     XVGGradient inner =
                         xvg_make_shadow(0xffffffcc, 0xffffff00, 0, y_offset + in_blur, in_blur, -in_blur, true);
-                    xvg_draw_circle_with_gradient(xvg, pt.x, pt.y, radius_outer, 0, inner);
+                    xvg_draw_circle_with_gradient(bg, pt.x, pt.y, radius_outer, 0, inner);
                 }
 
                 // Inner
@@ -1358,7 +1464,7 @@ void pw_tick(void* _gui)
                 const float inner_s1_y   = inner_y + inner_h * 0.87f;
 
                 XVGGradient inner_grad = xvg_make_linear_gradient(0xB5BFC8FF, 0xD4DFEAFF, 0, inner_s0_y, 0, inner_s1_y);
-                xvg_draw_circle_with_gradient(xvg, pt.x, pt.y, radius_inner, 0, inner_grad);
+                xvg_draw_circle_with_gradient(bg, pt.x, pt.y, radius_inner, 0, inner_grad);
 
 // Slider Tick/Notch
 // Angles in turns
@@ -1398,7 +1504,7 @@ void pw_tick(void* _gui)
                     const bool is_modulated = fabsf(modamts.data[lfo_idx]) != 0;
 
                     float r = arc_radius[lfo_idx];
-                    xvg_draw_arc(xvg, pt.x, pt.y, r, SLIDER_START_TURN, SLIDER_END_TURN, stroke_w, true, C_GREY_1);
+                    xvg_draw_arc(bg, pt.x, pt.y, r, SLIDER_START_TURN, SLIDER_END_TURN, stroke_w, true, C_GREY_1);
 
                     if (is_modulated)
                     {
@@ -1431,7 +1537,6 @@ void pw_tick(void* _gui)
             case PARAM_INPUT_GAIN:
             case PARAM_WET:
             {
-
                 float       param_width  = param_id == PARAM_INPUT_GAIN ? INPUT_WIDTH : WET_WIDTH;
                 const float meter_width  = snapf(param_width * lm->param_scale, 2);
                 const float meter_height = snapf(VERTICAL_SLIDER_HEIGHT * lm->param_scale, 2);
@@ -1460,7 +1565,7 @@ void pw_tick(void* _gui)
                     XVGGradient tl_shadow = xvg_make_shadow(0xFFFFFF00, 0xFFFFFF7F, 0, 0, blur, -spread, false);
                     // XVGGradient tl_shadow = xvg_make_shadow(top_ocol, top_iol, 0, 0, blur, -spread, false);
                     xvg_draw_rectangle_with_gradient(
-                        xvg,
+                        bg,
                         rect.x - blur - spread - offset,
                         rect.y - blur - spread - offset,
                         w + (blur + spread) * 2,
@@ -1474,7 +1579,7 @@ void pw_tick(void* _gui)
                     XVGGradient           br_shadow = xvg_make_shadow(0x0, 0x20, 0, 0, blur, -spread, false);
                     // XVGGradient br_shadow = xvg_make_shadow(bot_ocol, bot_iol, 0, 0, blur, -spread, false);
                     xvg_draw_rectangle_with_gradient(
-                        xvg,
+                        bg,
                         rect.x - blur - spread + offset,
                         rect.y - blur - spread + offset,
                         w + (blur + spread) * 2,
@@ -1519,7 +1624,7 @@ void pw_tick(void* _gui)
                     static const unsigned bg_grad_stop0 = 0x2C2F35FF;
                     static const unsigned bg_grad_stop1 = 0x585E6AFF;
                     XVGGradient grad = xvg_make_linear_gradient(bg_grad_stop0, bg_grad_stop1, 0, rect.y, 0, rect.b);
-                    xvg_draw_rectangle_with_gradient(xvg, rect.x, rect.y, w, h, 4 * lm->param_scale, 0, grad);
+                    xvg_draw_rectangle_with_gradient(bg, rect.x, rect.y, w, h, 4 * lm->param_scale, 0, grad);
                     // xvg_draw_rectangle(xvg, rect.x, rect.y, w, h, 4 * lm->param_scale, 0, 0x4A4E5AFF);
 
                     const float mod_amt_padding     = floorf(2 * lm->param_scale);
@@ -1596,7 +1701,7 @@ void pw_tick(void* _gui)
                     for (int ch = 0; ch < 2; ch++)
                     {
                         float br = 2 * lm->param_scale;
-                        xvg_draw_rectangle_with_gradient(xvg, ch_x[ch], ch_y, ch_w, ch_h, br, 0, ch_bg_grad);
+                        xvg_draw_rectangle_with_gradient(bg, ch_x[ch], ch_y, ch_w, ch_h, br, 0, ch_bg_grad);
                     }
 
                     const double release_time_slow =
@@ -1712,15 +1817,15 @@ void pw_tick(void* _gui)
                 {
                     // BG
                     float br = 4 * lm->param_scale;
-                    xvg_draw_rectangle(xvg, rect.x, rect.y, meter_width, meter_height, br, 0, C_BG_LIGHT);
+                    xvg_draw_rectangle(bg, rect.x, rect.y, meter_width, meter_height, br, 0, C_BG_LIGHT);
 
                     // Inner shadow
                     const float blur1   = 4; // * lm->param_scale; // Doesn't look great scaled
                     XVGGradient ishadow = xvg_make_shadow(0x70, 0x0, 0, 2, blur1, -blur1, true);
-                    xvg_draw_rectangle_with_gradient(xvg, rect.x, rect.y, meter_width, meter_height, br, 0, ishadow);
+                    xvg_draw_rectangle_with_gradient(bg, rect.x, rect.y, meter_width, meter_height, br, 0, ishadow);
                     float bot_offset = -2 - blur1 * 0.5;
                     ishadow = xvg_make_shadow(0xffffff70, 0xffffff00, bot_offset, bot_offset, blur1, -blur1, true);
-                    xvg_draw_rectangle_with_gradient(xvg, rect.x, rect.y, meter_width, meter_height, br, 0, ishadow);
+                    xvg_draw_rectangle_with_gradient(bg, rect.x, rect.y, meter_width, meter_height, br, 0, ishadow);
 
                     imgui_rect handle  = rect;
                     handle.x          += 2; // padding
@@ -1747,15 +1852,15 @@ void pw_tick(void* _gui)
                     for (int n = 1; n < NOTCH_COUNT - 1; n++)
                     {
                         float y = floorf(drag_y + n * y_inc);
-                        xvg_draw_solid_rectangle(xvg, notch_x, y, notch_w, 1, C_GREY_1);
+                        xvg_draw_solid_rectangle(bg, notch_x, y, notch_w, 1, C_GREY_1);
                     }
                     notch_x = handle.x + w * 0.125;
                     notch_w = w * 0.75f;
 
                     float top_y = floorf(drag_y) + 0.5f;
                     float bot_y = floorf(drag_b) + 0.5f;
-                    xvg_draw_solid_rectangle(xvg, notch_x, top_y, notch_w, 1, C_GREY_1);
-                    xvg_draw_solid_rectangle(xvg, notch_x, bot_y, notch_w, 1, C_GREY_1);
+                    xvg_draw_solid_rectangle(bg, notch_x, top_y, notch_w, 1, C_GREY_1);
+                    xvg_draw_solid_rectangle(bg, notch_x, bot_y, notch_w, 1, C_GREY_1);
 
                     // Handle drop shadow
                     float handle_cy = xm_lerpf(value_d, drag_b, drag_y);
@@ -1800,7 +1905,6 @@ void pw_tick(void* _gui)
                     const float mod_amt_strokewidth = 3;
                     const float mod_amt_delta       = mod_amt_padding + mod_amt_strokewidth;
 
-                    // nvgBeginPath(nvg);
                     for (int j = 0; j < ARRLEN(modamts.data); j++)
                     {
                         if (fabsf(modamts.data[j]) != 0)
@@ -1844,7 +1948,7 @@ void pw_tick(void* _gui)
             }
         }
     }
-    xvg_command_custom(xvg, gui, do_knob_shader, XVG_LABEL("Knob shader"));
+    xvg_command_custom(bg, gui, do_knob_shader, XVG_LABEL("Knob shader"));
     // * /
 
     //     const float peak_gain = p->gui_output_peak_gain;
@@ -1899,7 +2003,7 @@ void pw_tick(void* _gui)
             float       y = rect.b - 4;
             float       b = rect.b;
             XVGGradient g = xvg_make_linear_gradient(0x0, 0x40, 0, y, 0, b);
-            xvg_draw_solid_rectangle_with_gradient(xvg, lm->content_x, y, lm->content_r - lm->content_x, b - y, g);
+            xvg_draw_solid_rectangle_with_gradient(bg, lm->content_x, y, lm->content_r - lm->content_x, b - y, g);
         }
 
         // Inlet
@@ -1912,16 +2016,16 @@ void pw_tick(void* _gui)
             // ----------
             const float radius = lm->param_scale * 12;
             XVGGradient g      = {.colour1 = C_BG_LIGHT};
-            xvg_draw_rectangle_with_gradient_ex(xvg, rect.x, rect.y, w, h, radius, 0, radius, 0, 0, g);
+            xvg_draw_rectangle_with_gradient_ex(bg, rect.x, rect.y, w, h, radius, 0, radius, 0, 0, g);
             float blur = 6;
             g          = xvg_make_shadow(0x40, 0x0, 0, 0, blur, -blur, true);
-            xvg_draw_rectangle_with_gradient_ex(xvg, rect.x, rect.y, w, h, radius, 0, radius, 0, 0, g);
+            xvg_draw_rectangle_with_gradient_ex(bg, rect.x, rect.y, w, h, radius, 0, radius, 0, 0, g);
         }
 
         float cy            = (rect.y + rect.b) * 0.5f;
         float inner_padding = 12 * lm->param_scale;
         float fsize         = lm->param_scale * 12;
-        xvg_draw_text(xvg, rect.x + inner_padding, cy, "LFO", 0, fsize, XVG_ALIGN_CL, C_TEXT_LIGHT_BG);
+        xvg_draw_text(bg, rect.x + inner_padding, cy, "LFO", 0, fsize, XVG_ALIGN_CL, C_TEXT_LIGHT_BG);
 
         // Arrow
         float tri_half_width = 5 * lm->param_scale;
@@ -1939,8 +2043,8 @@ void pw_tick(void* _gui)
         float x2      = rect.r - inner_padding - tri_half_width;
         float x3      = rect.r - inner_padding - tri_half_width * 2;
         float stroke  = 2 * lm->param_scale;
-        xvg_draw_line_round(xvg, x1, y1, x2, y2, stroke, C_TEXT_LIGHT_BG);
-        xvg_draw_line_round(xvg, x2, y2, x3, y1, stroke, C_TEXT_LIGHT_BG);
+        xvg_draw_line_round(bg, x1, y1, x2, y2, stroke, C_TEXT_LIGHT_BG);
+        xvg_draw_line_round(bg, x2, y2, x3, y1, stroke, C_TEXT_LIGHT_BG);
         unsigned events = imgui_get_events_rect(im, 'lopn', &rect);
         if (events & IMGUI_EVENT_MOUSE_ENTER)
             pw_set_mouse_cursor(gui->pw, PW_CURSOR_HAND_POINT);
@@ -1995,8 +2099,8 @@ void pw_tick(void* _gui)
 
         float cy          = rect_cy(&rect);
         bool  autogain_on = p->autogain_on;
-        xvg_draw_text(xvg, rect.x, cy, "AUTOGAIN", NULL, fsize, XVG_ALIGN_CL, C_TEXT_DARK_BG);
-        draw_checkbox(xvg, checkbox_height, cy, rect.r, lm->param_scale, autogain_on);
+        xvg_draw_text(bg, rect.x, cy, "AUTOGAIN", NULL, fsize, XVG_ALIGN_CL, C_TEXT_DARK_BG);
+        draw_checkbox(bg, checkbox_height, cy, rect.r, lm->param_scale, autogain_on);
 
         // Keytracking
         rect.x = rect.r + BORDER_PADDING * 4;
@@ -2014,8 +2118,8 @@ void pw_tick(void* _gui)
             p->midi_keytracking_on ^= 1;
 
         bool midi_keytracking_on = p->midi_keytracking_on;
-        xvg_draw_text(xvg, rect.x, cy, "MIDI KEYTRACKING", NULL, fsize, XVG_ALIGN_CL, C_TEXT_DARK_BG);
-        draw_checkbox(xvg, checkbox_height, cy, rect.r, lm->param_scale, midi_keytracking_on);
+        xvg_draw_text(bg, rect.x, cy, "MIDI KEYTRACKING", NULL, fsize, XVG_ALIGN_CL, C_TEXT_DARK_BG);
+        draw_checkbox(bg, checkbox_height, cy, rect.r, lm->param_scale, midi_keytracking_on);
     }
 
     // Footer bottom right
@@ -2058,7 +2162,7 @@ void pw_tick(void* _gui)
             len = snprintf(text, sizeof(text), "v%s | %s | %s", CPLUG_PLUGIN_VERSION, plugin_type_name, os_name);
         }
         float fsize = 12 * lm->param_scale;
-        xvg_draw_text(xvg, lm->width - 8, lm->height - 8, text, text + len, fsize, XVG_ALIGN_BR, C_TEXT_DARK_BG);
+        xvg_draw_text(bg, lm->width - 8, lm->height - 8, text, text + len, fsize, XVG_ALIGN_BR, C_TEXT_DARK_BG);
     }
 
     // Logos
@@ -2084,7 +2188,14 @@ void pw_tick(void* _gui)
         {
             ifill = xvg_make_linear_gradient(C_WHITE, 0xb3b3b3ff, 0, y, 0, b);
         }
-        xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, icon.x, icon.y, icon.width, icon.height);
+        xvg_gradient_apply_image(
+            &ifill,
+            gui->icons.view,
+            xvg->xvg->smp_linear,
+            icon.x,
+            icon.y,
+            icon.width,
+            icon.height);
         xvg_draw_solid_rectangle_with_gradient(xvg, x, y, w, h, ifill);
 
         // Exacoustics logo
@@ -2105,7 +2216,14 @@ void pw_tick(void* _gui)
         const float proportion = (float)offset_a / 128.0f;
 
         ifill = (XVGGradient){.colour1 = hover ? C_WHITE : C_TEXT_DARK_BG};
-        xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, icon.x, icon.y, icon.width, icon.height);
+        xvg_gradient_apply_image(
+            &ifill,
+            gui->icons.view,
+            xvg->xvg->smp_linear,
+            icon.x,
+            icon.y,
+            icon.width,
+            icon.height);
         xvg_draw_solid_rectangle_with_gradient(xvg, rect.x, y, w, h, ifill);
     }
 
@@ -2188,8 +2306,20 @@ void pw_tick(void* _gui)
     {
         pw_set_mouse_cursor(gui->pw, PW_CURSOR_DEFAULT);
     }
-    xvg_command_end_pass(&gui->xvg, XVG_LABEL("swapchain-pass-end"));
-    xvg_end_frame(xvg, gui->plugin->width, gui->plugin->height);
+
+    xvg_command_end_pass(bg, XVG_LABEL("swapchain-pass-end"));
+    xvg_command_end_pass(gui->xvg_anim, XVG_LABEL("swapchain-pass-end"));
+
+    xvg_end_frame(&gui->xvg);
+
+    bool bg_match = do_bg_command_lists_match(gui);
+    println("bg_match: %hhu", bg_match);
+    if (!bg_match)
+    {
+        xvg_command_list_end_frame(bg, gui->plugin->width, gui->plugin->height);
+    }
+    xvg_command_list_end_frame(xvg, gui->plugin->width, gui->plugin->height);
+
     sg_commit(); // flip swapchain
     // resources_end_frame(&gui->resource_manager, gui->nvg);
     imgui_end_frame(&gui->imgui);

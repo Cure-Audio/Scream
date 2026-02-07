@@ -141,7 +141,7 @@ void ted_handle_ibeam_moved(TextEditor* ted)
 
     if (total_chars)
     {
-        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->xvg->arena, _nvg_arena);
 
         size_t alloc_size = 4 * total_chars + 1;
         char*  alloc_text = linked_arena_alloc(ted->undo_arena, alloc_size);
@@ -188,7 +188,7 @@ void ted_handle_ibeam_moved(TextEditor* ted)
         xvg_release_text_layout(ted->xvg, layout);
         linked_arena_release(ted->undo_arena, alloc_text);
 
-        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->xvg->arena, _nvg_arena);
     }
 
     ted->time_last_ibeam_move = xtime_now_ns();
@@ -733,7 +733,7 @@ int ted_get_text_idx(TextEditor* ted, float x)
     size_t total_chars = xarr_len(ted->codepoints);
     if (total_chars)
     {
-        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->xvg->arena, _nvg_arena);
         size_t alloc_size = 4 * total_chars + 1;
         char*  alloc_text = linked_arena_alloc(ted->undo_arena, alloc_size);
         size_t text_len   = ted_get_text(ted, alloc_text, alloc_size);
@@ -758,7 +758,7 @@ int ted_get_text_idx(TextEditor* ted, float x)
         x -= ted->dimensions.x;
         x -= ted->text_offset;
 
-        x *= ted->xvg->backingScaleFactor;
+        x *= ted->xvg->xvg->backingScaleFactor;
         if (x >= 0)
         {
             while (idx < layout->num_glyphs - 1 && !(x >= glyphs[idx].x && x <= glyphs[idx + 1].x))
@@ -775,7 +775,7 @@ int ted_get_text_idx(TextEditor* ted, float x)
 
         xvg_release_text_layout(ted->xvg, layout);
         linked_arena_release(ted->undo_arena, alloc_text);
-        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->xvg->arena, _nvg_arena);
     }
 
     LINKED_ARENA_LEAK_DETECT_END(ted->undo_arena)
@@ -852,7 +852,7 @@ void ted_handle_mouse_drag(TextEditor* ted, imgui_context* im)
     ted_set_ibeam_idx(ted, idx, true);
 }
 
-void ted_init(TextEditor* ted, XVG* xvg)
+void ted_init(TextEditor* ted, XVGCommandList* xvg)
 {
     ted->xvg = xvg;
     xarr_setcap(ted->codepoints, 64);
@@ -907,7 +907,7 @@ void ted_draw(TextEditor* ted, uint64_t frame_time_ns, const char* placeholder, 
 {
     LINKED_ARENA_LEAK_DETECT_BEGIN(ted->undo_arena)
 
-    XVG* xvg = ted->xvg;
+    XVGCommandList* xvg = ted->xvg;
 
     xassert(ted->ibeam_idx >= 0);
     xassert(ted->selection_start >= 0);
@@ -948,12 +948,12 @@ void ted_draw(TextEditor* ted, uint64_t frame_time_ns, const char* placeholder, 
         glyphs     = xvg_layout_get_glyphs(layout);
         glyphs_len = layout->num_glyphs;
 
-        text_width = (float)layout->xmax / xvg->backingScaleFactor;
+        text_width = (float)layout->xmax / xvg->xvg->backingScaleFactor;
 
         // Draw selection BG
         if (ted->selection_start != ted->selection_end)
         {
-            LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->arena, _nvg_arena);
+            LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->xvg->arena, _nvg_arena);
             xassert(ted->selection_start < ted->selection_end);
             const float start_x = glyphs[ted->selection_start].x;
             const float end_x   = (glyphs[ted->selection_end - 1].x + glyphs[ted->selection_end - 1].rect.w);
@@ -961,8 +961,8 @@ void ted_draw(TextEditor* ted, uint64_t frame_time_ns, const char* placeholder, 
             float selection_x     = start_x;
             float selection_width = end_x - start_x;
 
-            selection_x     /= xvg->backingScaleFactor;
-            selection_width /= xvg->backingScaleFactor;
+            selection_x     /= xvg->xvg->backingScaleFactor;
+            selection_width /= xvg->xvg->backingScaleFactor;
 
             selection_x += d->x + ted->text_offset + ted->theme.padding_left;
 
@@ -1009,7 +1009,7 @@ void ted_draw(TextEditor* ted, uint64_t frame_time_ns, const char* placeholder, 
                 if (idx >= glyphs_len)
                     ibeam_x = text_width;
                 else
-                    ibeam_x = (float)glyphs[idx].x / xvg->backingScaleFactor;
+                    ibeam_x = (float)glyphs[idx].x / xvg->xvg->backingScaleFactor;
                 if (ibeam_x < 0)
                     ibeam_x = 0;
                 ibeam_x += ted->text_offset;

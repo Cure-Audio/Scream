@@ -3,16 +3,16 @@
 #include <xhl/maths.h>
 
 void tooltip_draw(
-    Tooltip*     tt,
-    XVG*         xvg,
-    LinkedArena* arena,
-    uint64_t     time_ns,
-    float        gui_width,
-    float        gui_height,
-    float        scale)
+    Tooltip*        tt,
+    XVGCommandList* xvg,
+    LinkedArena*    arena,
+    uint64_t        time_ns,
+    float           gui_width,
+    float           gui_height,
+    float           scale)
 {
     LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(arena, _param_arena);
-    LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(xvg->arena, _nvg_arena);
+    LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(xvg->xvg->arena, _nvg_arena);
 
     xassert(tt->state.text != NULL);
 
@@ -46,7 +46,7 @@ void tooltip_draw(
         xvg_create_text_layout(xvg, tt->state.text, 0, FONT_SIZE, line_break_width, line_height);
     xassert(layout->num_rows >= 1);
 
-    float width  = layout->xmax / xvg->backingScaleFactor;
+    float width  = layout->xmax / xvg->xvg->backingScaleFactor;
     width       += TOOLTIP_TEXT_PADDING_X * 2;
 
     imgui_rect  d             = tt->state.target_widget_dimensions;
@@ -54,7 +54,7 @@ void tooltip_draw(
     const float widget_top    = d.y;
     const float widget_bottom = d.b;
 
-    float tt_height  = layout->total_height / xvg->backingScaleFactor;
+    float tt_height  = layout->total_height / xvg->xvg->backingScaleFactor;
     tt_height       += TOOLTIP_TEXT_PADDING_Y * 2;
     d.x              = widget_cx - width * 0.5f;
     d.r              = d.x + width;
@@ -174,6 +174,6 @@ void tooltip_draw(
     xvg_draw_text_layout(xvg, layout, text_x, text_y, XVG_ALIGN_CL, tt->settings.colour_text);
     xvg_release_text_layout(xvg, layout);
 
-    LINKED_ARENA_TAGGED_LEAK_DETECT_END(xvg->arena, _nvg_arena);
+    LINKED_ARENA_TAGGED_LEAK_DETECT_END(xvg->xvg->arena, _nvg_arena);
     LINKED_ARENA_TAGGED_LEAK_DETECT_END(arena, _param_arena);
 }

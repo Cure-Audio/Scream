@@ -11,7 +11,7 @@
 
 // #include "im_points.h"
 
-// #define SHOW_FPS
+#define SHOW_FPS
 
 // Assortment of cached lengths of things in the GUI
 typedef struct LayoutMetrics
@@ -104,7 +104,23 @@ typedef struct GUI
     XVGFont font;
     float   content_scale;
 
-    XVG           xvg;
+    XVG             xvg;
+    XVGCommandList* _xvg_bg0;
+    XVGCommandList* _xvg_bg1;
+    XVGCommandList* xvg_bg;
+    XVGCommandList* xvg_anim;
+    uint64_t        frame_counter;
+
+    struct
+    {
+        sg_image img;
+        sg_view  img_colview; // View for writing to
+        sg_view  img_texview; // View for reading from
+        sg_image depth;
+        sg_view  depth_view;
+        int      width, height;
+    } bg_framebuffer;
+
     imgui_context imgui;
 
     LayoutMetrics layout;

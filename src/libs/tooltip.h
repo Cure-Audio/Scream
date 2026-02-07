@@ -92,10 +92,10 @@ static void tooltip_handle_events(Tooltip* tt, imgui_rect d, const char* txt, ui
 }
 
 void tooltip_draw(
-    Tooltip*     tt,
-    XVG*         xvg,
-    LinkedArena* arena,
-    uint64_t     time_ns,
-    float        gui_width,
-    float        gui_height,
-    float        font_size);
+    Tooltip*        tt,
+    XVGCommandList* xvg,
+    LinkedArena*    arena,
+    uint64_t        time_ns,
+    float           gui_width,
+    float           gui_height,
+    float           font_size);

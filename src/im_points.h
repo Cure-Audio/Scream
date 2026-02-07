@@ -106,11 +106,11 @@ typedef struct IMPointsData
 
 typedef struct IMPointsFrameContext
 {
-    IMPointsData*         imp;   // not owned
-    struct XVG*           xvg;   // not owned
-    struct imgui_context* im;    // not owned
-    struct LinkedArena*   arena; // not owned
-    void*                 pw;    // not owned
+    IMPointsData*          imp;   // not owned
+    struct XVGCommandList* xvg;   // not owned
+    struct imgui_context*  im;    // not owned
+    struct LinkedArena*    arena; // not owned
+    void*                  pw;    // not owned
 
     // Recreate the cache
     bool should_update_cached_path;
@@ -122,8 +122,12 @@ typedef struct IMPointsFrameContext
     int  delete_pt_idx;
 } IMPointsFrameContext;
 
-static IMPointsFrameContext
-imp_frame_context_new(IMPointsData* imp, struct XVG* xvg, struct imgui_context* im, struct LinkedArena* arena, void* pw)
+static IMPointsFrameContext imp_frame_context_new(
+    IMPointsData*          imp,
+    struct XVGCommandList* xvg,
+    struct imgui_context*  im,
+    struct LinkedArena*    arena,
+    void*                  pw)
 {
     IMPointsFrameContext framestate = {0};
     framestate.imp                  = imp;
@@ -1229,7 +1233,7 @@ void imp_handle_grid_events(
 void imp_draw(IMPointsFrameContext* fstate)
 {
     const IMPointsData* imp = fstate->imp;
-    XVG*                xvg = fstate->xvg;
+    XVGCommandList*     xvg = fstate->xvg;
     xassert(xvg);
 
     // Draw path

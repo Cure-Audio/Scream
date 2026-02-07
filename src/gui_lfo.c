@@ -125,7 +125,7 @@ void do_lfo_shaders(void* uptr)
     }
 }
 
-void add_up_down_triangles(XVG* xvg, imgui_rect rect)
+void add_up_down_triangles(XVGCommandList* xvg, imgui_rect rect)
 {
     float w  = rect.r - rect.x;
     float cy = (rect.b + rect.y) * 0.5f;
@@ -212,11 +212,12 @@ void draw_lfo_section(GUI* gui)
 {
     LINKED_ARENA_LEAK_DETECT_BEGIN(gui->arena);
 
-    Plugin*        p   = gui->plugin;
-    XVG*           xvg = &gui->xvg;
-    imgui_context* im  = &gui->imgui;
-    LayoutMetrics* lm  = &gui->layout;
-    IMPointsData*  imp = &gui->imp;
+    Plugin*         p   = gui->plugin;
+    XVGCommandList* bg  = gui->xvg_bg;
+    XVGCommandList* xvg = gui->xvg_anim;
+    imgui_context*  im  = &gui->imgui;
+    LayoutMetrics*  lm  = &gui->layout;
+    IMPointsData*   imp = &gui->imp;
 
     const float SCALE          = lm->param_scale;
     const float PADDING        = floorf(8 * lm->content_scale);
@@ -280,7 +281,7 @@ void draw_lfo_section(GUI* gui)
     const float top_text_cy = display_y + (CONTENT_PADDING_Y + LFO_TAB_HEIGHT * 0.5f);
 
     XVGGradient g_bg = xvg_make_linear_gradient(0x242838FF, 0x0C101DFF, 0, display_y, 0, display_b);
-    xvg_draw_rectangle_with_gradient(xvg, lm->content_x + PADDING, display_y, display_w, display_h, 6, 0, g_bg);
+    xvg_draw_rectangle_with_gradient(bg, lm->content_x + PADDING, display_y, display_w, display_h, 6, 0, g_bg);
 
     // LFO tabs
     {
@@ -423,17 +424,17 @@ void draw_lfo_section(GUI* gui)
             }
         }
 
-        xvg_draw_text(xvg, rect.x, top_text_cy, "GRID", NULL, FONT_SIZE, XVG_ALIGN_CL, C_TEXT_DARK_BG);
+        xvg_draw_text(bg, rect.x, top_text_cy, "GRID", NULL, FONT_SIZE, XVG_ALIGN_CL, C_TEXT_DARK_BG);
 
         // Up & down "buttons"
         float btn_left = floor(rect.r - 6 * SCALE);
         float btn_top  = floor(top_text_cy - FONT_SIZE * 0.75f);
         float btn_bot  = floor(top_text_cy + FONT_SIZE * 0.4f);
 
-        add_up_down_triangles(xvg, (imgui_rect){btn_left, btn_top, rect.r, btn_bot});
+        add_up_down_triangles(bg, (imgui_rect){btn_left, btn_top, rect.r, btn_bot});
         char label[8];
         snprintf(label, sizeof(label), "%d", ngrid);
-        xvg_draw_text(xvg, rect.r - 9 * SCALE, top_text_cy, label, 0, FONT_SIZE, XVG_ALIGN_CR, C_GREY_1);
+        xvg_draw_text(bg, rect.r - 9 * SCALE, top_text_cy, label, 0, FONT_SIZE, XVG_ALIGN_CR, C_GREY_1);
     }
 
     // Rate
@@ -513,7 +514,7 @@ void draw_lfo_section(GUI* gui)
 
                 xvec4i      c     = icon_get_coords(&gui->icons, ICON_CROTCHET);
                 XVGGradient ifill = (XVGGradient){.colour1 = icon_col};
-                xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, c.x, c.y, c.width, c.height);
+                xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->xvg->smp_linear, c.x, c.y, c.width, c.height);
                 xvg_draw_solid_rectangle_with_gradient(xvg, x, y, height, height, ifill);
             }
             else
@@ -592,7 +593,14 @@ void draw_lfo_section(GUI* gui)
 
             XVGGradient ifill = {.colour1 = icon_col};
             xvec4i      icon  = icon_get_coords(&gui->icons, icon_id);
-            xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, icon.x, icon.y, icon.width, icon.height);
+            xvg_gradient_apply_image(
+                &ifill,
+                gui->icons.view,
+                xvg->xvg->smp_linear,
+                icon.x,
+                icon.y,
+                icon.width,
+                icon.height);
             xvg_draw_solid_rectangle_with_gradient(xvg, x, y, height, height, ifill);
         }
     }
@@ -704,7 +712,7 @@ void draw_lfo_section(GUI* gui)
         }
 
         float cy = rect_cy(&sl_rate);
-        xvg_draw_text(xvg, sl_rate.x, cy, "RATE", NULL, FONT_SIZE, XVG_ALIGN_CL, C_TEXT_DARK_BG);
+        xvg_draw_text(bg, sl_rate.x, cy, "RATE", NULL, FONT_SIZE, XVG_ALIGN_CL, C_TEXT_DARK_BG);
 
         char label[16] = {0};
 
@@ -716,7 +724,7 @@ void draw_lfo_section(GUI* gui)
         float btn_left = floor(sl_rate.r - 6 * SCALE);
         float btn_top  = floor(cy - FONT_SIZE * 0.75f);
         float btn_bot  = ceilf(cy + FONT_SIZE * 0.4f);
-        add_up_down_triangles(xvg, (imgui_rect){btn_left, btn_top, sl_rate.r, btn_bot});
+        add_up_down_triangles(bg, (imgui_rect){btn_left, btn_top, sl_rate.r, btn_bot});
     }
 
     // LFO Draw shapes
@@ -786,7 +794,14 @@ void draw_lfo_section(GUI* gui)
 
             XVGGradient ifill = {.colour1 = icon_col};
             xvec4i      icon  = icon_get_coords(&gui->icons, icon_id);
-            xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->smp_linear, icon.x, icon.y, icon.width, icon.height);
+            xvg_gradient_apply_image(
+                &ifill,
+                gui->icons.view,
+                xvg->xvg->smp_linear,
+                icon.x,
+                icon.y,
+                icon.width,
+                icon.height);
             xvg_draw_solid_rectangle_with_gradient(xvg, btn.x, btn.y, SHAPES_WIDTH, SHAPES_WIDTH, ifill);
         }
     }
@@ -836,7 +851,7 @@ void draw_lfo_section(GUI* gui)
             should_clear_lfo_trail                       = true;
         }
 
-        xvg_draw_text(xvg, content_x, rect_cy(&btn_pattern), "PATTERN", NULL, FONT_SIZE, XVG_ALIGN_CL, C_TEXT_DARK_BG);
+        xvg_draw_text(bg, content_x, rect_cy(&btn_pattern), "PATTERN", NULL, FONT_SIZE, XVG_ALIGN_CL, C_TEXT_DARK_BG);
 
         const int pattern_idx = main_get_lfo_pattern_idx(p);
 
@@ -972,7 +987,7 @@ void draw_lfo_section(GUI* gui)
                 0x10);
         }
 
-        xvg_draw_rectangle(xvg, grid_x, grid_y, grid_r - grid_x, grid_b - grid_y, 0, 1, C_GRID_PRIMARY);
+        xvg_draw_rectangle(bg, grid_x, grid_y, grid_r - grid_x, grid_b - grid_y, 0, 1, C_GRID_PRIMARY);
 
         // Horizontal subdivisions
         for (int k = 0; k < 2; k++)
@@ -982,14 +997,14 @@ void draw_lfo_section(GUI* gui)
             {
                 float x = xm_mapf(i, 0, num_grid_x, grid_x, grid_r);
                 x       = floorf(x);
-                xvg_draw_solid_rectangle(xvg, x, grid_y + 1, 1, grid_h - 2, col);
+                xvg_draw_solid_rectangle(bg, x, grid_y + 1, 1, grid_h - 2, col);
             }
             // Vertical subdivisions
             for (int i = 1 + k; i < num_grid_y; i += 2)
             {
                 float y = xm_mapf(i, 0, num_grid_y, grid_y, grid_b);
                 y       = floorf(y);
-                xvg_draw_solid_rectangle(xvg, grid_x + 1, y, grid_w - 2, 1, col);
+                xvg_draw_solid_rectangle(bg, grid_x + 1, y, grid_w - 2, 1, col);
             }
         }
 
