@@ -25,8 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <knob.glsl.h>
-#include <lfo.glsl.h>
+#include <shaders.glsl.h>
 
 #if defined(CPLUG_BUILD_STANDALONE)
 // #define SYNTH_HUD
@@ -704,46 +703,78 @@ void draw_checkbox(XVG* xvg, float width, float cy, float r, float scale, bool o
     }
 }
 
-void draw_background(GUI* gui)
+void do_background_shader(void* _gui)
 {
-    XVG* xvg = &gui->xvg;
+    GUI*           gui = _gui;
+    LayoutMetrics* lm  = &gui->layout;
+    sg_pipeline    pip = {0};
+    bool           ok  = resource_get_pipeline(&gui->resource_manager, &pip, bg_shader_desc, 0);
 
-    LayoutMetrics* lm = &gui->layout;
+    if (ok)
+    {
+        sg_apply_pipeline(pip);
 
-    XVGGradient bg_grad = xvg_make_linear_gradient(0x151B33FF, 0x090E1FFF, 0, 0, 0, lm->height);
-    xvg_draw_solid_rectangle_with_gradient(xvg, 0, 0, lm->width, lm->height, bg_grad);
+        vs_bg_uniforms_t vs_uniforms = {
+            .u_size                   = {lm->width, lm->height},
+            .u_bg_colour_top          = 0x151B33FF,
+            .u_bg_colour_bottom       = 0x090E1FFF,
+            .u_bg_colour_content      = C_BG_LIGHT,
+            .u_padding_x              = 8,
+            .u_height_header          = lm->content_y,
+            .u_height_footer          = lm->height - lm->content_b,
+            .u_border_radius          = 8,
+            .u_radial_gradient_y      = lm->content_y + lm->top_content_height * 0.2,
+            .u_radial_gradient_radius = {lm->width * 0.6f, lm->top_content_height * 0.75f},
+        };
+        sg_apply_uniforms(UB_vs_bg_uniforms, &SG_RANGE(vs_uniforms));
 
-    float width  = lm->width - 16;
-    float height = lm->content_b - lm->content_y;
-    xvg_draw_rectangle(xvg, 8, lm->content_y, width, height, 8, 0, C_BG_LIGHT);
+        sg_draw(0, 3, 1);
+    }
+}
 
-    float cx = lm->width * 0.5f;
-    float h  = lm->top_content_height;
-    // Mimic light reflections
-    XVGGradient lighting =
-        xvg_make_radial_gradient(0xffffff7f, 0xffffff00, cx, lm->content_y + h * 0.2, lm->width * 0.6f, h * 0.75f);
-    xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_y, width, h, 8, 0, lighting);
+void draw_background(GUI* gui, bool bg)
+{
+    XVG*           xvg = &gui->xvg;
+    LayoutMetrics* lm  = &gui->layout;
 
-    // Gentle reds and greens to add depth
-    // XVGGradient metallic =
-    //     xvg_make_linear_gradient(0xAC48000c, 0xBCEB2008, 8, lm->content_y, width, lm->top_content_bottom);
-    // xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_y, width, height, 8, 0, metallic);
+    if (bg)
+    {
 
-    // Inner shadows
-    const float blur_radius = 8;
-    float       grad_x      = lm->content_x - blur_radius * 0.5f;
-    float       grad_r      = lm->content_r + blur_radius * 0.5f;
-    float       grad_w      = grad_r - grad_x;
+        XVGGradient bg_grad = xvg_make_linear_gradient(0x151B33FF, 0x090E1FFF, 0, 0, 0, lm->height);
+        xvg_draw_solid_rectangle_with_gradient(xvg, 0, 0, lm->width, lm->height, bg_grad);
 
-    // Top inner shadow (light)
-    XVGGradient top_shadow = xvg_make_shadow(0xffffffdf, 0xffffff00, 0, 10, 4, -8, true);
-    xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_y, width, 16, 8, 0, top_shadow);
+        float width  = lm->width - 16;
+        float height = lm->content_b - lm->content_y;
+        xvg_draw_rectangle(xvg, 8, lm->content_y, width, height, 8, 0, C_BG_LIGHT);
 
-    // Bottom inner shadow (dark)
-    XVGGradient bot_shadow = xvg_make_shadow(0x7f, 0, 0, -10, 4, -8, true);
-    xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_b - 16, width, 16, 8, 0, bot_shadow);
+        float cx = lm->width * 0.5f;
+        float h  = lm->top_content_height;
+        // Mimic light reflections
+        XVGGradient lighting =
+            xvg_make_radial_gradient(0xffffff7f, 0xffffff00, cx, lm->content_y + h * 0.2, lm->width * 0.6f, h * 0.75f);
+        xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_y, width, h, 8, 0, lighting);
 
-    // // Dots
+        // Gentle reds and greens to add depth
+        // XVGGradient metallic =
+        //     xvg_make_linear_gradient(0xAC48000c, 0xBCEB2008, 8, lm->content_y, width, lm->top_content_bottom);
+        // xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_y, width, height, 8, 0, metallic);
+
+        // Inner shadows
+        const float blur_radius = 8;
+        float       grad_x      = lm->content_x - blur_radius * 0.5f;
+        float       grad_r      = lm->content_r + blur_radius * 0.5f;
+        float       grad_w      = grad_r - grad_x;
+
+        // Top inner shadow (light)
+        XVGGradient top_shadow = xvg_make_shadow(0xffffffdf, 0xffffff00, 0, 10, 4, -8, true);
+        xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_y, width, 16, 8, 0, top_shadow);
+
+        // Bottom inner shadow (dark)
+        XVGGradient bot_shadow = xvg_make_shadow(0x7f, 0, 0, -10, 4, -8, true);
+        xvg_draw_rectangle_with_gradient(xvg, 8, lm->content_b - 16, width, 16, 8, 0, bot_shadow);
+    }
+
+    // Dots
     const float DOT_DIAMETER = 6;
     const float DOT_RADIUS   = DOT_DIAMETER / 2;
     const float DOT_PADDING  = 6;
@@ -1045,8 +1076,14 @@ void pw_tick(void* _gui)
 
     // Background
     // NOTE: this is the heaviest draw call in the entire GUI, likely due to the high pixel coverage
-    // Currently its 50% of all consumed GPU usage
-    draw_background(gui);
+    // Currently its 50% of all consumed GPU usage by the GUI
+    // We use a custom shader to draw all gradients in one pass. It costs half as much GPU%
+    bool draw_bg = true;
+    if (draw_bg == false)
+    {
+        xvg_command_custom(xvg, gui, do_background_shader, XVG_LABEL("BG Shader"));
+    }
+    draw_background(gui, draw_bg);
 
     // Header
     {
@@ -1073,7 +1110,7 @@ void pw_tick(void* _gui)
     }
 
     // Params
-    // /*
+    // / *
     {
         static const ParamID param_ids[] = {PARAM_INPUT_GAIN, PARAM_CUTOFF, PARAM_SCREAM, PARAM_RESONANCE, PARAM_WET};
         _Static_assert(ARRLEN(param_ids) == ARRLEN(lm->param_positions_cx), "");
@@ -1808,7 +1845,7 @@ void pw_tick(void* _gui)
         }
     }
     xvg_command_custom(xvg, gui, do_knob_shader, XVG_LABEL("Knob shader"));
-    // */
+    // * /
 
     //     const float peak_gain = p->gui_output_peak_gain;
     //     if (peak_gain > 1)

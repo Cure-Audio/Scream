@@ -2,7 +2,7 @@
 #include "gui.h"
 
 #include <layout.h>
-#include <lfo.glsl.h>
+#include <shaders.glsl.h>
 #include <sort.h>
 #include <stdio.h>
 #include <xhl/time.h>
