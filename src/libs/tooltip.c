@@ -12,7 +12,7 @@ void tooltip_draw(
     float           scale)
 {
     LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(arena, _param_arena);
-    LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(xvg->xvg->arena, _nvg_arena);
+    LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(xvg->arena, _nvg_arena);
 
     xassert(tt->state.text != NULL);
 
@@ -174,6 +174,6 @@ void tooltip_draw(
     xvg_draw_text_layout(xvg, layout, text_x, text_y, XVG_ALIGN_CL, tt->settings.colour_text);
     xvg_release_text_layout(xvg, layout);
 
-    LINKED_ARENA_TAGGED_LEAK_DETECT_END(xvg->xvg->arena, _nvg_arena);
+    LINKED_ARENA_TAGGED_LEAK_DETECT_END(xvg->arena, _nvg_arena);
     LINKED_ARENA_TAGGED_LEAK_DETECT_END(arena, _param_arena);
 }

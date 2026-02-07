@@ -141,7 +141,7 @@ void ted_handle_ibeam_moved(TextEditor* ted)
 
     if (total_chars)
     {
-        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->arena, _nvg_arena);
 
         size_t alloc_size = 4 * total_chars + 1;
         char*  alloc_text = linked_arena_alloc(ted->undo_arena, alloc_size);
@@ -188,7 +188,7 @@ void ted_handle_ibeam_moved(TextEditor* ted)
         xvg_release_text_layout(ted->xvg, layout);
         linked_arena_release(ted->undo_arena, alloc_text);
 
-        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->arena, _nvg_arena);
     }
 
     ted->time_last_ibeam_move = xtime_now_ns();
@@ -733,7 +733,7 @@ int ted_get_text_idx(TextEditor* ted, float x)
     size_t total_chars = xarr_len(ted->codepoints);
     if (total_chars)
     {
-        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->arena, _nvg_arena);
         size_t alloc_size = 4 * total_chars + 1;
         char*  alloc_text = linked_arena_alloc(ted->undo_arena, alloc_size);
         size_t text_len   = ted_get_text(ted, alloc_text, alloc_size);
@@ -775,7 +775,7 @@ int ted_get_text_idx(TextEditor* ted, float x)
 
         xvg_release_text_layout(ted->xvg, layout);
         linked_arena_release(ted->undo_arena, alloc_text);
-        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->xvg->arena, _nvg_arena);
+        LINKED_ARENA_TAGGED_LEAK_DETECT_END(ted->xvg->arena, _nvg_arena);
     }
 
     LINKED_ARENA_LEAK_DETECT_END(ted->undo_arena)
@@ -953,7 +953,7 @@ void ted_draw(TextEditor* ted, uint64_t frame_time_ns, const char* placeholder, 
         // Draw selection BG
         if (ted->selection_start != ted->selection_end)
         {
-            LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->xvg->arena, _nvg_arena);
+            LINKED_ARENA_TAGGED_LEAK_DETECT_BEGIN(ted->xvg->arena, _nvg_arena);
             xassert(ted->selection_start < ted->selection_end);
             const float start_x = glyphs[ted->selection_start].x;
             const float end_x   = (glyphs[ted->selection_end - 1].x + glyphs[ted->selection_end - 1].rect.w);

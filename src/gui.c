@@ -123,9 +123,9 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->tooltip.settings.colour_bg     = 0xD4D7DEff;
 
     xvg_init(&gui->xvg);
-    gui->xvg_anim = xvg_command_list_create(&gui->xvg);
-    gui->_xvg_bg0 = xvg_command_list_create(&gui->xvg);
-    gui->_xvg_bg1 = xvg_command_list_create(&gui->xvg);
+    gui->_xvg_bg0 = xvg_command_list_create(&gui->xvg, 256, 4, 128);
+    gui->_xvg_bg1 = xvg_command_list_create(&gui->xvg, 256, 4, 128);
+    gui->xvg_anim = xvg_command_list_create(&gui->xvg, 0, 0, 0);
     // Load assets
     {
         // Font
@@ -243,9 +243,6 @@ void pw_destroy_gui(void* _gui)
     resources_deinit(&gui->resource_manager, &gui->xvg);
 
     imp_deinit(&gui->imp);
-    xvg_command_list_destroy(gui->xvg_anim);
-    xvg_command_list_destroy(gui->_xvg_bg0);
-    xvg_command_list_destroy(gui->_xvg_bg1);
     xvg_deinit(&gui->xvg);
     sg_shutdown(gui->sg);
 
@@ -1100,8 +1097,8 @@ void pw_tick(void* _gui)
     imgui_begin_frame(im);
 
     xvg_begin_frame(&gui->xvg);
-    xvg_command_list_begin_frame(gui->xvg_anim, &gui->xvg);
-    xvg_command_list_begin_frame(bg, &gui->xvg);
+    xvg_command_list_begin_frame(gui->xvg_anim);
+    xvg_command_list_begin_frame(bg);
 
     // TODO: replace with framebuffer
     xvg_command_begin_pass(
