@@ -1079,8 +1079,7 @@ void pw_tick(void* _gui)
 #endif
         gui->xvg.backingScaleFactor = pw_get_backing_scale_factor(gui->pw);
 
-        lm->param_scale = xm_maxf(1, xm_minf(lm->scale_x, lm->scale_y));
-        lm->param_scale = xm_maxf(lm->param_scale, lm->content_scale);
+        lm->param_scale = xm_maxf(0.75, xm_minf(lm->scale_x, lm->scale_y));
 
         lm->height_header = floorf(HEIGHT_HEADER * lm->param_scale);
         lm->height_footer = floorf(HEIGHT_FOOTER * lm->param_scale);
@@ -1194,31 +1193,44 @@ void pw_tick(void* _gui)
         gui->lfo_toggle_button = lfo_btn;
 
         // Framebuffer
-        sg_destroy_view(gui->bg_framebuffer.depth_view);
-        sg_destroy_view(gui->bg_framebuffer.img_texview);
-        sg_destroy_view(gui->bg_framebuffer.img_colview);
-        sg_destroy_image(gui->bg_framebuffer.img);
-        sg_destroy_image(gui->bg_framebuffer.depth);
-        gui->bg_framebuffer.width       = gui->plugin->width * gui->xvg.backingScaleFactor;
-        gui->bg_framebuffer.height      = gui->plugin->height * gui->xvg.backingScaleFactor;
-        gui->bg_framebuffer.img         = sg_make_image(&(sg_image_desc){
-                    .usage.color_attachment = true,
-                    .width                  = gui->bg_framebuffer.width,
-                    .height                 = gui->bg_framebuffer.height,
-                    .pixel_format           = SG_PIXELFORMAT_RGBA8,
-                    .sample_count           = 1,
-        });
-        gui->bg_framebuffer.depth       = sg_make_image(&(sg_image_desc){
-                  .usage.depth_stencil_attachment = true,
-                  .width                          = gui->bg_framebuffer.width,
-                  .height                         = gui->bg_framebuffer.height,
-                  .pixel_format                   = SG_PIXELFORMAT_DEPTH_STENCIL,
-                  .sample_count                   = 1,
-        });
-        gui->bg_framebuffer.img_colview = sg_make_view(&(sg_view_desc){.color_attachment = gui->bg_framebuffer.img});
-        gui->bg_framebuffer.img_texview = sg_make_view(&(sg_view_desc){.texture = gui->bg_framebuffer.img});
-        gui->bg_framebuffer.depth_view =
-            sg_make_view(&(sg_view_desc){.depth_stencil_attachment = gui->bg_framebuffer.depth});
+        int fb_width  = gui->plugin->width * gui->xvg.backingScaleFactor;
+        int fb_height = gui->plugin->width * gui->xvg.backingScaleFactor;
+        if (fb_width != gui->bg_framebuffer.width || fb_height != gui->bg_framebuffer.height)
+        {
+            sg_destroy_view(gui->bg_framebuffer.depth_view);
+            sg_destroy_view(gui->bg_framebuffer.img_texview);
+            sg_destroy_view(gui->bg_framebuffer.img_colview);
+            sg_destroy_image(gui->bg_framebuffer.img);
+            sg_destroy_image(gui->bg_framebuffer.depth);
+            gui->bg_framebuffer.width  = gui->plugin->width * gui->xvg.backingScaleFactor;
+            gui->bg_framebuffer.height = gui->plugin->height * gui->xvg.backingScaleFactor;
+            gui->bg_framebuffer.img    = sg_make_image(&(sg_image_desc){
+                   .usage.color_attachment = true,
+                   .width                  = gui->bg_framebuffer.width,
+                   .height                 = gui->bg_framebuffer.height,
+                   .pixel_format           = SG_PIXELFORMAT_RGBA8,
+                   .sample_count           = 1,
+            });
+            gui->bg_framebuffer.depth  = sg_make_image(&(sg_image_desc){
+                 .usage.depth_stencil_attachment = true,
+                 .width                          = gui->bg_framebuffer.width,
+                 .height                         = gui->bg_framebuffer.height,
+                 .pixel_format                   = SG_PIXELFORMAT_DEPTH_STENCIL,
+                 .sample_count                   = 1,
+            });
+            gui->bg_framebuffer.img_colview =
+                sg_make_view(&(sg_view_desc){.color_attachment = gui->bg_framebuffer.img});
+            gui->bg_framebuffer.img_texview = sg_make_view(&(sg_view_desc){.texture = gui->bg_framebuffer.img});
+            gui->bg_framebuffer.depth_view =
+                sg_make_view(&(sg_view_desc){.depth_stencil_attachment = gui->bg_framebuffer.depth});
+            xassert(gui->bg_framebuffer.width);
+            xassert(gui->bg_framebuffer.height);
+            xassert(gui->bg_framebuffer.img_texview.id);
+            gui->_xvg_bg0->shapes_buffer_len = 0; // This will force the BG to redraw
+            gui->_xvg_bg0->text_buffer_len   = 0;
+            gui->_xvg_bg1->shapes_buffer_len = 0;
+            gui->_xvg_bg1->text_buffer_len   = 0;
+        }
     }
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
