@@ -269,9 +269,9 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->tooltip.settings.colour_bg     = 0xD4D7DEff;
 
     xvg_init(&gui->xvg);
-    gui->_xvg_bg0 = xvg_command_list_create(&gui->xvg, 256, 4, 128);
-    gui->_xvg_bg1 = xvg_command_list_create(&gui->xvg, 256, 4, 128);
-    gui->xvg_anim = xvg_command_list_create(&gui->xvg, 0, 0, 0);
+    gui->_xvg_bg0 = xvg_command_list_create(&gui->xvg);
+    gui->_xvg_bg1 = xvg_command_list_create(&gui->xvg);
+    gui->xvg_anim = xvg_command_list_create(&gui->xvg);
     // Load assets
     {
         // Font
@@ -962,25 +962,26 @@ bool do_bg_command_lists_match(GUI* gui)
 
     bool match = true;
     // Shapes
-    match &= l1->shapes_buffer_len == l2->shapes_buffer_len;
+    match &= l1->frame.num_shapes == l2->frame.num_shapes;
     if (!match)
         return match;
-    match &= 0 == memcmp(l1->shapes_buffer, l2->shapes_buffer, sizeof(l2->shapes_buffer[0]) * l2->shapes_buffer_len);
+    match &= 0 == memcmp(l1->shapes, l2->shapes, sizeof(l2->shapes[0]) * l2->frame.num_shapes);
     if (!match)
         return match;
 
     // Lines
-    match &= l1->line_buffer_len == l2->line_buffer_len;
+    match &= l1->frame.num_line_segments == l2->frame.num_line_segments;
     if (!match)
         return match;
-    match &= 0 == memcmp(l1->line_buffer, l2->line_buffer, sizeof(l2->line_buffer[0]) * l2->line_buffer_len);
+    match &=
+        0 == memcmp(l1->line_segments, l2->line_segments, sizeof(l2->line_segments[0]) * l2->frame.num_line_segments);
     if (!match)
         return match;
     // Text
-    match &= l1->text_buffer_len == l2->text_buffer_len;
+    match &= l1->frame.num_text == l2->frame.num_text;
     if (!match)
         return match;
-    match &= 0 == memcmp(l1->text_buffer, l2->text_buffer, sizeof(l2->text_buffer[0]) * l2->text_buffer_len);
+    match &= 0 == memcmp(l1->text, l2->text, sizeof(l2->text[0]) * l2->frame.num_text);
 
     return match;
 }
@@ -1226,10 +1227,10 @@ void pw_tick(void* _gui)
             xassert(gui->bg_framebuffer.width);
             xassert(gui->bg_framebuffer.height);
             xassert(gui->bg_framebuffer.img_texview.id);
-            gui->_xvg_bg0->shapes_buffer_len = 0; // This will force the BG to redraw
-            gui->_xvg_bg0->text_buffer_len   = 0;
-            gui->_xvg_bg1->shapes_buffer_len = 0;
-            gui->_xvg_bg1->text_buffer_len   = 0;
+            gui->_xvg_bg0->frame.num_shapes = 0; // This will force the BG to redraw
+            gui->_xvg_bg0->frame.num_text   = 0;
+            gui->_xvg_bg1->frame.num_shapes = 0;
+            gui->_xvg_bg1->frame.num_text   = 0;
         }
     }
 
