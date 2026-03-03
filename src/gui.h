@@ -22,7 +22,6 @@ typedef struct LayoutMetrics
     float scale_y;
 
     float content_scale;
-    float devicePixelRatio; // Some nonsense value for NVG which I still don't totally understand
 
     float height_header;
     float height_footer;
@@ -102,7 +101,6 @@ typedef struct GUI
     void*   pw;
     void*   sg;
     XVGFont font;
-    float   content_scale;
 
     XVG             xvg;
     XVGCommandList* _xvg_bg0;

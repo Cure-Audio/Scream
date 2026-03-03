@@ -241,6 +241,9 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->plugin = p;
     p->gui      = gui;
 
+    extern float system_get_content_scale();
+    gui->layout.content_scale = system_get_content_scale();
+
     sg_environment env;
     memset(&env, 0, sizeof(env));
     env.defaults.sample_count = 1;
@@ -436,7 +439,7 @@ void pw_get_info(struct PWGetInfo* info)
         uint32_t width  = info->constrain_size.width;
         uint32_t height = info->constrain_size.height;
 
-        float    content_scale  = xm_maxf(1, gui->content_scale);
+        float    content_scale  = xm_maxf(1, gui->layout.content_scale);
         uint32_t min_width      = (uint32_t)(GUI_MIN_WIDTH * content_scale);
         uint32_t min_height     = (uint32_t)(GUI_MIN_HEIGHT * content_scale);
         uint32_t content_height = (uint32_t)(CONTENT_HEIGHT * content_scale);
@@ -670,7 +673,7 @@ bool pw_event(const PWEvent* event)
 
     if (event->type == PW_EVENT_CONTENT_SCALE_FACTOR_CHANGED)
     {
-        gui->content_scale = event->content_scale_factor;
+        gui->layout.content_scale = event->content_scale_factor;
     }
 
     return false;
@@ -1074,14 +1077,6 @@ void pw_tick(void* _gui)
         lm->scale_x = (float)lm->width / (float)GUI_INIT_WIDTH;
         lm->scale_y = (float)top_height / (float)init_height;
 
-        const float content_scale = xm_maxf(gui->content_scale, 1.0f);
-#ifdef __APPLE__
-        lm->content_scale    = 1;
-        lm->devicePixelRatio = 2; // required for text to render properly...
-#else
-        lm->content_scale    = content_scale;
-        lm->devicePixelRatio = 1;
-#endif
         gui->xvg.backingScaleFactor = pw_get_backing_scale_factor(gui->pw);
 
         lm->param_scale = xm_maxf(0.75, xm_minf(lm->scale_x, lm->scale_y));
