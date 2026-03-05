@@ -125,12 +125,15 @@ set(PLUGIN_SOURCES
     src/gui_lfo.c
     src/im_points.c
     src/resource_manager.c
-    src/libs/texteditor.c
-    src/libs/tooltip.c
+    src/icons.c
+
     src/libs/freetype_scu.c
+    src/libs/nanosvgrast3.c
     src/libs/stb_rect_pack.c
     src/libs/stb_image.c
     src/libs/stb_image_resize2.c
+    src/libs/texteditor.c
+    src/libs/tooltip.c
     
     # modules/wip_libs/src/nanovg2.c
     modules/xvg/xvg.c
@@ -352,3 +355,9 @@ if (WIN32 AND CMAKE_BUILD_TYPE MATCHES Debug)
 
     # add_dependencies(${HOTRELOAD_LIB_NAME} shader_header)
 endif()
+
+# Tool
+# add_executable(svg_parser tools/svg_parser.c)
+# target_compile_definitions(svg_parser PRIVATE ${PLUGIN_DEFINITIONS})
+# target_include_directories(svg_parser PRIVATE ${PLUGIN_INCLUDE})
+# target_compile_options(svg_parser PRIVATE ${PLUGIN_OPTIONS})

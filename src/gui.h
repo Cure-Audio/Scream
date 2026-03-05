@@ -1,6 +1,7 @@
 #pragma once
 #include "imgui.h"
 #include "plugin.h"
+#include <nanosvgrast3.h>
 #include <xhl/vector.h>
 #include <xvg.h>
 
@@ -52,9 +53,8 @@ typedef struct LayoutMetrics
 
 enum IconID
 {
-    ICON_NONE,
     ICON_CURE_AUDIO,
-    ICON_EXACOUSTICS,
+    ICON_EXACOUSTICS_WHITE,
     ICON_EXACOUSTICS_COLOUR,
     ICON_IMP_POINTS,
     ICON_IMP_FLAT,
@@ -72,26 +72,27 @@ enum IconID
     ICON_LFO_RETRIG_LOOP,
     ICON_LFO_ONE_SHOT,
     ICON_CROTCHET,
+    ICON_COUNT,
 };
 
 typedef struct IconMap
 {
-    sg_image img;
-    sg_view  view;
-    int      width;
-    int      height;
+    int            width;
+    int            height;
+    unsigned char* buffer;
+    sg_image       img;
+    sg_view        view;
+
+    bool dirty;
+
+    struct
+    {
+        stbrp_rect rects[ICON_COUNT];
+
+        stbrp_context ctx;
+        stbrp_node    nodes[ICON_COUNT];
+    } atlas;
 } IconMap;
-
-static xvec4i icon_get_coords(IconMap* m, int id)
-{
-    xvec4i c = {0, id * m->width, m->width, m->width};
-    xassert(c.x >= 0 && c.x <= m->width);
-    xassert(c.y >= 0 && c.y <= m->height);
-    xassert(c.x + c.width <= m->width);
-    xassert(c.y + c.height <= m->height);
-
-    return c;
-}
 
 typedef struct GUI
 {
@@ -138,7 +139,8 @@ typedef struct GUI
     // The opcacity values are increased as the LFO playhead "passes over them", and they decay over time
     float* lfo_playhead_trail;
 
-    IconMap icons;
+    NSVGrasteriser svg_rasteriser;
+    IconMap        icons;
 
     int             active_param_text_input; // enum ParamID, or -1 if inactive
     TextEditor      texteditor;
@@ -161,29 +163,7 @@ typedef struct GUI
 #endif // SHOW_FPS
 } GUI;
 
-// static const NVGcolour C_WHITE         = nvgHexColour(0xffffffff);
-// static const NVGcolour C_TEXT_LIGHT_BG = nvgHexColour(0x707880FF);
-// static const NVGcolour C_TEXT_DARK_BG  = nvgHexColour(0x828A91FF);
-
-// static const NVGcolour C_BG_LIGHT = nvgHexColour(0xC9D3DDFF);
-// static const NVGcolour C_BG_DARK  = nvgHexColour(0x151B32FF);
-// static const NVGcolour C_BG_LFO   = nvgHexColour(0x090E20FF);
-
-// static const NVGcolour C_GREY_1 = nvgHexColour(0xB5BEC7FF);
-// static const NVGcolour C_GREY_2 = nvgHexColour(0x636A78FF);
-// static const NVGcolour C_GREY_3 = nvgHexColour(0x353940FF);
-
-// static const NVGcolour C_DARK_BLUE    = nvgHexColour(0x459CB4FF);
-// static const NVGcolour C_LIGHT_BLUE   = nvgHexColour(0xACDEECFF);
-// static const NVGcolour C_LIGHT_BLUE_2 = nvgHexColour(0x97E6FCFF);
-// static const NVGcolour C_BTN_HOVER    = (NVGcolour){1, 1, 1, 0.2};
-// static const NVGcolour C_GREEN        = nvgHexColour(0x62E32BFF);
-// static const NVGcolour C_RED          = nvgHexColour(0xFF4757FF);
-
-// static const NVGcolour C_GRID_PRIMARY   = nvgHexColour(0x515762FF);
-// static const NVGcolour C_GRID_SECONDARY = nvgHexColour(0x40464FFF);
-// static const NVGcolour C_GRID_TERTIARY  = C_GRID_SECONDARY;
-// // static const NVGcolour C_GRID_TERTIARY  = nvgHexColour(0x2C2F35FF);
+xvec4i icon_get_coords(GUI* gui, enum IconID id, float w, float h);
 
 enum
 {

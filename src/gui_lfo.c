@@ -513,7 +513,7 @@ void draw_lfo_section(GUI* gui)
                 float crotchet_x = cx - 5 * SCALE;
                 float crotchet_y = cy - 7 * SCALE;
 
-                xvec4i      c     = icon_get_coords(&gui->icons, ICON_CROTCHET);
+                xvec4i      c     = icon_get_coords(gui, ICON_CROTCHET, height, height);
                 XVGGradient ifill = (XVGGradient){.colour1 = icon_col};
                 xvg_gradient_apply_image(&ifill, gui->icons.view, xvg->xvg->smp_linear, c.x, c.y, c.width, c.height);
                 xvg_draw_solid_rectangle_with_gradient(xvg, x, y, height, height, ifill);
@@ -593,7 +593,7 @@ void draw_lfo_section(GUI* gui)
             xassert(type >= 0 && type <= 2);
 
             XVGGradient ifill = {.colour1 = icon_col};
-            xvec4i      icon  = icon_get_coords(&gui->icons, icon_id);
+            xvec4i      icon  = icon_get_coords(gui, icon_id, height, height);
             xvg_gradient_apply_image(
                 &ifill,
                 gui->icons.view,
@@ -794,7 +794,7 @@ void draw_lfo_section(GUI* gui)
             unsigned icon_col = is_selected ? C_BG_LFO : is_hovering ? C_LIGHT_BLUE_2 : C_TEXT_DARK_BG;
 
             XVGGradient ifill = {.colour1 = icon_col};
-            xvec4i      icon  = icon_get_coords(&gui->icons, icon_id);
+            xvec4i      icon  = icon_get_coords(gui, icon_id, SHAPES_WIDTH, SHAPES_WIDTH);
             xvg_gradient_apply_image(
                 &ifill,
                 gui->icons.view,

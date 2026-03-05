@@ -227,6 +227,128 @@ sg_image make_icon_mipmaps(const sg_image_desc* desc_)
     return img;
 }
 
+extern unsigned long long SVG_DATA_Cure_Audio[];
+extern unsigned long long SVG_DATA_Exacoustics_white[];
+extern unsigned long long SVG_DATA_Exacoustics_colour[];
+extern unsigned long long SVG_DATA_PT_Select[];
+extern unsigned long long SVG_DATA_PT_Flat[];
+extern unsigned long long SVG_DATA_PT_Ramp_Up[];
+extern unsigned long long SVG_DATA_PT_Ramp_Down[];
+extern unsigned long long SVG_DATA_PT_Convex_Up[];
+extern unsigned long long SVG_DATA_PT_Convex_Down[];
+extern unsigned long long SVG_DATA_PT_Concave_Up[];
+extern unsigned long long SVG_DATA_PT_Concave_Down[];
+extern unsigned long long SVG_DATA_PT_Cosine_Up[];
+extern unsigned long long SVG_DATA_PT_Cosine_Down[];
+extern unsigned long long SVG_DATA_PT_Tri_Up[];
+extern unsigned long long SVG_DATA_PT_Tri_Down[];
+extern unsigned long long SVG_DATA_Loop_icon[];
+extern unsigned long long SVG_DATA_Retrig_icon[];
+extern unsigned long long SVG_DATA_One_shot_icon[];
+extern unsigned long long SVG_DATA_Crotchet[];
+
+static const unsigned long long* SVGS[] = {
+    SVG_DATA_Cure_Audio,     SVG_DATA_Exacoustics_white, SVG_DATA_Exacoustics_colour, SVG_DATA_PT_Select,
+    SVG_DATA_PT_Flat,        SVG_DATA_PT_Ramp_Up,        SVG_DATA_PT_Ramp_Down,       SVG_DATA_PT_Convex_Up,
+    SVG_DATA_PT_Convex_Down, SVG_DATA_PT_Concave_Up,     SVG_DATA_PT_Concave_Down,    SVG_DATA_PT_Cosine_Up,
+    SVG_DATA_PT_Cosine_Down, SVG_DATA_PT_Tri_Up,         SVG_DATA_PT_Tri_Down,        SVG_DATA_Loop_icon,
+    SVG_DATA_Retrig_icon,    SVG_DATA_One_shot_icon,     SVG_DATA_Crotchet,
+};
+xstatic_assert(ARRLEN(SVGS) == ICON_COUNT, "");
+
+void icons_init_size(IconMap* m, int size)
+{
+    if (size > m->width || size > m->height)
+    {
+        sg_destroy_view(m->view);
+        sg_destroy_image(m->img);
+        xfree(m->buffer);
+
+        m->width  = size;
+        m->height = size;
+        m->buffer = xmalloc(m->width * m->height * 4);
+
+        m->img  = sg_make_image(&(sg_image_desc){
+             .width                = m->width,
+             .height               = m->height,
+             .pixel_format         = SG_PIXELFORMAT_RGBA8,
+             .usage.dynamic_update = true,
+        });
+        m->view = sg_make_view(&(sg_view_desc){.texture = m->img});
+    }
+
+    // Reset icons
+    memset(m->buffer, 0, m->width * m->height * 4);
+    memset(&m->atlas, 0, sizeof(m->atlas));
+    stbrp_init_target(&m->atlas.ctx, m->width - 1, m->height - 1, m->atlas.nodes, ARRLEN(m->atlas.nodes));
+}
+
+xvec4i icon_get_coords(GUI* gui, enum IconID id, float w, float h)
+{
+    xvec4i c = {0};
+
+    w *= gui->xvg.backingScaleFactor;
+    h *= gui->xvg.backingScaleFactor;
+
+    bool ok = id >= 0 && id < ARRLEN(gui->icons.atlas.rects);
+    xassert(ok);
+    if (!ok)
+        return c;
+    // Check if coords are in cache
+    stbrp_rect* rect = &gui->icons.atlas.rects[id];
+    if (rect->was_packed == 0)
+    {
+        // If not, use stbrp to find place in atlas
+        rect->w        = w;
+        rect->h        = h;
+        int num_packed = stbrp_pack_rects(&gui->icons.atlas.ctx, rect, 1);
+
+        if (num_packed)
+        {
+            // Render to atlas
+            NSVGimage2* image = (NSVGimage2*)SVGS[id];
+
+            float scale = (float)rect->h / image->height;
+
+            int stride = gui->icons.width * 4;
+
+            unsigned char* dst  = gui->icons.buffer;
+            dst                += rect->y * stride;
+            dst                += rect->x * 4;
+
+            nsvgRasterise(&gui->svg_rasteriser, image, 0, 0, scale, dst, rect->w, rect->h, stride, gui->arena);
+
+            gui->icons.dirty = true;
+        }
+    }
+    // Return coords
+
+    xassert(rect->w == (int)w);
+    xassert(rect->h == (int)h);
+
+    c.x      = rect->x;
+    c.y      = rect->y;
+    c.width  = rect->w;
+    c.height = rect->h;
+
+    return c;
+}
+
+void icons_end_frame(IconMap* m)
+{
+    if (m->dirty)
+    {
+        m->dirty                        = false;
+        size_t              update_size = m->width * m->height * 4;
+        const sg_image_data data        = {
+                   .mip_levels[0] = {
+                       .ptr  = m->buffer,
+                       .size = update_size,
+            }};
+        sg_update_image(m->img, &data);
+    }
+}
+
 void* pw_create_gui(void* _plugin, void* _pw)
 {
     CPLUG_LOG_ASSERT(_plugin);
@@ -319,54 +441,6 @@ void* pw_create_gui(void* _plugin, void* _pw)
         while (font.id == 0 && font_idx < ARRLEN(font_paths));
 
         gui->font = font;
-
-        // Icons
-        void*  file_data     = NULL;
-        size_t file_data_len = 0;
-        bool   ok            = false;
-
-        // Don't increment path len
-        xfmt(path, len, "%s", "icons.png");
-
-        ok = xfiles_read(path, &file_data, &file_data_len);
-        xassert(ok);
-        if (ok)
-        {
-            // TODO: handle alpha only images?
-            int      x = 0, y = 0, comp = 0;
-            stbi_uc* img_buf = stbi_load_from_memory(file_data, file_data_len, &x, &y, &comp, 4);
-            xassert(img_buf);
-            xassert(comp == 4);
-
-            if (img_buf)
-            {
-                unsigned w                   = x;
-                unsigned desired_num_mipmaps = 0;
-                while (w >= 32) // we likely arent drawing icons smaller than 16px
-                {
-                    w >>= 1;
-                    desired_num_mipmaps++;
-                }
-
-                sg_image_desc img_desc = {
-                    .width              = x,
-                    .height             = y,
-                    .pixel_format       = SG_PIXELFORMAT_RGBA8,
-                    .num_mipmaps        = desired_num_mipmaps,
-                    .data.mip_levels[0] = {
-                        .ptr  = img_buf,
-                        .size = x * y * comp,
-                    }};
-                gui->icons.img  = make_icon_mipmaps(&img_desc);
-                gui->icons.view = sg_make_view(&(sg_view_desc){.texture = gui->icons.img});
-                stbi_image_free(img_buf);
-
-                gui->icons.width  = x;
-                gui->icons.height = y;
-            }
-
-            XFILES_FREE(file_data);
-        }
     }
     resources_init(&gui->resource_manager, 4096);
     gui->active_param_text_input = -1;
@@ -394,6 +468,7 @@ void pw_destroy_gui(void* _gui)
     xarr_free(gui->lfo_playhead_trail);
     ted_deinit(&gui->texteditor);
     resources_deinit(&gui->resource_manager, &gui->xvg);
+    xfree(gui->icons.buffer);
 
     imp_deinit(&gui->imp);
     xvg_deinit(&gui->xvg);
@@ -1231,6 +1306,9 @@ void pw_tick(void* _gui)
             gui->_xvg_bg1->frame.num_shapes = 0;
             gui->_xvg_bg1->frame.num_text   = 0;
         }
+
+        // Remake icons ?
+        icons_init_size(&gui->icons, ceilf(lm->param_scale * 320));
     }
 
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
@@ -2337,7 +2415,7 @@ void pw_tick(void* _gui)
 
         bool hover = !!(e_logo & IMGUI_EVENT_MOUSE_HOVER);
 
-        xvec4i      icon  = icon_get_coords(&gui->icons, ICON_CURE_AUDIO);
+        xvec4i      icon  = icon_get_coords(gui, ICON_CURE_AUDIO, w, h);
         XVGGradient ifill = {.colour1 = C_TEXT_DARK_BG};
         if (hover)
         {
@@ -2362,10 +2440,8 @@ void pw_tick(void* _gui)
         if (e_logo & IMGUI_EVENT_MOUSE_LEFT_DOWN)
             click_exaclogo = true;
 
-        hover = !!(e_logo & IMGUI_EVENT_MOUSE_HOVER);
-        icon  = icon_get_coords(&gui->icons, hover ? ICON_EXACOUSTICS_COLOUR : ICON_EXACOUSTICS);
-        xassert(icon.x == 0);
-        xassert(icon.width == 128);
+        hover                  = !!(e_logo & IMGUI_EVENT_MOUSE_HOVER);
+        icon                   = icon_get_coords(gui, hover ? ICON_EXACOUSTICS_COLOUR : ICON_EXACOUSTICS_WHITE, w, h);
         const int   offset_a   = 96;
         const int   width_a    = icon.width - offset_a;
         const float proportion = (float)offset_a / 128.0f;
@@ -2465,6 +2541,7 @@ void pw_tick(void* _gui)
     xvg_command_end_pass(bg, XVG_LABEL("swapchain-pass-end"));
     xvg_command_end_pass(gui->xvg_anim, XVG_LABEL("swapchain-pass-end"));
 
+    icons_end_frame(&gui->icons);
     xvg_end_frame(&gui->xvg);
 
     bool bg_match = do_bg_command_lists_match(gui);
