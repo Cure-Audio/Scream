@@ -22,16 +22,17 @@ static inline float skewf(float v, float a)
     return va / (1.0f - a - v + 2 * va);
 }
 
-static inline float interp_points(float norm_pos, float skew_amt, float point1_y, float point2_y)
+static float interp_points(float norm_pos, float skew_amt, float point1_y, float point2_y)
 {
     if (point1_y == point2_y)
         return point2_y;
 
-    float skewed_pos;
-    if (point1_y < point2_y)
-        skewed_pos = skewf(norm_pos, skew_amt);
-    else
-        skewed_pos = 1.0f - skewf(1.0f - norm_pos, skew_amt);
+    if (point1_y > point2_y)
+        norm_pos = (1.0f - norm_pos);
+    float skewed_pos = skewf(norm_pos, skew_amt);
+    if (point1_y > point2_y)
+        skewed_pos = (1.0f - skewed_pos);
+
     return xm_lerpf(skewed_pos, point1_y, point2_y);
 }
 
