@@ -5,7 +5,7 @@ set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 project(Scream
     VERSION 1.0.7
     DESCRIPTION ""
-    HOMEPAGE_URL "https://github.com/Tremus/skibidiscream"
+    HOMEPAGE_URL "https://github.com/Cure-Audio/Scream"
     LANGUAGES C)
 set(COMPANY_NAME "Cure Audio")
 

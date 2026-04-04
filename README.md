@@ -50,9 +50,9 @@ When doing comparisons, it is recommended to follow these steps in our plugin:
 
 ### Other noteworthy quirks
 
--   The original synths ADSR cannot set its internal release times to 0. The GUI may tell you the paramters release value is 0, but internally its not. When you release a MIDI note, the audio signal will exponentially decay in volume and will be virtually inaudible for about 100ms, but a distortion will boost that level much higher. This is a real nuisance when you start applying loads of distorions and/or compression after the synth, because this results in a nasty squeely distorted release sound, possibly followed by a click. The synth has its own distoriton effects, however they are sit in the signal chain before ADSR, resulting in smooth attacks and decays (assuming no 3rd party FX are applied afterwards).
+- The original synths ADSR cannot set its internal release times to 0. The GUI may tell you the paramters release value is 0, but internally its not. When you release a MIDI note, the audio signal will exponentially decay in volume and will be virtually inaudible for about 100ms, but a distortion will boost that level much higher. This is a real nuisance when you start applying loads of distorions and/or compression after the synth, because this results in a nasty squeely distorted release sound, possibly followed by a click. The synth has its own distoriton effects, however they are sit in the signal chain before ADSR, resulting in smooth attacks and decays (assuming no 3rd party FX are applied afterwards).
 
--   The original filter suffered from self oscillation problems. In our filter, we employ clever gating tricks to prevent this.
+- The original filter suffered from self oscillation problems. In our filter, we employ clever gating tricks to prevent this.
 
 ### Room for improvement
 
@@ -68,16 +68,18 @@ This is all a tech demo of work in progress GUI libraries I'm working on. The go
 
 I'm using a novel way write/use an immediate mode (IM) library. There are probably other small projects that use similar techniques to what I do, but I have not come across any. Let's coin the term "treeless immediate mode library" or "TIM" to discern this style of library.
 
-Update: Here are 2 YouTube streams I just found of people implementing what I have, but for mouse down/up events only 
+Update: Here are 2 YouTube streams I just found of people implementing what I have, but for mouse down/up events only
+
 1. https://www.youtube.com/watch?v=go-h9c_h6Uw
 2. https://www.youtube.com/watch?v=8e56I1z9cn4
 
 Most IM libraries build a big retained mode (RM) like tree structure under the hood and use complicated diffs between tree structures from previous frames while offering a simple declarative IM interface.
 
 TIM calculates hit tests at runtime and stores ids that succeed on a first come first served (served = stores the id) basis. This has the advantage of skipping the enormous amount of state with the bugs and restrictions that come with developing and maintaining a big tree structure, while suffering from a few unique probelems. Here are some examples:
+
 - TIM forces a front to back widget event handling style, which the the reverse of how GUIs usually want to be rendered (back to front).
-- Certain events like key presses must respond "event consumed" or "event not consumed" immediately as they're received and cannot be handled at draw time. This plugin attemps to correctly handle this stuff by setting some flags, but the IM lib I'm hoping to use doesn't have any way of solving that problem at all. 
-- Trying to drag a file out of your window on macOS is something that can only be done from the beginning of the mouse down event sent to your NSView. It cannot be done for example at the end of a frame like it can on Windows. 
+- Certain events like key presses must respond "event consumed" or "event not consumed" immediately as they're received and cannot be handled at draw time. This plugin attemps to correctly handle this stuff by setting some flags, but the IM lib I'm hoping to use doesn't have any way of solving that problem at all.
+- Trying to drag a file out of your window on macOS is something that can only be done from the beginning of the mouse down event sent to your NSView. It cannot be done for example at the end of a frame like it can on Windows.
 
 It's still not certain how well the TIM technique can scale in a large app with lots of dynamic content, popup windows, text input widgets, file drag in and drag out functionality and still be ergonomic to use. The library needs more work and more testing, and may even prove to be not worth it, or may need major rewrites and fundamental design changes. For small apps like this one, none the aforementioned problems are bad enough that the tree based IM system or an RM system would offer better value. I think the lightweight and flexible TIM system is much better for small apps like this one even in its unfinished state. TIM was the right choice for this app and switching to a conservative RM would make this app worse.
 
@@ -92,6 +94,7 @@ sokol_gfx of course uses global state, so I've had to fork it to make it usable 
 Note that I'm not interested in supporting a wide range of compilers, namely MSVC, or mingw or any of that nonsense. This codebase is written in C99 and probably uses several clang and GCC extensions, many of which aren't supported by MSVC. A clever programmer could probably compile all this as C++ 20/23 with MSVC, but why torture youself? Mingw from my limited experience doesn't come with system headers for Windows MIDI apis rendering it unusable for audio work. Clang is mostly consistent across platforms which IMO is better suited to this kind of development.
 
 Requirements:
+
 - [CMake](https://cmake.org/)
 - [Ninja](https://ninja-build.org/)
 - [Clang 17+](https://releases.llvm.org/download.html), or something reasonably modern. Older versions likely work
@@ -99,9 +102,10 @@ Requirements:
 - a macOS or Windows device
 
 Build:
+
 ```
-git clone https://github.com/Tremus/skibidiscream
-cd skibidiscream
+git clone https://github.com/Cure-Audio/Scream
+cd Scream
 git submodule update --init
 #windows
 .\shaders.bat
