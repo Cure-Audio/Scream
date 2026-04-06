@@ -508,7 +508,18 @@ void pw_get_info(struct PWGetInfo* info)
 {
     if (info->type == PW_INFO_INIT_SIZE)
     {
-        Plugin* p              = info->init_size.plugin;
+        Plugin* p = info->init_size.plugin;
+
+        uint32_t screen_width  = 0;
+        uint32_t screen_height = 0;
+        pw_get_screen_size(&screen_width, &screen_height);
+
+        uint32_t max_width  = (uint32_t)((float)screen_width * 0.8f);
+        uint32_t max_height = (uint32_t)((float)screen_height * 0.8f);
+
+        p->width  = xm_minu(max_width, p->width);
+        p->height = xm_minu(max_height, p->height);
+
         info->init_size.width  = p->width;
         info->init_size.height = p->height;
     }
