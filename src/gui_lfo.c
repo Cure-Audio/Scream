@@ -80,7 +80,7 @@ void do_lfo_shaders(void* uptr)
     }
 
     sg_pipeline   pip;
-    IMPointsArea* grid_area          = &gui->imp.area;
+    imgui_rect* grid_area          = &gui->imp.area;
     bool          have_all_resources = true;
     have_all_resources &= resource_get_pipeline(&gui->resource_manager, &pip, lfo_vertical_grad_shader_desc, 0);
     // imgui_rect* grid_area          = NULL;
@@ -302,7 +302,7 @@ void draw_lfo_section(GUI* gui)
         {
             xassert(events & IMGUI_EVENT_MOUSE_LEFT_DOWN);
             p->selected_lfo_idx                          = data.mouse_down_idx;
-            imp->main_points_valid                       = false;
+            imp_reload(&gui->imp);
             fstate.should_update_main_points_with_points = true;
             should_clear_lfo_trail                       = true;
 
@@ -906,7 +906,7 @@ void draw_lfo_section(GUI* gui)
 
     const enum IMPShapeType current_shape = p->lfo_shape_idx;
 
-    const IMPointsArea selection_area = {lm->content_x + 16, grid_y - 32, lm->content_r - 16, grid_b + 24};
+    const imgui_rect selection_area = {lm->content_x + 16, grid_y - 32, lm->content_r - 16, grid_b + 24};
 
     imp_run(
         &fstate,
@@ -951,7 +951,10 @@ void draw_lfo_section(GUI* gui)
             gui->lfo_playhead_trail[i] = LFO_PLAYHEAD_TRAIL_MAX_OPACITY;
     }
 
-    if (has_resized || fstate.should_update_audio_points_with_main_points)
+    bool should_update_y_values = fstate.did_reload;
+    should_update_y_values |= fstate.should_update_audio_points_with_main_points;
+    should_update_y_values |= has_resized;
+    if (should_update_y_values)
     {
         size_t len = xarr_len(gui->lfo_ybuffer);
         size_t cap = xarr_cap(gui->lfo_ybuffer);

@@ -3,7 +3,7 @@
 #include <cplug.h>
 #include <linked_arena.h>
 #include <stdint.h>
-#include <xhl/array.h>
+#include <xhl/array2.h>
 #include <xhl/thread.h>
 #include <xhl/vector.h>
 

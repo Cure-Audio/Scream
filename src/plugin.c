@@ -10,7 +10,7 @@
 #include <xhl/time.h>
 
 #include "params_and_events.c"
-#include <xhl/array.h>
+#include <xhl/array2.h>
 #include <xhl/debug.h>
 #include <xhl/string.h>
 #include <xhl/vector.h>

@@ -8,7 +8,7 @@
 // #include "widgets.h"
 
 #include <stdint.h>
-#include <xhl/array.h>
+#include <xhl/array2.h>
 #include <xhl/debug.h>
 #include <xhl/files.h>
 #include <xhl/maths.h>
@@ -51,7 +51,9 @@ void gui_handle_param_change(void* _gui, ParamID param_id)
 {
     GUI* gui = _gui;
     if (param_id == PARAM_PATTERN_LFO_1 || param_id == PARAM_PATTERN_LFO_2)
-        gui->imp.main_points_valid = false;
+    {
+        imp_reload(&gui->imp);
+    }
 }
 
 static void my_sg_logger(
@@ -398,6 +400,9 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->_xvg_bg0 = xvg_command_list_create(&gui->xvg);
     gui->_xvg_bg1 = xvg_command_list_create(&gui->xvg);
     gui->xvg_anim = xvg_command_list_create(&gui->xvg);
+
+    imp_init(&gui->imp, 'lpt\0', 'lsp\0', 'lbg\0');
+
     // Load assets
     {
         // Font

@@ -2,7 +2,7 @@
 #include <imgui.h>
 #include <stdbool.h>
 #include <utf8.h>
-#include <xhl/array.h>
+#include <xhl/array2.h>
 #include <xhl/maths.h>
 #include <xhl/time.h>
 
