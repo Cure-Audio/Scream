@@ -1328,8 +1328,7 @@ void pw_tick(void* _gui)
         .depth_format = SG_PIXELFORMAT_NONE,
 
 #if __APPLE__
-        .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
-        .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
+        .metal.current_drawable = pw_get_metal_drawable(gui->pw),
 #endif
 #if _WIN32
         .d3d11.render_view = pw_get_dx11_render_target_view(gui->pw),
@@ -1353,20 +1352,9 @@ void pw_tick(void* _gui)
     xvg_command_begin_pass(
         gui->xvg_anim,
         &(sg_pass){
-            .swapchain =
-                {
-                    .width  = gui->plugin->width,
-                    .height = gui->plugin->height,
-#if __APPLE__
-                    .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
-                    .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
-#endif
-#if _WIN32
-                    .d3d11.render_view = pw_get_dx11_render_target_view(gui->pw),
-#endif
-                },
-            .action = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0.0f, 0.0f, 0.0f, 1.0}}},
-            .label  = XVG_LABEL("swapchain-pass-begin")},
+            .swapchain = gui->swapchain,
+            .action    = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0.0f, 0.0f, 0.0f, 1.0}}},
+            .label     = XVG_LABEL("swapchain-pass-begin")},
         XVG_LABEL("swapchain-pass-begin"));
 
 // Synth HUD
