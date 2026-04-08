@@ -372,7 +372,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
     memset(&env, 0, sizeof(env));
     env.defaults.sample_count = 1;
     env.defaults.color_format = SG_PIXELFORMAT_RGBA8;
-    env.defaults.depth_format = SG_PIXELFORMAT_DEPTH_STENCIL;
+    env.defaults.depth_format = SG_PIXELFORMAT_NONE;
 #if __APPLE__
     env.metal.device = pw_get_metal_device(gui->pw);
 #elif _WIN32
@@ -1151,8 +1151,8 @@ void pw_tick(void* _gui)
         _MINIMUM_WIDTH = PARAMS_BOUNDARY_LEFT * 2 + VERTICAL_SLIDER_WIDTH * 2 + ROTARY_PARAM_OUTER_DIAMETER * 3,
     };
     // 75% min width is the new minimum scale
-    const int min_width = ((_MINIMUM_WIDTH*3)/4);
-    _Static_assert(((_MINIMUM_WIDTH*3)/4) < GUI_MIN_WIDTH, "");
+    const int min_width = ((_MINIMUM_WIDTH * 3) / 4);
+    _Static_assert(((_MINIMUM_WIDTH * 3) / 4) < GUI_MIN_WIDTH, "");
 
     // Recalculate layout metrics
     if (im->frame.events & ((1 << PW_EVENT_RESIZE_UPDATE) | (1 << PW_EVENT_CONTENT_SCALE_FACTOR_CHANGED)))
@@ -1290,11 +1290,9 @@ void pw_tick(void* _gui)
         int fb_height = gui->plugin->width * gui->xvg.backingScaleFactor;
         if (fb_width != gui->bg_framebuffer.width || fb_height != gui->bg_framebuffer.height)
         {
-            sg_destroy_view(gui->bg_framebuffer.depth_view);
             sg_destroy_view(gui->bg_framebuffer.img_texview);
             sg_destroy_view(gui->bg_framebuffer.img_colview);
             sg_destroy_image(gui->bg_framebuffer.img);
-            sg_destroy_image(gui->bg_framebuffer.depth);
             gui->bg_framebuffer.width  = gui->plugin->width * gui->xvg.backingScaleFactor;
             gui->bg_framebuffer.height = gui->plugin->height * gui->xvg.backingScaleFactor;
             gui->bg_framebuffer.img    = sg_make_image(&(sg_image_desc){
@@ -1304,18 +1302,9 @@ void pw_tick(void* _gui)
                    .pixel_format           = SG_PIXELFORMAT_RGBA8,
                    .sample_count           = 1,
             });
-            gui->bg_framebuffer.depth  = sg_make_image(&(sg_image_desc){
-                 .usage.depth_stencil_attachment = true,
-                 .width                          = gui->bg_framebuffer.width,
-                 .height                         = gui->bg_framebuffer.height,
-                 .pixel_format                   = SG_PIXELFORMAT_DEPTH_STENCIL,
-                 .sample_count                   = 1,
-            });
             gui->bg_framebuffer.img_colview =
                 sg_make_view(&(sg_view_desc){.color_attachment = gui->bg_framebuffer.img});
             gui->bg_framebuffer.img_texview = sg_make_view(&(sg_view_desc){.texture = gui->bg_framebuffer.img});
-            gui->bg_framebuffer.depth_view =
-                sg_make_view(&(sg_view_desc){.depth_stencil_attachment = gui->bg_framebuffer.depth});
             xassert(gui->bg_framebuffer.width);
             xassert(gui->bg_framebuffer.height);
             xassert(gui->bg_framebuffer.img_texview.id);
@@ -1336,15 +1325,14 @@ void pw_tick(void* _gui)
         .height       = gui->layout.height,
         .sample_count = 1,
         .color_format = SG_PIXELFORMAT_RGBA8,
-        .depth_format = SG_PIXELFORMAT_DEPTH_STENCIL,
+        .depth_format = SG_PIXELFORMAT_NONE,
 
 #if __APPLE__
         .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
         .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
 #endif
 #if _WIN32
-        .d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw),
-        .d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw),
+        .d3d11.render_view = pw_get_dx11_render_target_view(gui->pw),
 #endif
     };
 
@@ -1354,25 +1342,10 @@ void pw_tick(void* _gui)
     xvg_command_list_begin_frame(gui->xvg_anim);
     xvg_command_list_begin_frame(bg);
 
-    // TODO: replace with framebuffer
     xvg_command_begin_pass(
         bg,
         &(sg_pass){
-            .attachments.colors[0]     = gui->bg_framebuffer.img_colview,
-            .attachments.depth_stencil = gui->bg_framebuffer.depth_view,
-            //             .swapchain =
-            //                 {
-            //                     .width  = gui->plugin->width,
-            //                     .height = gui->plugin->height,
-            // #if __APPLE__
-            //                     .metal.current_drawable      = pw_get_metal_drawable(gui->pw),
-            //                     .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
-            // #endif
-            // #if _WIN32
-            //                     .d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw),
-            //                     .d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw),
-            // #endif
-            //                 },
+            .attachments.colors[0] = gui->bg_framebuffer.img_colview,
             .action = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0.0f, 0.0f, 0.0f, 1.0}}},
             .label  = XVG_LABEL("swapchain-pass-begin")},
         XVG_LABEL("swapchain-pass-begin"));
@@ -1389,8 +1362,7 @@ void pw_tick(void* _gui)
                     .metal.depth_stencil_texture = pw_get_metal_depth_stencil_texture(gui->pw),
 #endif
 #if _WIN32
-                    .d3d11.render_view        = pw_get_dx11_render_target_view(gui->pw),
-                    .d3d11.depth_stencil_view = pw_get_dx11_depth_stencil_view(gui->pw),
+                    .d3d11.render_view = pw_get_dx11_render_target_view(gui->pw),
 #endif
                 },
             .action = {.colors[0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = {0.0f, 0.0f, 0.0f, 1.0}}},
