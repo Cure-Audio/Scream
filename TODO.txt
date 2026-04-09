@@ -65,6 +65,8 @@ x get state working in new version
 
 x when holding down keys to play MIDI notes on the macOS standalone version, keydown events are repeatedly sent.
   This would be fine for a text input, but is a bug for anything else. It probably needs to be fixed on the CPLUG side
+- make LFO mod amounts automatable by DAW
+
 
 (CPLUG)
 Figure out a simple way to copy a framebuffer straight to the swapchain (no shaders)
