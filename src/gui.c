@@ -1319,8 +1319,8 @@ void pw_tick(void* _gui)
     // Note: The 'id<CAMetalDrawable>' pointer can change every frame.
     // New calls to get this pointer must be issued every frame
     gui->swapchain = (sg_swapchain){
-        .width        = gui->layout.width,
-        .height       = gui->layout.height,
+        .width        = gui->layout.width * gui->xvg.backingScaleFactor,
+        .height       = gui->layout.height * gui->xvg.backingScaleFactor,
         .sample_count = 1,
         .color_format = SG_PIXELFORMAT_RGBA8,
         .depth_format = SG_PIXELFORMAT_NONE,
