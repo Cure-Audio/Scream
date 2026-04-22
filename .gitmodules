@@ -15,4 +15,4 @@
 	url = https://github.com/Tremus/xvg
 [submodule "modules/freetype"]
 	path = modules/freetype
-	url = https://github.com/freetype/freetype
+	url = https://github.com/Tremus/freetype
