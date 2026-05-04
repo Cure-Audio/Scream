@@ -385,5 +385,3 @@ endif()
 # target_compile_definitions(svg_parser PRIVATE ${PLUGIN_DEFINITIONS})
 # target_include_directories(svg_parser PRIVATE ${PLUGIN_INCLUDE})
 # target_compile_options(svg_parser PRIVATE ${PLUGIN_OPTIONS})
-
-add_executable(jsonparser jsonparser.c)
