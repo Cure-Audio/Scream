@@ -5,8 +5,6 @@
 #include <xhl/maths.h>
 #include <xhl/vector.h>
 
-typedef xvecu plugin_version;
-
 typedef struct StateHeader
 {
     plugin_version version;
@@ -82,11 +80,11 @@ _Static_assert(offsetof(struct PluginStatev0_3_0, lfo_mod_amounts) == offsetof(P
 _Static_assert(offsetof(struct PluginStatev0_3_0, lfos) == offsetof(PluginStatev0_2_4, lfos), "");
 _Static_assert(offsetof(struct PluginStatev0_3_0, blob) == offsetof(PluginStatev0_2_4, blob), "");
 
-plugin_version get_plugin_version()
+plugin_version parse_plugin_version(const char* version_string)
 {
     plugin_version version = {0};
     int            major, minor, patch;
-    if (3 == sscanf(CPLUG_PLUGIN_VERSION, "%d.%d.%d", &major, &minor, &patch))
+    if (3 == sscanf(version_string, "%d.%d.%d", &major, &minor, &patch))
     {
         version.major = major;
         version.minor = minor;
@@ -94,6 +92,8 @@ plugin_version get_plugin_version()
     }
     return version;
 }
+
+plugin_version get_plugin_version() { return parse_plugin_version(CPLUG_PLUGIN_VERSION); }
 
 // [main thread]
 void cplug_saveState(void* _p, const void* stateCtx, cplug_writeProc writeProc)

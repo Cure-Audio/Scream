@@ -279,3 +279,6 @@ void param_change_update(Plugin* p, ParamID id, double value);
 void param_set(Plugin* p, ParamID id, double value);
 // [main thread]
 double main_get_param(Plugin* p, ParamID id);
+
+typedef xvecu  plugin_version;
+plugin_version parse_plugin_version(const char* version_string);

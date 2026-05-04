@@ -2,6 +2,7 @@
 
 #include "dsp.h"
 #include "plugin.h"
+#include "updates.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -88,6 +89,7 @@ void* cplug_createPlugin(CplugHostContext* ctx)
 {
     g_is_main_thread = true;
     library_load_platform();
+    updates_init();
 
     struct Plugin* p                   = NULL;
     size_t         expected_max_memory = sizeof(*p);
@@ -176,6 +178,8 @@ void* cplug_createPlugin(CplugHostContext* ctx)
 void cplug_destroyPlugin(void* _p)
 {
     CPLUG_LOG_ASSERT(_p != NULL);
+
+    updates_deinit();
 
     Plugin* p = _p;
     for (int i = 0; i < ARRLEN(p->lfos); i++)

@@ -45,6 +45,7 @@ void println(const char* const fmt, ...)
     if (!n)
         return;
 
+    xassert(n <= ARRLEN(buf) - 2);
     buf[n++] = '\n';
     buf[n]   = '\0';
 
