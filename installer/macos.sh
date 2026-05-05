@@ -122,6 +122,10 @@ pkgbuild --root "${SCRIPT_DIR}/../build/Release/Scream.vst3" \
 # https://developer.apple.com/library/archive/documentation/DeveloperTools/Reference/DistributionDefinitionRef/Chapters/Distribution_XML_Ref.html
 # https://forum.juce.com/t/vst-installer/16654/15
 # https://github.com/surge-synthesizer/surge/blob/main/scripts/installer_mac/make_installer.sh
+# Background images appear to be around 1280x832 - 1280x840.
+# Set scaling="proportional" to resize the image to always fit
+# http://shanekirk.com/2013/10/creating-flat-packages-in-osx/>
+# https://ofek.dev/words/guides/2025-05-13-distributing-command-line-tools-for-macos/
 
 cp "${SCRIPT_DIR}/../LICENSE" "${SCRIPT_DIR}"
 
@@ -130,6 +134,7 @@ cat > ${PKG_DIR}/distribution.xml << XMLEND
 <installer-gui-script minSpecVersion="1">
     <title>Scream ${VERSION}</title>
     <license file="LICENSE"/>
+    <background file="_macOS_installer_background.png" mime-type="image/png" scaling="proportional" />
     <pkg-ref id="com.CureAudio.Scream.pkg.assets"/>
     <pkg-ref id="com.CureAudio.Scream.pkg.au"/>
     <pkg-ref id="com.CureAudio.Scream.pkg.clap"/>
@@ -189,7 +194,7 @@ if [ -n "$DEVELOPER_ID_INSTALLER" ]; then
     fi
 fi
 
-# #======================================
+#======================================
 
 # Submit for notorisation
 # NOTE if this fails, try debugging using this
