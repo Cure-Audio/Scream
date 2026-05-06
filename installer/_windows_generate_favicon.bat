@@ -1,0 +1,2 @@
+@REM Source: https://techcommunity.microsoft.com/discussions/windowsinsiderprogram/ico-file-converter-working-on-windows-pc/4364216
+CALL magick _windows_icon.png -define icon:auto-resize=256,64,48,32,16 _windows_favicon.ico
