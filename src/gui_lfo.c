@@ -925,7 +925,8 @@ void draw_lfo_section(GUI* gui)
     lm->current_lfo_playhead = playhead;
 
     bool       retrigger_flag = xt_atomic_exchange_u8(&p->gui_retrig_flag, 0);
-    const bool has_resized    = !!(im->frame.events & (1 << PW_EVENT_RESIZE_UPDATE));
+    const bool has_resized =
+        !!(im->frame.events & ((1 << PW_EVENT_RESIZE_UPDATE) | (1 << PW_EVENT_CONTENT_SCALE_FACTOR_CHANGED)));
 
     // Clear trail on resize
     should_clear_lfo_trail |= has_resized;

@@ -35,8 +35,6 @@ void        g_timer_cb(CFRunLoopTimerRef timer, void* info) { dequeue_global_eve
 
 #include <Appkit/AppKit.h>
 
-float system_get_content_scale() { return 1; }
-
 void library_load_platform()
 {
     g_platform_init_counter++;

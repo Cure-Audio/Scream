@@ -366,8 +366,7 @@ void* pw_create_gui(void* _plugin, void* _pw)
     gui->plugin = p;
     p->gui      = gui;
 
-    extern float system_get_content_scale();
-    gui->layout.content_scale = system_get_content_scale();
+    gui->layout.content_scale = 1.0f;
 
     sg_environment env;
     memset(&env, 0, sizeof(env));
