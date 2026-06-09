@@ -530,10 +530,9 @@ void pw_get_info(struct PWGetInfo* info)
         uint32_t width  = info->constrain_size.width;
         uint32_t height = info->constrain_size.height;
 
-        float    content_scale  = xm_maxf(1, gui->layout.content_scale);
-        uint32_t min_width      = (uint32_t)(GUI_MIN_WIDTH * content_scale);
-        uint32_t min_height     = (uint32_t)(GUI_MIN_HEIGHT * content_scale);
-        uint32_t content_height = (uint32_t)(CONTENT_HEIGHT * content_scale);
+        uint32_t min_width      = (uint32_t)(GUI_MIN_WIDTH);
+        uint32_t min_height     = (uint32_t)(GUI_MIN_HEIGHT);
+        uint32_t content_height = (uint32_t)(CONTENT_HEIGHT);
 
         if (gui->plugin->lfo_section_open)
         {
