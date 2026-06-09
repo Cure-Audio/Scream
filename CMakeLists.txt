@@ -308,11 +308,11 @@ elseif(WIN32)
         COMMAND attrib +s +h ${VST3_BUILD_PATH}/PlugIn.ico
         COMMAND attrib +s ${VST3_BUILD_PATH}
 
-        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${VST3_BUILD_PATH} to %LOCALAPPDATA%\\Programs\\Common\\VST3"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory  "${VST3_BUILD_PATH}" "%LOCALAPPDATA%\\Programs\\Common\\VST3\\${PROJECT_NAME}.vst3"
+        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${VST3_BUILD_PATH} to C:\\Program Files\\Common Files\\VST3"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory  "${VST3_BUILD_PATH}" "C:\\Program Files\\Common Files\\VST3\\${PROJECT_NAME}.vst3"
 
-        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}_plugin.dll to %LOCALAPPDATA%\\Programs\\Common\\CLAP\\${PROJECT_NAME}.clap"
-        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}_plugin.dll" "%LOCALAPPDATA%\\Programs\\Common\\CLAP\\${PROJECT_NAME}.clap"
+        COMMAND ${CMAKE_COMMAND} -E echo "Installing ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}_plugin.dll to C:\\Program Files\\Common Files\\CLAP\\${PROJECT_NAME}.clap"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}_plugin.dll" "C:\\Program Files\\Common Files\\CLAP\\${PROJECT_NAME}.clap"
         )
     target_link_libraries(${PROJECT_NAME}_plugin PRIVATE ${PLUGIN_LIBRARIES})
     target_include_directories(${PROJECT_NAME}_plugin PRIVATE ${PLUGIN_INCLUDE})
