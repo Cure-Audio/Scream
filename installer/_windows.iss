@@ -29,6 +29,8 @@ WizardBackImageFileDynamicDark=.\_windows_WizardBackImageFile.png
 ; Logo in top right corner
 WizardSmallImageFile=.\_windows_WizardSmallImageFile_DynamicDark.png
 WizardSmallImageFileDynamicDark=.\_windows_WizardSmallImageFile_DynamicDark.png
+; Minimum Windows version (Win 8) https://jrsoftware.org/ishelp/index.php?topic=setup_minversion
+MinVersion=6.2
 
 [Components]
 ; Note: This is a list of selectable "Components" for a user to install

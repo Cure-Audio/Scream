@@ -5,6 +5,10 @@
 #error Unsupported OS
 #endif
 
+// Force min Windows support. NOTE: DirectX 11 requires Windows 7+
+// #define WINVER 0x0601 // Widnows 7
+#define WINVER 0x0602 // Windows 8
+
 #define CPLUG_IS_INSTRUMENT 0
 
 #define CPLUG_NUM_INPUT_BUSSES  1
