@@ -354,8 +354,9 @@ void render_lfo(Plugin* p, float* buffer, int num_samples, int lfo_idx)
         xassert(lfo->phase <= pt2.x);
         xassert(it >= points_start && it < points_end);
 
-        float rel_position  = (float)lfo->phase - pt1.x;
-        rel_position       /= pt2.x - pt1.x;
+        float rel_distance_x = (float)lfo->phase - pt1.x;
+        float rel_range_x    = pt2.x - pt1.x; // WARNING: might equal 0
+        float rel_position   = rel_range_x > 0 ? rel_distance_x / rel_range_x : 0;
 
         // Calc LFO value
         float v = interp_points(rel_position, pt1.skew, pt1.y, pt2.y);
