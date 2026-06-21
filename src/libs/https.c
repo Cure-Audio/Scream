@@ -57,7 +57,7 @@ HTTPSResponseError https_translate_error(XRequestError err)
     }
 }
 
-int https_cb(
+XRequestCallbackResult https_cb(
     void*       user_ptr,
     const void* data, // May be NULL
     unsigned    size  // May be zero
