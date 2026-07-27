@@ -148,7 +148,7 @@ void ted_handle_ibeam_moved(TextEditor* ted)
         size_t text_len   = ted_get_text(ted, alloc_text, alloc_size);
 
         const XVGTextLayout* layout =
-            xvg_create_text_layout(ted->xvg, alloc_text, alloc_text + text_len, ted->theme.font_size, 0, 1);
+            xvg_create_text_layout(ted->xvg, alloc_text, alloc_text + text_len, ted->theme.font_size, 0, 0, 0, false);
         const XVGGlyphLayout* glyphs     = xvg_layout_get_glyphs(layout);
         float                 text_width = layout->xmax;
 
@@ -739,7 +739,7 @@ int ted_get_text_idx(TextEditor* ted, float x)
         size_t text_len   = ted_get_text(ted, alloc_text, alloc_size);
 
         const XVGTextLayout* layout =
-            xvg_create_text_layout(ted->xvg, alloc_text, alloc_text + text_len, ted->theme.font_size, 0, 1);
+            xvg_create_text_layout(ted->xvg, alloc_text, alloc_text + text_len, ted->theme.font_size, 0, 0, 0, false);
         const XVGGlyphLayout* glyphs = xvg_layout_get_glyphs(layout);
 
         float text_width = layout->xmax;
@@ -944,7 +944,7 @@ void ted_draw(TextEditor* ted, uint64_t frame_time_ns, const char* placeholder, 
         xassert(text_len == strlen(alloc_text));
 
         const XVGTextLayout* layout =
-            xvg_create_text_layout(ted->xvg, alloc_text, alloc_text + text_len, ted->theme.font_size, 0, 1);
+            xvg_create_text_layout(ted->xvg, alloc_text, alloc_text + text_len, ted->theme.font_size, 0, 0, 0, false);
         glyphs     = xvg_layout_get_glyphs(layout);
         glyphs_len = layout->num_glyphs;
 

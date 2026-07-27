@@ -8,7 +8,7 @@
 
 #ifdef __APPLE__
 #define HAVE_FCNTL_H
-#define HAVE_UNISTD_H 1
+#define HAVE_UNISTD_H
 #endif
 
 #define FT2BUILD_H_
@@ -73,7 +73,7 @@
 // #include "../../modules/freetype/src/base/ftbbox.c"
 // #include "../../modules/freetype/src/base/ftpatent.c"
 // #include "../../modules/freetype/src/base/ftsynth.c"
-// #include "../../modules/freetype/src/base/ftmm.c"
+#include "../../modules/freetype/src/base/ftmm.c"
 // #include "../../modules/freetype/src/base/ftstroke.c"
 // #include "../../modules/freetype/src/base/ftpfr.c"
 // #include "../../modules/freetype/src/base/ftfstype.c"

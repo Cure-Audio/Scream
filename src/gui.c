@@ -1406,7 +1406,7 @@ void pw_tick(void* _gui)
 
         float                cx     = lm->width * 0.5f;
         float                cy     = lm->height_header * 0.5f + 4;
-        const XVGTextLayout* layout = xvg_create_text_layout(bg, "SCREAM", NULL, 24 * lm->param_scale, 0, 0);
+        const XVGTextLayout* layout = xvg_create_text_layout(bg, "SCREAM", NULL, 24 * lm->param_scale, 0, 0, 0, false);
         xvg_draw_text_layout(bg, layout, cx, cy, XVG_ALIGN_CC, 0, C_BG_LIGHT);
 
         // Show evil red dot?

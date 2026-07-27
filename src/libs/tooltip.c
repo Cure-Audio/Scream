@@ -43,7 +43,7 @@ void tooltip_draw(
     line_break_width       = xm_maxf(line_break_width, 500);
     line_break_width       = xm_minf(line_break_width, gui_width);
     const XVGTextLayout* layout =
-        xvg_create_text_layout(xvg, tt->state.text, 0, FONT_SIZE, line_break_width, line_height);
+        xvg_create_text_layout(xvg, tt->state.text, 0, FONT_SIZE, 0, line_break_width, line_height, false);
     xassert(layout->num_rows >= 1);
 
     float width  = layout->xmax / xvg->xvg->backingScaleFactor;
